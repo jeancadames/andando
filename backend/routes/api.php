@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Customer\CustomerAuthController;
 use App\Http\Controllers\Api\Provider\ProviderAuthController;
 use App\Http\Controllers\Api\Provider\ProviderDashboardController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceController;
@@ -44,4 +45,17 @@ Route::prefix('provider')->group(function () {
         Route::put('/experiences/{experience}/schedules/{schedule}', [ProviderExperienceScheduleController::class, 'update']);
         Route::delete('/experiences/{experience}/schedules/{schedule}', [ProviderExperienceScheduleController::class, 'destroy']);
     });
+});
+
+/**
+ * Grupo de rutas para clientes
+ */
+Route::prefix('customer')->group(function () {
+
+    /**
+     * Crear cuenta de cliente
+     *
+     * POST /api/customer/register
+     */
+    Route::post('/register', [CustomerAuthController::class, 'register']);
 });

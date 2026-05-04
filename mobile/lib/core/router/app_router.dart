@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/customer/auth/presentation/screens/customer_register_screen.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
@@ -72,7 +73,9 @@ class AppRouter {
         path: '/register',
         name: RouteNames.register,
         builder: (context, state) {
-          return const _CustomerRegisterPlaceholder();
+          return CustomerRegisterScreen(
+            authController: _authController,
+          );
         },
       ),
 
@@ -407,21 +410,21 @@ class AppRouter {
 /// Placeholder temporal del registro de cliente.
 ///
 /// Todavía no hemos creado el flujo real de cliente.
-class _CustomerRegisterPlaceholder extends StatelessWidget {
-  const _CustomerRegisterPlaceholder();
+// class _CustomerRegisterPlaceholder extends StatelessWidget {
+//   const _CustomerRegisterPlaceholder();
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Crear Cuenta'),
-      ),
-      body: const Center(
-        child: Text('Registro de cliente pendiente'),
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text('Crear Cuenta'),
+//       ),
+//       body: const Center(
+//         child: Text('Registro de cliente pendiente'),
+//       ),
+//     );
+//   }
+// }
 
 /// Placeholder temporal del dashboard proveedor.
 class _ProviderDashboardPlaceholder extends StatelessWidget {
