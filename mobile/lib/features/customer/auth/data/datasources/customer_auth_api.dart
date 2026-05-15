@@ -3,21 +3,17 @@ import 'package:http/http.dart' as http;
 import '../../../../../core/config/environment.dart';
 import '../models/customer_auth_response.dart';
 
-/**
- * CustomerAuthApi
- *
- * RESPONSABILIDAD:
- * - Comunicarse con Laravel
- * - NO manejar UI
- * - NO navegar
- * - SOLO HTTP + parseo
- */
+/// CustomerAuthApi
+///
+/// RESPONSABILIDAD:
+/// - Comunicarse con Laravel
+/// - NO manejar UI
+/// - NO navegar
+/// - SOLO HTTP + parseo
 class CustomerAuthApi {
   const CustomerAuthApi();
 
-  /**
-   * Registrar cliente
-   */
+  /// Registrar cliente
   Future<CustomerAuthResponse> register({
     required String fullName,
     required String email,
@@ -45,9 +41,7 @@ class CustomerAuthApi {
     return _handleResponse(response);
   }
 
-  /**
-   * Manejo de respuesta del backend
-   */
+  /// Manejo de respuesta del backend
   CustomerAuthResponse _handleResponse(http.Response response) {
     final body = jsonDecode(response.body);
 

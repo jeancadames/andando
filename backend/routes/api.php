@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Auth\LoginController;
+use App\Http\Controllers\Api\Client\ExploreController;
 use App\Http\Controllers\Api\Customer\CustomerAuthController;
 use App\Http\Controllers\Api\Provider\ProviderAuthController;
 use App\Http\Controllers\Api\Provider\ProviderDashboardController;
@@ -7,25 +9,23 @@ use App\Http\Controllers\Api\Provider\ProviderExperienceController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceScheduleController;
 use Illuminate\Support\Facades\Route;
 
+/*
+|--------------------------------------------------------------------------
+| Login general
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/login
+|
+| Permite iniciar sesión a:
+| - clientes
+| - afiliados/proveedores
+*/
+Route::post('/auth/login', LoginController::class);
+
 Route::prefix('provider')->group(function () {
-    /*
-    |--------------------------------------------------------------------------
-    | Rutas públicas de afiliado/proveedor
-    |--------------------------------------------------------------------------
-    |
-    | Estas no requieren token.
-    */
     Route::post('/register', [ProviderAuthController::class, 'register']);
     Route::post('/login', [ProviderAuthController::class, 'login']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Rutas protegidas de afiliado/proveedor
-    |--------------------------------------------------------------------------
-    |
-    | Estas sí requieren:
-    | Authorization: Bearer <token>
-    */
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [ProviderAuthController::class, 'me']);
         Route::post('/logout', [ProviderAuthController::class, 'logout']);
@@ -47,15 +47,12 @@ Route::prefix('provider')->group(function () {
     });
 });
 
-/**
- * Grupo de rutas para clientes
- */
 Route::prefix('customer')->group(function () {
-
-    /**
-     * Crear cuenta de cliente
-     *
-     * POST /api/customer/register
-     */
     Route::post('/register', [CustomerAuthController::class, 'register']);
+});
+
+Route::prefix('client/explore')->group(function () {
+    Route::get('/experiences', [ExploreController::class, 'index']);
+    Route::get('/experiences/categories', [ExploreController::class, 'categories']);
+    Route::get('/experiences/{id}', [ExploreController::class, 'show']);
 });

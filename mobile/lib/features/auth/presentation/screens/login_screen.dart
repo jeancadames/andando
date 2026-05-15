@@ -1,28 +1,31 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../core/config/environment.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../application/auth_controller.dart';
-import '../../../provider/onboarding/data/datasources/provider_auth_api.dart';
 
-/// Login general de AndanDO.
+/// Pantalla de login general de AndanDO.
 ///
-/// Por ahora este login está conectado al endpoint de afiliado/proveedor:
+/// Esta pantalla permite:
+/// - iniciar sesión con email y contraseña.
+/// - autenticar usuarios normales/clientes.
+/// - autenticar afiliados/proveedores.
+/// - mostrar botón visual para Google.
+/// - mostrar botón visual para Apple.
+/// - crear cuenta.
+/// - ir al registro de afiliado.
+/// - continuar como invitado.
 ///
-/// POST /api/provider/login
-///
-/// Flujo actual:
-/// - El usuario escribe correo y contraseña.
-/// - Flutter llama a Laravel.
-/// - Laravel devuelve token, user y provider.
-/// - Flutter guarda la sesión.
-/// - Si el afiliado está aprobado, va a /provider/dashboard.
-/// - Si está pendiente, va a /provider/verification-pending.
-///
-/// Nota:
-/// Más adelante, cuando exista login de cliente, este login puede decidir
-/// si el usuario es cliente o afiliado según la respuesta del backend.
+/// Flujo correcto:
+/// - customer/client → /client/explore
+/// - provider/affiliate approved → /provider/dashboard
+/// - provider/affiliate pending/rejected → /provider/verification-pending
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
@@ -31,8 +34,8 @@ class LoginScreen extends StatefulWidget {
 
   /// Controlador global de autenticación.
   ///
-  /// Lo necesitamos para guardar la sesión después de que Laravel
-  /// responda correctamente con un token.
+  /// Lo usamos para guardar la sesión después de que Laravel
+  /// responda correctamente con token y datos del usuario.
   final AuthController authController;
 
   @override
@@ -42,46 +45,50 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   /// Llave del formulario.
   ///
-  /// Permite validar todos los campos antes de enviar el login.
+  /// Permite validar email y contraseña antes de enviar.
   final _formKey = GlobalKey<FormState>();
 
-  /// Servicio que llama al backend Laravel para login de afiliado/proveedor.
-  final _providerAuthApi = const ProviderAuthApi();
+  /// API general de autenticación.
+  ///
+  /// Esta clase está definida al final de este mismo archivo
+  /// para que no tengas que crear archivos adicionales ahora.
+  final _authApi = const _GeneralAuthApi();
 
-  /// Controlador del correo electrónico.
+  /// Controlador del campo email.
   final _emailController = TextEditingController();
 
-  /// Controlador de la contraseña.
+  /// Controlador del campo contraseña.
   final _passwordController = TextEditingController();
 
   /// Define si la contraseña se muestra o se oculta.
   bool _showPassword = false;
 
-  /// Define si estamos enviando la solicitud de login.
-  ///
-  /// Cuando es true:
-  /// - bloqueamos el botón.
-  /// - mostramos loader.
+  /// Indica si el login por email/contraseña está enviándose.
   bool _isLoading = false;
+
+  /// Indica si se presionó el botón de Google.
+  bool _isGoogleLoading = false;
+
+  /// Indica si se presionó el botón de Apple.
+  bool _isAppleLoading = false;
 
   @override
   void dispose() {
-    /// Liberamos los controladores para evitar uso innecesario de memoria.
+    /// Siempre liberamos los controladores para evitar fugas de memoria.
     _emailController.dispose();
     _passwordController.dispose();
 
     super.dispose();
   }
 
-  /// Envía el login al backend.
+  /// Envía login por email y contraseña.
   ///
-  /// Este método reemplaza la navegación temporal que antes hacía:
+  /// Este método ahora usa:
   ///
-  /// context.goNamed(RouteNames.clientExplore);
+  /// POST /api/auth/login
   ///
-  /// Ahora hace login real contra Laravel.
+  /// Ese endpoint debe aceptar tanto clientes como afiliados/proveedores.
   Future<void> _submitLogin() async {
-    /// Primero validamos campos del formulario.
     final isValid = _formKey.currentState!.validate();
 
     if (!isValid) {
@@ -93,56 +100,37 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      /// Llamamos al endpoint:
-      ///
-      /// POST /api/provider/login
-      ///
-      /// El backend debe devolver:
-      /// - token
-      /// - user
-      /// - provider
-      final response = await _providerAuthApi.login(
+      final response = await _authApi.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
-      /// Guardamos sesión localmente.
-      ///
-      /// Esto es obligatorio antes de navegar a /provider/dashboard.
-      ///
-      /// Si no guardamos sesión, el router seguirá creyendo que el usuario
-      /// no está autenticado y puede devolverlo a /login.
+      final normalizedUserType = _normalizeUserType(response.userType);
+
+      final isProvider = _isProviderType(normalizedUserType);
+
       await widget.authController.saveSession(
         token: response.token,
-        userType: 'provider',
+        userType: normalizedUserType,
         name: response.userName,
         email: response.userEmail,
-        providerStatus: response.providerStatus,
+
+        /// Solo guardamos providerStatus cuando el usuario es afiliado/proveedor.
+        ///
+        /// Para usuarios normales, esto debe ir null para que AuthController
+        /// limpie cualquier providerStatus viejo.
+        providerStatus: isProvider ? response.providerStatus : null,
       );
 
       if (!mounted) return;
 
-      /// Redirección según el estado del afiliado/proveedor.
-      ///
-      /// Si está aprobado, ya puede entrar al dashboard.
-      if (response.providerStatus == 'approved') {
-        context.goNamed(RouteNames.providerDashboard);
-        return;
-      }
-
-      /// Si todavía no está aprobado, lo mandamos a la pantalla de revisión.
-      ///
-      /// Esto evita que un afiliado pending entre al dashboard.
-      context.goNamed(RouteNames.providerVerificationPending);
+      _redirectAfterLogin(
+        userType: normalizedUserType,
+        providerStatus: response.providerStatus,
+      );
     } catch (e) {
       if (!mounted) return;
 
-      /// Mostramos el error devuelto por Laravel.
-      ///
-      /// Ejemplos:
-      /// - credenciales incorrectas.
-      /// - usuario no tiene perfil de proveedor.
-      /// - error de conexión.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -159,7 +147,110 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Muestra mensaje temporal para recuperación de contraseña.
+  /// Normaliza el tipo de usuario recibido desde Laravel.
+  ///
+  /// Esto nos permite aceptar distintos nombres internos:
+  /// - customer
+  /// - client
+  /// - user
+  /// - provider
+  /// - affiliate
+  /// - afiliado
+  String _normalizeUserType(String userType) {
+    final type = userType.trim().toLowerCase();
+
+    if (type == 'provider' || type == 'affiliate' || type == 'afiliado') {
+      return 'provider';
+    }
+
+    if (type == 'customer' || type == 'client' || type == 'user') {
+      return 'customer';
+    }
+
+    return type.isEmpty ? 'customer' : type;
+  }
+
+  /// Determina si el usuario pertenece al flujo de afiliado/proveedor.
+  bool _isProviderType(String userType) {
+    return userType == 'provider';
+  }
+
+  /// Redirige al usuario según su tipo y estado.
+  ///
+  /// Reglas:
+  /// - Cliente → explorar.
+  /// - Proveedor aprobado → dashboard.
+  /// - Proveedor pendiente/rechazado/suspendido → pantalla de verificación.
+  void _redirectAfterLogin({
+    required String userType,
+    required String? providerStatus,
+  }) {
+    if (_isProviderType(userType)) {
+      if (providerStatus == 'approved') {
+        context.goNamed(RouteNames.providerDashboard);
+        return;
+      }
+
+      context.goNamed(RouteNames.providerVerificationPending);
+      return;
+    }
+
+    context.goNamed(RouteNames.clientExplore);
+  }
+
+  /// Acción temporal del botón "Continuar con Google".
+  ///
+  /// Por ahora NO llama backend.
+  /// Solo dejamos el botón visualmente listo para conectar después.
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _isGoogleLoading = true;
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    setState(() {
+      _isGoogleLoading = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Inicio de sesión con Google pendiente de conectar.',
+        ),
+      ),
+    );
+  }
+
+  /// Acción temporal del botón "Continuar con Apple".
+  ///
+  /// Por ahora NO llama backend.
+  /// Solo dejamos el botón visualmente listo para conectar después.
+  Future<void> _handleAppleLogin() async {
+    setState(() {
+      _isAppleLoading = true;
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    setState(() {
+      _isAppleLoading = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Inicio de sesión con Apple pendiente de conectar.',
+        ),
+      ),
+    );
+  }
+
+  /// Acción temporal para recuperación de contraseña.
   void _showForgotPasswordMessage() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -168,19 +259,17 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Acción temporal para registro de cliente.
-  ///
-  /// Todavía no hemos construido el registro de cliente.
+  /// Navega al registro de cliente.
   void _goToCustomerRegister() {
     context.goNamed(RouteNames.register);
   }
 
-  /// Envía al flujo de registro de afiliado/proveedor.
+  /// Navega al registro de afiliado.
   void _goToAffiliateRegister() {
     context.goNamed(RouteNames.affiliateRegister);
   }
 
-  /// Permite entrar a explorar sin iniciar sesión.
+  /// Permite explorar la app sin autenticarse.
   void _continueAsGuest() {
     context.goNamed(RouteNames.clientExplore);
   }
@@ -192,37 +281,38 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            /// Logo superior.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 48, 24, 36),
-              child: Center(
-                child: Image.asset(
-                  'assets/images/logos/andando_logo.png',
-                  width: double.infinity,
-                  fit: BoxFit.contain,
-
-                  /// Fallback por si el asset todavía no está configurado.
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Text(
-                      'AndanDO',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.primaryBlue,
-                        fontSize: 44,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-
-            /// Contenido principal.
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
+                    const SizedBox(height: 48),
+
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 310,
+                        ),
+                        child: Image.asset(
+                          'assets/images/logos/andando_logo.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Text(
+                              'AndanDO',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.primaryBlue,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 72),
+
                     Form(
                       key: _formKey,
                       child: Column(
@@ -248,7 +338,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             },
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 22),
 
                           _LoginTextField(
                             label: 'Contraseña',
@@ -288,13 +378,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                 '¿Olvidaste tu contraseña?',
                                 style: TextStyle(
                                   color: AppColors.primaryBlue,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
 
                           SizedBox(
                             width: double.infinity,
@@ -306,9 +397,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 foregroundColor: AppColors.white,
                                 disabledBackgroundColor:
                                     AppColors.primaryBlue.withAlpha(120),
-                                elevation: 8,
+                                elevation: 10,
                                 shadowColor:
-                                    AppColors.primaryBlue.withAlpha(45),
+                                    AppColors.primaryBlue.withAlpha(55),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -325,7 +416,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   : const Text(
                                       'Iniciar Sesión',
                                       style: TextStyle(
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
                                         fontSize: 16,
                                       ),
                                     ),
@@ -337,11 +428,40 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 28),
 
+                    const _OrDivider(),
+
+                    const SizedBox(height: 28),
+
+                    _SocialLoginButton(
+                      label: 'Continuar con Google',
+                      backgroundColor: AppColors.white,
+                      foregroundColor: AppColors.textDark,
+                      borderColor: const Color(0xFFE5E7EB),
+                      isLoading: _isGoogleLoading,
+                      icon: const _GoogleIcon(),
+                      onPressed: _isGoogleLoading ? null : _handleGoogleLogin,
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    _SocialLoginButton(
+                      label: 'Continuar con Apple',
+                      backgroundColor: Colors.black,
+                      foregroundColor: AppColors.white,
+                      borderColor: Colors.black,
+                      isLoading: _isAppleLoading,
+                      icon: const _AppleIcon(),
+                      onPressed: _isAppleLoading ? null : _handleAppleLogin,
+                    ),
+
+                    const SizedBox(height: 30),
+
                     const Text(
                       '¿No tienes cuenta?',
                       style: TextStyle(
                         color: AppColors.mutedForeground,
                         fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
 
@@ -365,7 +485,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Text(
                           'Crear Cuenta',
                           style: TextStyle(
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             fontSize: 16,
                           ),
                         ),
@@ -382,12 +502,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: AppColors.primaryRed,
                           decoration: TextDecoration.underline,
                           decorationColor: AppColors.primaryRed,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     TextButton(
                       onPressed: _continueAsGuest,
@@ -395,55 +516,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Continuar como invitado →',
                         style: TextStyle(
                           color: AppColors.mutedForeground,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
                         ),
                       ),
                     ),
+
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
             ),
 
-            /// Texto legal inferior.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: const [
-                  Text(
-                    'Al continuar, aceptas nuestros ',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.mutedForeground,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Text(
-                    'Términos',
-                    style: TextStyle(
-                      color: AppColors.primaryBlue,
-                      fontSize: 12,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                  Text(
-                    ' y ',
-                    style: TextStyle(
-                      color: AppColors.mutedForeground,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Text(
-                    'Política de Privacidad',
-                    style: TextStyle(
-                      color: AppColors.primaryBlue,
-                      fontSize: 12,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ],
-              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 10, 24, 20),
+              child: _LegalFooter(),
             ),
           ],
         ),
@@ -452,10 +539,144 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-/// Campo reutilizable del login general.
+/// API general de login.
 ///
-/// Este widget fuerza el texto oscuro para evitar el problema
-/// de que los inputs hereden texto blanco desde el ThemeData global.
+/// Esta clase llama al backend Laravel:
+///
+/// POST /api/auth/login
+///
+/// Debe servir tanto para:
+/// - clientes/usuarios.
+/// - afiliados/proveedores.
+class _GeneralAuthApi {
+  const _GeneralAuthApi();
+
+  Future<_AuthLoginResponse> login({
+    required String email,
+    required String password,
+  }) async {
+    final uri = Uri.parse('${Environment.apiBaseUrl}/auth/login');
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+      },
+      body: {
+        'email': email,
+        'password': password,
+      },
+    );
+
+    return _handleResponse(response);
+  }
+
+  _AuthLoginResponse _handleResponse(http.Response response) {
+    Map<String, dynamic> body;
+
+    try {
+      body = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('El servidor respondió con un formato inválido.');
+    }
+
+    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+
+    if (isSuccessful) {
+      return _AuthLoginResponse.fromJson(body);
+    }
+
+    if (body.containsKey('errors')) {
+      final errors = body['errors'] as Map<String, dynamic>;
+
+      if (errors.isNotEmpty) {
+        final firstError = errors.values.first;
+
+        if (firstError is List && firstError.isNotEmpty) {
+          throw Exception(firstError.first.toString());
+        }
+      }
+    }
+
+    throw Exception(
+      body['message']?.toString() ?? 'No se pudo iniciar sesión.',
+    );
+  }
+}
+
+/// Modelo de respuesta del login general.
+///
+/// Laravel debe responder algo como:
+///
+/// Cliente:
+/// {
+///   "token": "...",
+///   "user": {
+///     "id": 1,
+///     "name": "Jean",
+///     "email": "jean@email.com",
+///     "type": "customer"
+///   },
+///   "provider": null
+/// }
+///
+/// Afiliado/proveedor:
+/// {
+///   "token": "...",
+///   "user": {
+///     "id": 2,
+///     "name": "Proveedor",
+///     "email": "proveedor@email.com",
+///     "type": "provider"
+///   },
+///   "provider": {
+///     "id": 1,
+///     "status": "approved"
+///   }
+/// }
+class _AuthLoginResponse {
+  const _AuthLoginResponse({
+    required this.token,
+    required this.userName,
+    required this.userEmail,
+    required this.userType,
+    this.providerStatus,
+  });
+
+  final String token;
+  final String userName;
+  final String userEmail;
+  final String userType;
+  final String? providerStatus;
+
+  factory _AuthLoginResponse.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] as Map<String, dynamic>?;
+
+    if (user == null) {
+      throw Exception('La respuesta del servidor no contiene el usuario.');
+    }
+
+    final provider = json['provider'] as Map<String, dynamic>?;
+
+    final rawType = (user['type'] ?? user['role'] ?? '').toString();
+
+    final inferredType = rawType.trim().isNotEmpty
+        ? rawType
+        : provider != null
+            ? 'provider'
+            : 'customer';
+
+    return _AuthLoginResponse(
+      token: json['token']?.toString() ?? '',
+      userName: (user['name'] ?? user['full_name'] ?? 'Usuario').toString(),
+      userEmail: (user['email'] ?? '').toString(),
+      userType: inferredType,
+      providerStatus: provider?['status']?.toString(),
+    );
+  }
+}
+
+/// Campo reusable del formulario de login.
 class _LoginTextField extends StatelessWidget {
   const _LoginTextField({
     required this.label,
@@ -468,28 +689,13 @@ class _LoginTextField extends StatelessWidget {
     this.validator,
   });
 
-  /// Texto visible encima del campo.
   final String label;
-
-  /// Controlador del input.
   final TextEditingController controller;
-
-  /// Placeholder del campo.
   final String hintText;
-
-  /// Icono izquierdo.
   final IconData prefixIcon;
-
-  /// Tipo de teclado.
   final TextInputType? keyboardType;
-
-  /// Define si el texto se oculta.
   final bool obscureText;
-
-  /// Widget derecho opcional.
   final Widget? suffixIcon;
-
-  /// Validador del formulario.
   final String? Function(String?)? validator;
 
   @override
@@ -497,7 +703,6 @@ class _LoginTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        /// Label del campo.
         Text(
           label,
           style: const TextStyle(
@@ -514,20 +719,12 @@ class _LoginTextField extends StatelessWidget {
           keyboardType: keyboardType,
           obscureText: obscureText,
           validator: validator,
-
-          /// ESTA ES LA LÍNEA CLAVE.
-          ///
-          /// Esto fuerza el texto escrito a oscuro.
-          /// Sin esto, el TextFormField puede heredar blanco del theme.
           style: const TextStyle(
             color: AppColors.textDark,
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
-
-          /// Color del cursor.
           cursorColor: AppColors.primaryBlue,
-
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: const TextStyle(
@@ -538,8 +735,17 @@ class _LoginTextField extends StatelessWidget {
             prefixIcon: Icon(
               prefixIcon,
               color: AppColors.mutedForeground,
+              size: 22,
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 50,
+              minHeight: 56,
             ),
             suffixIcon: suffixIcon,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 50,
+              minHeight: 56,
+            ),
             filled: true,
             fillColor: const Color(0xFFF8F9FA),
             contentPadding: const EdgeInsets.symmetric(
@@ -578,6 +784,286 @@ class _LoginTextField extends StatelessWidget {
                 width: 1.4,
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(
+          child: Divider(
+            color: Color(0xFFE5E7EB),
+            thickness: 1,
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'o',
+            style: TextStyle(
+              color: AppColors.mutedForeground,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Divider(
+            color: Color(0xFFE5E7EB),
+            thickness: 1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SocialLoginButton extends StatelessWidget {
+  const _SocialLoginButton({
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.borderColor,
+    required this.icon,
+    required this.onPressed,
+    this.isLoading = false,
+  });
+
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Color borderColor;
+  final Widget icon;
+  final VoidCallback? onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          elevation: backgroundColor == AppColors.white ? 3 : 0,
+          shadowColor: Colors.black.withAlpha(25),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: borderColor,
+              width: 1.4,
+            ),
+          ),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: foregroundColor,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Center(
+                      child: icon,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foregroundColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _AppleIcon extends StatelessWidget {
+  const _AppleIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(
+      offset: const Offset(0.0, -1.5),
+      child: const Icon(
+        Icons.apple,
+        color: AppColors.white,
+        size: 30,
+      ),
+    );
+  }
+}
+
+class _GoogleIcon extends StatelessWidget {
+  const _GoogleIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 24,
+      height: 24,
+      child: CustomPaint(
+        painter: _GoogleIconPainter(),
+      ),
+    );
+  }
+}
+
+class _GoogleIconPainter extends CustomPainter {
+  const _GoogleIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double strokeWidth = size.width * 0.17;
+
+    final Rect rect = Rect.fromLTWH(
+      strokeWidth / 2,
+      strokeWidth / 2,
+      size.width - strokeWidth,
+      size.height - strokeWidth,
+    );
+
+    Paint buildArcPaint(Color color) {
+      return Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round
+        ..isAntiAlias = true;
+    }
+
+    const Color googleBlue = Color(0xFF4285F4);
+    const Color googleRed = Color(0xFFEA4335);
+    const Color googleYellow = Color(0xFFFBBC05);
+    const Color googleGreen = Color(0xFF34A853);
+
+    canvas.drawArc(
+      rect,
+      -0.05 * math.pi,
+      0.48 * math.pi,
+      false,
+      buildArcPaint(googleBlue),
+    );
+
+    canvas.drawArc(
+      rect,
+      -0.78 * math.pi,
+      0.50 * math.pi,
+      false,
+      buildArcPaint(googleRed),
+    );
+
+    canvas.drawArc(
+      rect,
+      -1.25 * math.pi,
+      0.42 * math.pi,
+      false,
+      buildArcPaint(googleYellow),
+    );
+
+    canvas.drawArc(
+      rect,
+      -1.70 * math.pi,
+      0.58 * math.pi,
+      false,
+      buildArcPaint(googleGreen),
+    );
+
+    final Paint horizontalPaint = Paint()
+      ..color = googleBlue
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
+
+    final double y = size.height * 0.52;
+
+    canvas.drawLine(
+      Offset(size.width * 0.53, y),
+      Offset(size.width * 0.88, y),
+      horizontalPaint,
+    );
+
+    canvas.drawLine(
+      Offset(size.width * 0.88, y),
+      Offset(size.width * 0.88, size.height * 0.43),
+      horizontalPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false;
+  }
+}
+
+class _LegalFooter extends StatelessWidget {
+  const _LegalFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: const [
+        Text(
+          'Al continuar, aceptas nuestros ',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.mutedForeground,
+            fontSize: 12,
+          ),
+        ),
+        Text(
+          'Términos',
+          style: TextStyle(
+            color: AppColors.primaryBlue,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            decoration: TextDecoration.underline,
+          ),
+        ),
+        Text(
+          ' y ',
+          style: TextStyle(
+            color: AppColors.mutedForeground,
+            fontSize: 12,
+          ),
+        ),
+        Text(
+          'Política de Privacidad',
+          style: TextStyle(
+            color: AppColors.primaryBlue,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            decoration: TextDecoration.underline,
           ),
         ),
       ],
