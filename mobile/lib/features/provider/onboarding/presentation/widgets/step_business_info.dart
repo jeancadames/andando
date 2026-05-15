@@ -3,24 +3,35 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_colors.dart';
 import 'provider_text_field.dart';
 
-/// Paso 2 del registro de proveedor.
+/// Paso 2 del registro de afiliado.
 ///
-/// Esta pantalla recoge la información comercial del proveedor:
-/// - Nombre del negocio
-/// - Tipo de negocio
-/// - RNC
-/// - Dirección
-/// - Ciudad
-/// - Provincia
+/// Esta pantalla recoge la información comercial del afiliado:
+/// - Nombre del negocio.
+/// - Tipo de negocio.
+/// - RNC.
+/// - Dirección.
+/// - Ciudad.
+/// - Provincia.
 ///
 /// Importante:
-/// El tipo de negocio se envía al backend como slug.
-/// Ejemplo:
+/// El campo "Tipo de negocio" envía un slug técnico al backend.
+///
+/// Flutter enviará uno de estos valores:
+///
 /// - tourism_agency
 /// - tour_operator
+/// - tour_guide
+/// - tourism_transport
+/// - activities_experiences
+/// - other
 ///
-/// El texto visible puede ser "Agencia de Turismo",
-/// pero el backend debe recibir un valor estable y técnico.
+/// Laravel debe tener esos mismos slugs registrados en la tabla:
+///
+/// provider_business_types
+///
+/// Si backend no tiene esos slugs, Laravel responderá:
+///
+/// The selected business type slug is invalid.
 class StepBusinessInfo extends StatelessWidget {
   const StepBusinessInfo({
     super.key,
@@ -49,7 +60,8 @@ class StepBusinessInfo extends StatelessWidget {
 
   /// Slug del tipo de negocio seleccionado.
   ///
-  /// Ejemplo: tourism_agency.
+  /// Este valor viene desde ProviderRegisterScreen y se guarda
+  /// dentro de ProviderRegisterFormData.
   final String selectedBusinessTypeSlug;
 
   /// Provincia seleccionada.
@@ -64,12 +76,18 @@ class StepBusinessInfo extends StatelessWidget {
   /// Callback cuando cambia cualquier campo de texto.
   final VoidCallback onChanged;
 
-  /// Lista de tipos de negocio disponibles.
+  /// Lista completa de tipos de negocio disponibles.
   ///
-  /// En una versión más avanzada, esto debería venir del backend:
-  /// GET /api/provider/business-types
+  /// Estos valores deben coincidir con los slugs existentes en Laravel.
   ///
-  /// Por ahora lo dejamos local para avanzar con el flujo.
+  /// Backend debe aceptar:
+  ///
+  /// tourism_agency
+  /// tour_operator
+  /// tour_guide
+  /// tourism_transport
+  /// activities_experiences
+  /// other
   static const List<_SelectOption> _businessTypes = [
     _SelectOption(
       value: 'tourism_agency',
@@ -99,8 +117,8 @@ class StepBusinessInfo extends StatelessWidget {
 
   /// Provincias disponibles.
   ///
-  /// Para MVP dejamos las principales según el diseño.
-  /// Luego podemos mover esto a un catálogo real.
+  /// Para el MVP dejamos una lista local.
+  /// Más adelante esto puede venir desde backend.
   static const List<_SelectOption> _provinces = [
     _SelectOption(value: 'Distrito Nacional', label: 'Distrito Nacional'),
     _SelectOption(value: 'Santo Domingo', label: 'Santo Domingo'),
@@ -122,7 +140,6 @@ class StepBusinessInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        /// Título del paso.
         const Text(
           'Información del Negocio',
           style: TextStyle(
@@ -134,7 +151,6 @@ class StepBusinessInfo extends StatelessWidget {
 
         const SizedBox(height: 8),
 
-        /// Subtítulo explicativo.
         const Text(
           'Cuéntanos sobre tu empresa',
           style: TextStyle(
@@ -183,18 +199,12 @@ class StepBusinessInfo extends StatelessWidget {
           hintText: 'Calle, número, sector',
           prefixIcon: Icons.location_on_outlined,
           keyboardType: TextInputType.streetAddress,
-
-          /// La dirección ocupa varias líneas.
           maxLines: 3,
           onChanged: onChanged,
         ),
 
         const SizedBox(height: 20),
 
-        /// Dos columnas: ciudad y provincia.
-        ///
-        /// En pantallas pequeñas esto puede quedar ajustado,
-        /// pero mantiene el diseño original de Figma.
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -229,26 +239,38 @@ class StepBusinessInfo extends StatelessWidget {
 
 /// Modelo simple para opciones de dropdown.
 ///
-/// Este modelo solo se usa dentro de este archivo.
-/// Por eso es privado con guion bajo.
+/// value:
+/// Valor técnico que se guarda o se envía al backend.
+///
+/// label:
+/// Texto visible para el usuario.
 class _SelectOption {
   const _SelectOption({
     required this.value,
     required this.label,
   });
 
-  /// Valor técnico que se guarda o se envía al backend.
   final String value;
-
-  /// Texto visible para el usuario.
   final String label;
 }
 
 /// Dropdown reutilizable dentro del paso de negocio.
 ///
-/// Lo dejamos aquí privado porque por ahora solo se usa en este step.
-/// Si luego lo usamos en más pantallas, lo movemos a:
-/// provider_select_field.dart
+/// Lo usamos para:
+/// - Tipo de negocio.
+/// - Provincia.
+///
+/// Este widget también protege contra valores viejos.
+/// Por ejemplo, si antes tenías guardado:
+///
+/// agencia-de-tours
+///
+/// pero ahora la lista usa:
+///
+/// tourism_agency
+///
+/// entonces no intentamos mostrar un value inexistente.
+/// En su lugar, mostramos el placeholder "Seleccionar...".
 class _StepSelectField extends StatelessWidget {
   const _StepSelectField({
     required this.label,
@@ -266,11 +288,17 @@ class _StepSelectField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    /// DropdownButtonFormField necesita null cuando no hay valor seleccionado.
+    /// Verificamos si el value actual realmente existe en la lista.
     ///
-    /// Si le pasamos string vacío, Flutter intentará buscar una opción
-    /// con value '', y si no existe puede dar error.
-    final selectedValue = value.isEmpty ? null : value;
+    /// Esto evita este error típico de Flutter:
+    ///
+    /// There should be exactly one item with DropdownButton's value.
+    final optionExists = options.any((option) => option.value == value);
+
+    /// Si value está vacío o no existe en la lista, usamos null.
+    ///
+    /// null hace que el Dropdown muestre el placeholder.
+    final selectedValue = value.isEmpty || !optionExists ? null : value;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,17 +318,16 @@ class _StepSelectField extends StatelessWidget {
           value: selectedValue,
           isExpanded: true,
 
-          /// IMPORTANTE:
-          /// Esto evita que el texto seleccionado salga blanco.
+          /// Fuerza texto oscuro.
+          ///
+          /// Esto evita que el dropdown herede texto blanco del theme global.
           style: const TextStyle(
             color: AppColors.textDark,
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
 
-          /// Color del menú desplegable.
           dropdownColor: AppColors.white,
-
           iconEnabledColor: AppColors.mutedForeground,
 
           decoration: InputDecoration(
@@ -329,7 +356,21 @@ class _StepSelectField extends StatelessWidget {
                 width: 1.4,
               ),
             ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: AppColors.primaryRed,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: AppColors.primaryRed,
+                width: 1.4,
+              ),
+            ),
           ),
+
           hint: Text(
             placeholder,
             style: const TextStyle(
@@ -338,22 +379,21 @@ class _StepSelectField extends StatelessWidget {
               fontWeight: FontWeight.w400,
             ),
           ),
+
           items: options.map((option) {
             return DropdownMenuItem<String>(
               value: option.value,
               child: Text(
                 option.label,
-
-                /// IMPORTANTE:
-                /// Esto evita que las opciones del dropdown hereden blanco
-                /// desde el theme global.
                 style: const TextStyle(
                   color: AppColors.textDark,
                   fontSize: 16,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             );
           }).toList(),
+
           onChanged: onChanged,
         ),
       ],
