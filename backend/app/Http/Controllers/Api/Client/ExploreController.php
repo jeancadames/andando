@@ -147,7 +147,7 @@ class ExploreController extends Controller
             'cancellation_policy' => $experience->cancellation_policy,
             'instant_confirmation' => true,
             'cover_photo_url' => $coverPhoto
-                ? asset('storage/' . ltrim($coverPhoto->path, '/'))
+                ? $this->formatPhotoUrl($coverPhoto->path)
                 : null,
             'rating' => $experience->rating
                 ? round((float) $experience->rating, 1)
@@ -177,5 +177,24 @@ class ExploreController extends Controller
         }
 
         return $data;
+    }
+
+        /**
+     * Formatea la URL de una foto.
+     *
+     * Si la imagen ya es una URL externa, se devuelve igual.
+     * Si es una ruta local, se convierte a URL pública de storage.
+     */
+    private function formatPhotoUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return asset('storage/' . ltrim($path, '/'));
     }
 }

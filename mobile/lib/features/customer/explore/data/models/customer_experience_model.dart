@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 /// Modelo usado por el cliente para explorar experiencias.
 ///
 /// Este modelo representa una experiencia creada por un proveedor
@@ -19,6 +21,9 @@ class CustomerExperienceModel {
   final double rating;
   final int reviewsCount;
 
+  /// Fechas disponibles para reservar.
+  final List<DateTime> availableDates;
+
   const CustomerExperienceModel({
     required this.id,
     required this.title,
@@ -35,9 +40,9 @@ class CustomerExperienceModel {
     required this.coverPhotoUrl,
     required this.rating,
     required this.reviewsCount,
+    required this.availableDates,
   });
 
-  /// Construye el modelo desde el JSON retornado por Laravel.
   factory CustomerExperienceModel.fromJson(Map<String, dynamic> json) {
     return CustomerExperienceModel(
       id: _toInt(json['id']),
@@ -55,10 +60,12 @@ class CustomerExperienceModel {
       coverPhotoUrl: json['cover_photo_url']?.toString(),
       rating: _toDouble(json['rating']),
       reviewsCount: _toInt(json['reviews_count']),
+      availableDates: _parseAvailableDates(
+        json['available_dates'],
+      ),
     );
   }
 
-  /// Convierte el modelo a JSON.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -76,19 +83,30 @@ class CustomerExperienceModel {
       'cover_photo_url': coverPhotoUrl,
       'rating': rating,
       'reviews_count': reviewsCount,
+      'available_dates': availableDates
+          .map((date) => date.toIso8601String())
+          .toList(),
     };
   }
 
-  /// Precio formateado para mostrar en UI.
+  /// Precio formateado con separador de miles.
+  ///
+  /// Ejemplo:
+  /// RD$4,200
+  /// RD$25,000
+  /// RD$1,250,000
   String get formattedPrice {
+    final formatter = NumberFormat('#,###', 'en_US');
+
+    final formattedNumber = formatter.format(price);
+
     if (currency == 'DOP') {
-      return 'RD\$${price.toStringAsFixed(0)}';
+      return 'RD\$$formattedNumber';
     }
 
-    return '$currency ${price.toStringAsFixed(0)}';
+    return '$currency $formattedNumber';
   }
 
-  /// Ubicación segura para evitar textos nulos en pantalla.
   String get displayLocation {
     if (location != null && location!.trim().isNotEmpty) {
       return location!;
@@ -101,7 +119,6 @@ class CustomerExperienceModel {
     return 'Ubicación no especificada';
   }
 
-  /// Duración segura para mostrar en pantalla.
   String get displayDuration {
     if (duration != null && duration!.trim().isNotEmpty) {
       return duration!;
@@ -114,6 +131,7 @@ class CustomerExperienceModel {
     if (value is int) return value;
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
+
     return 0;
   }
 
@@ -122,17 +140,44 @@ class CustomerExperienceModel {
     if (value is int) return value.toDouble();
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0;
+
     return 0;
   }
 
   static bool _toBool(dynamic value) {
     if (value is bool) return value;
-    if (value is int) return value == 1;
+
+    if (value is int) {
+      return value == 1;
+    }
+
     if (value is String) {
       final normalized = value.toLowerCase();
+
       return normalized == 'true' || normalized == '1';
     }
 
     return false;
+  }
+
+  static List<DateTime> _parseAvailableDates(dynamic value) {
+    if (value == null) {
+      return [];
+    }
+
+    if (value is! List) {
+      return [];
+    }
+
+    return value
+        .map((item) {
+          if (item is String) {
+            return DateTime.tryParse(item);
+          }
+
+          return null;
+        })
+        .whereType<DateTime>()
+        .toList();
   }
 }

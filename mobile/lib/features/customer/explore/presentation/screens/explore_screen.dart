@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/explore_controller.dart';
 import '../../data/models/customer_experience_model.dart';
+import 'experience_detail_screen.dart';
 
 /// Pantalla principal de exploración para customers y visitantes.
 ///
@@ -88,33 +89,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     )
                   else ...[
                     SliverToBoxAdapter(
-                      child: _SectionTitle(
+                      child: _ExperienceCarouselSection(
                         title: 'Actividades populares',
                         subtitle: 'Experiencias recomendadas para ti',
+                        experiences: _controller.popularExperiences,
+                        controller: _controller,
                       ),
                     ),
-                    SliverList.separated(
-                      itemCount: _controller.experiences.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 14),
-                      itemBuilder: (context, index) {
-                        final experience = _controller.experiences[index];
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: _ExperienceCard(
-                            experience: experience,
-                            onTap: () {
-                              // Aquí luego conectamos con TourDetail.
-                              // Ejemplo futuro:
-                              // Navigator.pushNamed(
-                              //   context,
-                              //   '/client/tour',
-                              //   arguments: experience.id,
-                              // );
-                            },
-                          ),
-                        );
-                      },
+                    SliverToBoxAdapter(
+                      child: _ExperienceCarouselSection(
+                        title: 'Actividades recomendadas',
+                        subtitle: 'Basadas en tus favoritos',
+                        experiences: _controller.recommendedExperiences,
+                        controller: _controller,
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: _ExperienceCarouselSection(
+                        title: 'Actividades cercanas a ti',
+                        subtitle: 'Opciones disponibles cerca de tu ubicación',
+                        experiences: _controller.nearbyExperiences,
+                        controller: _controller,
+                      ),
                     ),
                     const SliverToBoxAdapter(
                       child: SizedBox(height: 24),
@@ -274,6 +270,70 @@ class _CategoryList extends StatelessWidget {
   }
 }
 
+/// Sección reutilizable de carrusel horizontal de experiencias.
+class _ExperienceCarouselSection extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<CustomerExperienceModel> experiences;
+  final ExploreController controller;
+
+  const _ExperienceCarouselSection({
+    required this.title,
+    required this.subtitle,
+    required this.experiences,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (experiences.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(
+          title: title,
+          subtitle: subtitle,
+        ),
+        SizedBox(
+          height: 330,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            scrollDirection: Axis.horizontal,
+            itemCount: experiences.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              final experience = experiences[index];
+
+              return SizedBox(
+                width: 260,
+                child: _ExperienceCard(
+                  experience: experience,
+                  isFavorite: controller.isFavorite(experience.id),
+                  onFavoriteTap: () {
+                    controller.toggleFavorite(experience.id);
+                  },
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ExperienceDetailScreen(
+                          experience: experience,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Título de sección.
 class _SectionTitle extends StatelessWidget {
   final String title;
@@ -316,10 +376,14 @@ class _SectionTitle extends StatelessWidget {
 /// Card visual de experiencia.
 class _ExperienceCard extends StatelessWidget {
   final CustomerExperienceModel experience;
+  final bool isFavorite;
+  final VoidCallback onFavoriteTap;
   final VoidCallback onTap;
 
   const _ExperienceCard({
     required this.experience,
+    required this.isFavorite,
+    required this.onFavoriteTap,
     required this.onTap,
   });
 
@@ -331,13 +395,13 @@ class _ExperienceCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 255,
+        height: 330,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(26),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withOpacity(0.06),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -346,7 +410,8 @@ class _ExperienceCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Column(
           children: [
-            Expanded(
+            SizedBox(
+              height: 155,
               child: Stack(
                 children: [
                   Positioned.fill(
@@ -363,17 +428,24 @@ class _ExperienceCard extends StatelessWidget {
                   Positioned(
                     top: 14,
                     right: 14,
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.92),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Icon(
-                        Icons.favorite_border_rounded,
-                        size: 21,
-                        color: Color(0xFF111827),
+                    child: GestureDetector(
+                      onTap: onFavoriteTap,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Icon(
+                          isFavorite
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          size: 21,
+                          color: isFavorite
+                              ? const Color(0xFFE11D48)
+                              : const Color(0xFF111827),
+                        ),
                       ),
                     ),
                   ),
@@ -387,7 +459,7 @@ class _ExperienceCard extends StatelessWidget {
                           vertical: 7,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
+                          color: Colors.white.withOpacity(0.92),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -403,83 +475,96 @@ class _ExperienceCard extends StatelessWidget {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 13, 16, 15),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    experience.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF111827),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 13, 16, 15),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      experience.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 17,
-                        color: Color(0xFF6B7280),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          experience.displayLocation,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF6B7280),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 17,
+                          color: Color(0xFF6B7280),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            experience.displayLocation,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF6B7280),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.star_rounded,
-                        size: 17,
-                        color: Color(0xFFF59E0B),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        experience.rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF111827),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 16,
+                          color: Color(0xFF6B7280),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 11),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          experience.displayDuration,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF6B7280),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            experience.displayDuration,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF6B7280),
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        experience.formattedPrice,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF111827),
+                      ],
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 17,
+                          color: Color(0xFFF59E0B),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 3),
+                        Text(
+                          experience.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          experience.formattedPrice,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-
+use App\Models\ProviderExperiencePhoto;
 use Illuminate\Support\Facades\DB;
 use App\Models\Provider;
 use App\Models\ProviderExperience;
@@ -267,7 +267,7 @@ class ProviderExperienceSeeder extends Seeder
          * Crear o actualizar experiencias.
          */
         foreach ($experiences as $experience) {
-            ProviderExperience::updateOrCreate(
+            $createdExperience = ProviderExperience::updateOrCreate(
                 [
                     'provider_id' => $provider->id,
                     'title' => $experience['title'],
@@ -278,6 +278,32 @@ class ProviderExperienceSeeder extends Seeder
                         'provider_id' => $provider->id,
                     ]
                 )
+            );
+
+            /**
+             * Imagen demo para mostrar en la pantalla Explorar.
+             */
+            $imageUrl = match ($createdExperience->category) {
+                'Aventura' => 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+                'Cultural' => 'https://images.unsplash.com/photo-1518005020951-eccb494ad742',
+                'Playa' => 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e',
+                'Naturaleza' => 'https://images.unsplash.com/photo-1501785888041-af3ef285b470',
+                default => 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+            };
+
+            ProviderExperiencePhoto::updateOrCreate(
+                [
+                    'provider_experience_id' => $createdExperience->id,
+                    'is_cover' => true,
+                ],
+                [
+                    'path' => $imageUrl,
+                    'original_name' => 'demo-cover.jpg',
+                    'mime_type' => 'image/jpeg',
+                    'size_bytes' => 0,
+                    'sort_order' => 1,
+                    'is_cover' => true,
+                ]
             );
         }
     }
