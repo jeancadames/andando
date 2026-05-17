@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/customer_experience_model.dart';
+import '../../../reservations/data/datasources/customer_booking_remote_datasource.dart';
 
 class ExperienceDetailScreen extends StatefulWidget {
   final CustomerExperienceModel experience;
+  final bool initialIsFavorite;
+  final ValueChanged<bool> onFavoriteChanged;
 
   const ExperienceDetailScreen({
     super.key,
     required this.experience,
+    required this.initialIsFavorite,
+    required this.onFavoriteChanged,
   });
 
   @override
@@ -17,13 +23,26 @@ class ExperienceDetailScreen extends StatefulWidget {
 }
 
 class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
-  bool isFavorite = false;
+  late bool isFavorite;
+
   int travelers = 1;
-  DateTime? selectedDate;
+  bool isReserving = false;
+
+  CustomerExperienceScheduleModel? selectedSchedule;
+  late List<CustomerExperienceScheduleModel> _availableSchedules;
 
   late final TextEditingController _travelersController;
+  late final CustomerBookingRemoteDataSource _bookingDataSource;
+
+  List<CustomerExperienceScheduleModel> get availableSchedules {
+    return _availableSchedules;
+  }
 
   int get maxTravelers {
+    if (selectedSchedule != null) {
+      return selectedSchedule!.availableSpots;
+    }
+
     if (widget.experience.capacity > 0) {
       return widget.experience.capacity;
     }
@@ -31,58 +50,86 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     return 20;
   }
 
-  List<DateTime> get availableDates {
-    if (widget.experience.availableDates.isNotEmpty) {
-      return widget.experience.availableDates;
-    }
-
-    final now = DateTime.now();
-
-    return List.generate(
-      8,
-      (index) => DateTime(
-        now.year,
-        now.month,
-        now.day + index + 1,
-      ),
-    );
+  bool get canReserve {
+    return selectedSchedule != null &&
+        travelers >= 1 &&
+        travelers <= maxTravelers &&
+        !isReserving;
   }
 
-  int get availableSpotsForSelectedDate {
-    if (selectedDate == null) return maxTravelers;
-
-    return maxTravelers;
+  double get unitPrice {
+    return selectedSchedule?.price ?? widget.experience.price;
   }
 
-  double get totalPrice => widget.experience.price * travelers;
+  String get unitCurrency {
+    return selectedSchedule?.currency ?? widget.experience.currency;
+  }
 
-  String get formattedTotal {
+  double get totalPrice => unitPrice * travelers;
+
+  String get formattedUnitPrice {
     final formatter = NumberFormat('#,###', 'en_US');
+    final formatted = formatter.format(unitPrice);
 
-    final formatted = formatter.format(totalPrice);
-
-    if (widget.experience.currency == 'DOP') {
+    if (unitCurrency == 'DOP') {
       return 'RD\$$formatted';
     }
 
-    return '${widget.experience.currency} $formatted';
+    return '$unitCurrency $formatted';
+  }
+
+  String get formattedTotal {
+    final formatter = NumberFormat('#,###', 'en_US');
+    final formatted = formatter.format(totalPrice);
+
+    if (unitCurrency == 'DOP') {
+      return 'RD\$$formatted';
+    }
+
+    return '$unitCurrency $formatted';
+  }
+
+  String get shareLink {
+    final currentHost = Uri.base.origin;
+
+    if (currentHost.contains('andando.app')) {
+      return 'https://andando.app/experiences/${widget.experience.id}';
+    }
+
+    return '$currentHost/#/experiences/${widget.experience.id}';
+  }
+
+  String get shareMessage {
+    return 'Mira esta experiencia en AndanDO: ${widget.experience.title}\n$shareLink';
   }
 
   @override
   void initState() {
     super.initState();
-    _travelersController = TextEditingController(text: travelers.toString());
 
-    final dates = availableDates;
-    if (dates.isNotEmpty) {
-      selectedDate = dates.first;
-    }
+    isFavorite = widget.initialIsFavorite;
+    selectedSchedule = null;
+
+    _availableSchedules = List<CustomerExperienceScheduleModel>.from(
+      widget.experience.availableSchedules,
+    );
+
+    _travelersController = TextEditingController(text: travelers.toString());
+    _bookingDataSource = CustomerBookingRemoteDataSource();
   }
 
   @override
   void dispose() {
     _travelersController.dispose();
     super.dispose();
+  }
+
+  void _toggleFavorite() {
+    setState(() {
+      isFavorite = !isFavorite;
+    });
+
+    widget.onFavoriteChanged(isFavorite);
   }
 
   void _updateTravelers(int value) {
@@ -97,6 +144,149 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     });
   }
 
+  void _onScheduleChanged(CustomerExperienceScheduleModel? schedule) {
+    setState(() {
+      selectedSchedule = schedule;
+
+      if (schedule != null && travelers > schedule.availableSpots) {
+        travelers = schedule.availableSpots;
+        _travelersController.text = travelers.toString();
+        _travelersController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _travelersController.text.length),
+        );
+      }
+    });
+  }
+
+  void _decreaseAvailableSpotsAfterBooking() {
+  final schedule = selectedSchedule;
+
+  if (schedule == null) return;
+
+  final newAvailableSpots = schedule.availableSpots - travelers;
+
+  final updatedSchedule = CustomerExperienceScheduleModel(
+    id: schedule.id,
+    startsAt: schedule.startsAt,
+    capacity: schedule.capacity,
+    availableSpots: newAvailableSpots,
+    price: schedule.price,
+    currency: schedule.currency,
+  );
+
+  setState(() {
+    if (newAvailableSpots <= 0) {
+      _availableSchedules = _availableSchedules
+          .where((item) => item.id != schedule.id)
+          .toList();
+
+      selectedSchedule = null;
+      travelers = 1;
+    } else {
+      _availableSchedules = _availableSchedules.map((item) {
+        if (item.id == schedule.id) {
+          return updatedSchedule;
+        }
+
+        return item;
+      }).toList();
+
+      selectedSchedule = updatedSchedule;
+
+      if (travelers > updatedSchedule.availableSpots) {
+        travelers = updatedSchedule.availableSpots;
+      }
+    }
+
+    _travelersController.text = travelers.toString();
+    _travelersController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _travelersController.text.length),
+    );
+  });
+}
+
+  Future<void> _reserveExperience() async {
+    if (!canReserve || selectedSchedule == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona una fecha y cantidad válida de viajeros.'),
+        ),
+      );
+      return;
+    }
+
+    final shouldConfirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return _BookingReviewDialog(
+          experienceTitle: widget.experience.title,
+          date: selectedSchedule!.formattedDate,
+          travelers: travelers,
+          duration: widget.experience.displayDuration,
+          unitPrice: formattedUnitPrice,
+          totalPrice: formattedTotal,
+          includedItems: const [
+            'Transporte incluido',
+            'Almuerzo',
+            'Guía certificado',
+            'Seguro',
+          ],
+        );
+      },
+    );
+
+    if (shouldConfirm != true) {
+      return;
+    }
+
+    setState(() {
+      isReserving = true;
+    });
+
+    try {
+      final booking = await _bookingDataSource.createBooking(
+        scheduleId: selectedSchedule!.id,
+        guestsCount: travelers,
+      );
+
+      _decreaseAvailableSpotsAfterBooking();
+
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return _BookingSuccessDialog(
+            bookingCode: booking.bookingCode,
+            totalPrice: formattedTotal,
+          );
+        },
+      );
+    } on CustomerBookingException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo crear la reserva. Inténtalo nuevamente.'),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        isReserving = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final experience = widget.experience;
@@ -106,8 +296,10 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
       bottomNavigationBar: _BottomBookingBar(
-        unitPrice: experience.formattedPrice,
+        unitPrice: formattedUnitPrice,
         totalPrice: formattedTotal,
+        canReserve: canReserve,
+        isLoading: isReserving,
         onReserve: _reserveExperience,
       ),
       body: CustomScrollView(
@@ -146,11 +338,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
                       iconColor: isFavorite
                           ? const Color(0xFFE11D48)
                           : const Color(0xFF111827),
-                      onTap: () {
-                        setState(() {
-                          isFavorite = !isFavorite;
-                        });
-                      },
+                      onTap: _toggleFavorite,
                     ),
                   ),
                   Positioned(
@@ -158,7 +346,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
                     right: 18,
                     child: _CircleButton(
                       icon: Icons.share_rounded,
-                      onTap: _shareExperience,
+                      onTap: _openShareModal,
                     ),
                   ),
                 ],
@@ -175,28 +363,17 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 130),
               child: _BookingCard(
-                availableDates: availableDates,
-                selectedDate: selectedDate,
+                availableSchedules: availableSchedules,
+                selectedSchedule: selectedSchedule,
                 travelersController: _travelersController,
                 travelers: travelers,
                 maxTravelers: maxTravelers,
-                availableSpots: availableSpotsForSelectedDate,
-                onDateChanged: (value) {
-                  setState(() {
-                    selectedDate = value;
-                  });
-                },
-                onMinus: () {
-                  _updateTravelers(travelers - 1);
-                },
-                onPlus: () {
-                  _updateTravelers(travelers + 1);
-                },
+                onScheduleChanged: _onScheduleChanged,
+                onMinus: () => _updateTravelers(travelers - 1),
+                onPlus: () => _updateTravelers(travelers + 1),
                 onTravelersTyped: (value) {
                   final parsed = int.tryParse(value);
-
                   if (parsed == null) return;
-
                   _updateTravelers(parsed);
                 },
               ),
@@ -207,30 +384,124 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     );
   }
 
-  void _shareExperience() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Compartir: ${widget.experience.title}'),
+  Future<void> _openShareModal() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Compartir experiencia',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _ShareOption(
+                  icon: Icons.email_outlined,
+                  title: 'Compartir por mail',
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _launchShareUri(
+                      Uri(
+                        scheme: 'mailto',
+                        queryParameters: {
+                          'subject': 'Experiencia en AndanDO',
+                          'body': shareMessage,
+                        },
+                      ),
+                    );
+                  },
+                ),
+                _ShareOption(
+                  icon: Icons.chat_outlined,
+                  title: 'Compartir por WhatsApp',
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final encoded = Uri.encodeComponent(shareMessage);
+                    await _launchShareUri(
+                      Uri.parse('https://wa.me/?text=$encoded'),
+                    );
+                  },
+                ),
+                _ShareOption(
+                  icon: Icons.sms_outlined,
+                  title: 'Compartir por Apple Message',
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _launchShareUri(
+                      Uri(
+                        scheme: 'sms',
+                        queryParameters: {'body': shareMessage},
+                      ),
+                    );
+                  },
+                ),
+                _ShareOption(
+                  icon: Icons.link_rounded,
+                  title: 'Copiar link',
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await Clipboard.setData(ClipboardData(text: shareLink));
+
+                    if (!mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Link copiado al portapapeles.'),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  void _reserveExperience() {
-    if (selectedDate == null) {
+  Future<void> _launchShareUri(Uri uri) async {
+    final canOpen = await canLaunchUrl(uri);
+
+    if (!canOpen) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Selecciona una fecha para continuar.'),
+          content: Text('No se pudo abrir esta opción para compartir.'),
         ),
       );
+
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Reserva iniciada para $travelers viajero(s). Total: $formattedTotal',
-        ),
-      ),
+    await launchUrl(
+      uri,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
     );
   }
 }
@@ -437,25 +708,23 @@ class _MainInfoCard extends StatelessWidget {
 }
 
 class _BookingCard extends StatelessWidget {
-  final List<DateTime> availableDates;
-  final DateTime? selectedDate;
+  final List<CustomerExperienceScheduleModel> availableSchedules;
+  final CustomerExperienceScheduleModel? selectedSchedule;
   final TextEditingController travelersController;
   final int travelers;
   final int maxTravelers;
-  final int availableSpots;
-  final ValueChanged<DateTime?> onDateChanged;
+  final ValueChanged<CustomerExperienceScheduleModel?> onScheduleChanged;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
   final ValueChanged<String> onTravelersTyped;
 
   const _BookingCard({
-    required this.availableDates,
-    required this.selectedDate,
+    required this.availableSchedules,
+    required this.selectedSchedule,
     required this.travelersController,
     required this.travelers,
     required this.maxTravelers,
-    required this.availableSpots,
-    required this.onDateChanged,
+    required this.onScheduleChanged,
     required this.onMinus,
     required this.onPlus,
     required this.onTravelersTyped,
@@ -463,14 +732,14 @@ class _BookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasSchedules = availableSchedules.isNotEmpty;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,44 +762,14 @@ class _BookingCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          _DateSelector(
-            availableDates: availableDates,
-            selectedDate: selectedDate,
-            onChanged: onDateChanged,
-          ),
-          if (selectedDate != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.event_seat_outlined,
-                    size: 18,
-                    color: Color(0xFF1D4ED8),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Cupos disponibles para esta fecha: $availableSpots',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1D4ED8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          if (hasSchedules)
+            _ScheduleSelector(
+              availableSchedules: availableSchedules,
+              selectedSchedule: selectedSchedule,
+              onChanged: onScheduleChanged,
+            )
+          else
+            const _NoSchedulesBox(),
           const SizedBox(height: 22),
           const Text(
             'Viajeros',
@@ -545,13 +784,16 @@ class _BookingCard extends StatelessWidget {
             controller: travelersController,
             travelers: travelers,
             maxTravelers: maxTravelers,
+            enabled: hasSchedules && selectedSchedule != null,
             onMinus: onMinus,
             onPlus: onPlus,
             onChanged: onTravelersTyped,
           ),
           const SizedBox(height: 8),
           Text(
-            'Mínimo 1 persona. Máximo $maxTravelers cupos.',
+            selectedSchedule == null
+                ? 'Selecciona una fecha para ver los cupos disponibles.'
+                : 'Mínimo 1 persona. Máximo $maxTravelers cupos.',
             style: const TextStyle(
               fontSize: 13,
               color: Color(0xFF6B7280),
@@ -563,60 +805,166 @@ class _BookingCard extends StatelessWidget {
   }
 }
 
-class _DateSelector extends StatelessWidget {
-  final List<DateTime> availableDates;
-  final DateTime? selectedDate;
-  final ValueChanged<DateTime?> onChanged;
+class _ScheduleSelector extends StatefulWidget {
+  final List<CustomerExperienceScheduleModel> availableSchedules;
+  final CustomerExperienceScheduleModel? selectedSchedule;
+  final ValueChanged<CustomerExperienceScheduleModel?> onChanged;
 
-  const _DateSelector({
-    required this.availableDates,
-    required this.selectedDate,
+  const _ScheduleSelector({
+    required this.availableSchedules,
+    required this.selectedSchedule,
     required this.onChanged,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<DateTime>(
-      value: selectedDate,
-      isExpanded: true,
-      decoration: InputDecoration(
-        prefixIcon: const Icon(Icons.calendar_month_outlined),
-        hintText: 'Selecciona una fecha',
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(
-            color: Color(0xFFE5E7EB),
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(
-            color: Color(0xFFE5E7EB),
-          ),
-        ),
+  State<_ScheduleSelector> createState() => _ScheduleSelectorState();
+}
+
+class _ScheduleSelectorState extends State<_ScheduleSelector> {
+  final GlobalKey _fieldKey = GlobalKey();
+
+  Future<void> _openMenu() async {
+    final renderBox =
+        _fieldKey.currentContext?.findRenderObject() as RenderBox?;
+
+    if (renderBox == null) return;
+
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    final fieldOffset = renderBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlay,
+    );
+
+    final fieldSize = renderBox.size;
+
+    final selected = await showMenu<CustomerExperienceScheduleModel>(
+      context: context,
+      color: Colors.white,
+      elevation: 10,
+      constraints: BoxConstraints(
+        minWidth: fieldSize.width,
+        maxWidth: fieldSize.width,
+        maxHeight: 280,
       ),
-      items: availableDates.map((date) {
-        return DropdownMenuItem<DateTime>(
-          value: date,
-          child: Text(_formatDate(date)),
+      position: RelativeRect.fromLTRB(
+        fieldOffset.dx,
+        fieldOffset.dy + fieldSize.height + 6,
+        overlay.size.width - fieldOffset.dx - fieldSize.width,
+        0,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      items: widget.availableSchedules.map((schedule) {
+        return PopupMenuItem<CustomerExperienceScheduleModel>(
+          value: schedule,
+          height: 58,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  schedule.formattedDate,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+              Text(
+                '${schedule.availableSpots} cupos',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF2563EB),
+                ),
+              ),
+            ],
+          ),
         );
       }).toList(),
-      onChanged: onChanged,
     );
+
+    if (selected != null) {
+      widget.onChanged(selected);
+    }
   }
 
-  static String _formatDate(DateTime date) {
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final year = date.year.toString();
+  @override
+  Widget build(BuildContext context) {
+    final hasSelectedSchedule = widget.selectedSchedule != null;
 
-    return '$day/$month/$year';
+    return InkWell(
+      key: _fieldKey,
+      onTap: _openMenu,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 58,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.calendar_month_outlined,
+              color: Color(0xFF6B7280),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                hasSelectedSchedule
+                    ? '${widget.selectedSchedule!.formattedDate} · ${widget.selectedSchedule!.availableSpots} cupos'
+                    : 'Selecciona una fecha',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight:
+                      hasSelectedSchedule ? FontWeight.w700 : FontWeight.w500,
+                  color: hasSelectedSchedule
+                      ? const Color(0xFF111827)
+                      : const Color(0xFF6B7280),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF6B7280),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoSchedulesBox extends StatelessWidget {
+  const _NoSchedulesBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: const Text(
+        'Esta experiencia todavía no tiene fechas disponibles para reservar.',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF9A3412),
+        ),
+      ),
+    );
   }
 }
 
@@ -624,6 +972,7 @@ class _TravelersSelector extends StatelessWidget {
   final TextEditingController controller;
   final int travelers;
   final int maxTravelers;
+  final bool enabled;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
   final ValueChanged<String> onChanged;
@@ -632,6 +981,7 @@ class _TravelersSelector extends StatelessWidget {
     required this.controller,
     required this.travelers,
     required this.maxTravelers,
+    required this.enabled,
     required this.onMinus,
     required this.onPlus,
     required this.onChanged,
@@ -642,27 +992,24 @@ class _TravelersSelector extends StatelessWidget {
     return Container(
       height: 58,
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: enabled ? const Color(0xFFF9FAFB) : const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
           _CounterButton(
             icon: Icons.remove_rounded,
-            enabled: travelers > 1,
+            enabled: enabled && travelers > 1,
             onTap: onMinus,
           ),
           Expanded(
             child: TextField(
               controller: controller,
+              enabled: enabled,
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: onChanged,
               decoration: const InputDecoration(
                 border: InputBorder.none,
@@ -677,7 +1024,7 @@ class _TravelersSelector extends StatelessWidget {
           ),
           _CounterButton(
             icon: Icons.add_rounded,
-            enabled: travelers < maxTravelers,
+            enabled: enabled && travelers < maxTravelers,
             onTap: onPlus,
           ),
         ],
@@ -718,16 +1065,24 @@ class _CounterButton extends StatelessWidget {
 class _BottomBookingBar extends StatelessWidget {
   final String unitPrice;
   final String totalPrice;
+  final bool canReserve;
+  final bool isLoading;
   final VoidCallback onReserve;
 
   const _BottomBookingBar({
     required this.unitPrice,
     required this.totalPrice,
+    required this.canReserve,
+    required this.isLoading,
     required this.onReserve,
   });
 
   @override
   Widget build(BuildContext context) {
+    final buttonColor = canReserve
+        ? const Color(0xFF003B73)
+        : const Color(0xFFCBD5E1);
+
     return SafeArea(
       top: false,
       child: Container(
@@ -735,9 +1090,7 @@ class _BottomBookingBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border(
-            top: BorderSide(
-              color: Colors.black.withOpacity(0.08),
-            ),
+            top: BorderSide(color: Colors.black.withOpacity(0.08)),
           ),
         ),
         child: Row(
@@ -775,10 +1128,12 @@ class _BottomBookingBar extends StatelessWidget {
               width: 180,
               height: 56,
               child: ElevatedButton(
-                onPressed: onReserve,
+                onPressed: canReserve ? onReserve : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8EA5BF),
+                  backgroundColor: buttonColor,
+                  disabledBackgroundColor: const Color(0xFFCBD5E1),
                   foregroundColor: Colors.white,
+                  disabledForegroundColor: Colors.white,
                   elevation: 0,
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(0, 56),
@@ -786,19 +1141,72 @@ class _BottomBookingBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                child: const Text(
-                  'Reservar ahora',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                child: isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Reservar ahora',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ShareOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _ShareOption({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(
+          icon,
+          color: const Color(0xFF111827),
+        ),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF111827),
+        ),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right_rounded,
+        color: Color(0xFF9CA3AF),
+      ),
+      onTap: onTap,
     );
   }
 }
@@ -936,6 +1344,444 @@ class _DetailImagePlaceholder extends StatelessWidget {
           size: 92,
           color: Color(0xFF9CA3AF),
         ),
+      ),
+    );
+  }
+}
+
+class _BookingReviewDialog extends StatelessWidget {
+  final String experienceTitle;
+  final String date;
+  final int travelers;
+  final String duration;
+  final String unitPrice;
+  final String totalPrice;
+  final List<String> includedItems;
+
+  const _BookingReviewDialog({
+    required this.experienceTitle,
+    required this.date,
+    required this.travelers,
+    required this.duration,
+    required this.unitPrice,
+    required this.totalPrice,
+    required this.includedItems,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(26),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Revisar reserva',
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(false),
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF3F4F6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Resumen de tu reserva',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    _SummaryRow(label: 'Experiencia', value: experienceTitle),
+                    _SummaryRow(label: 'Fecha', value: date),
+                    _SummaryRow(
+                      label: 'Viajeros',
+                      value: travelers == 1 ? '1 persona' : '$travelers personas',
+                    ),
+                    _SummaryRow(label: 'Duración', value: duration),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'Desglose de precios',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _PriceRow(
+                label: '$unitPrice x $travelers viajero(s)',
+                value: totalPrice,
+              ),
+              const Divider(height: 28),
+              _PriceRow(
+                label: 'Total',
+                value: totalPrice,
+                isTotal: true,
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'Políticas importantes',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _PolicyItem(
+                icon: Icons.shield_outlined,
+                iconColor: Color(0xFF16A34A),
+                title: 'Cancelación gratuita',
+                text: 'Cancela hasta 24 horas antes del inicio.',
+              ),
+              const _PolicyItem(
+                icon: Icons.credit_card_rounded,
+                iconColor: Color(0xFF003B73),
+                title: 'Condiciones de cobro',
+                text: 'El cobro se realizará al confirmar la reserva.',
+              ),
+              _PolicyItem(
+                icon: Icons.check_rounded,
+                iconColor: const Color(0xFF003B73),
+                title: 'Qué incluye',
+                text: includedItems.join(', '),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Text(
+                  'Al confirmar esta reserva, aceptas nuestros Términos y Condiciones y Política de Privacidad.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF003B73),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Confirmar y Pagar',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF111827),
+                    side: const BorderSide(color: Color(0xFFE5E7EB)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Revisar Reserva',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookingSuccessDialog extends StatelessWidget {
+  final String bookingCode;
+  final String totalPrice;
+
+  const _BookingSuccessDialog({
+    required this.bookingCode,
+    required this.totalPrice,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+      ),
+      title: const Text('Reserva creada'),
+      content: Text(
+        'Tu reserva fue creada correctamente.\n\nCódigo: $bookingCode\nTotal: $totalPrice',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Aceptar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _BookingCodeBox extends StatelessWidget {
+  final String bookingCode;
+
+  const _BookingCodeBox({
+    required this.bookingCode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFCBD5E1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.info_outline_rounded,
+                size: 20,
+                color: Color(0xFF003B73),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Código de reserva',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF475569),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SelectableText(
+            bookingCode,
+            style: const TextStyle(
+              fontSize: 22,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF003B73),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Guarda este código para futuras consultas.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _SummaryRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PriceRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isTotal;
+
+  const _PriceRow({
+    required this.label,
+    required this.value,
+    this.isTotal = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.w900 : FontWeight.w500,
+              color: const Color(0xFF334155),
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isTotal ? 21 : 15,
+            fontWeight: FontWeight.w900,
+            color: isTotal
+                ? const Color(0xFF003B73)
+                : const Color(0xFF111827),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PolicyItem extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String text;
+
+  const _PolicyItem({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 17),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 22,
+            color: iconColor,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

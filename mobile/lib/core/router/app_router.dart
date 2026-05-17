@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/customer/booking/presentation/screens/customer_bookings_screen.dart';
+import '../../features/customer/favorites/presentation/screens/customer_favorites_screen.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/customer/auth/presentation/screens/customer_register_screen.dart';
+import '../../features/customer/explore/data/models/customer_experience_model.dart';
+import '../../features/customer/explore/presentation/controllers/explore_controller.dart';
+import '../../features/customer/explore/presentation/screens/experience_detail_screen.dart';
 import '../../features/customer/explore/presentation/screens/explore_screen.dart';
 import '../../features/provider/dashboard/screens/provider_dashboard_screen.dart';
 import '../../features/provider/experiences/screens/add_schedule_screen.dart';
@@ -15,50 +20,18 @@ import '../../features/provider/onboarding/presentation/screens/provider_registe
 import '../../features/provider/onboarding/presentation/screens/provider_verification_pending_screen.dart';
 import 'route_names.dart';
 
-/// Router principal de AndanDO.
-///
-/// Este archivo centraliza toda la navegación de la app.
-///
-/// Aquí controlamos:
-/// - rutas públicas.
-/// - rutas privadas.
-/// - redirecciones según autenticación.
-/// - redirecciones según tipo de usuario.
-/// - redirecciones según estado del afiliado/proveedor.
-///
-/// Tipos esperados:
-/// - customer
-/// - provider
-///
-/// Estados esperados del provider:
-/// - pending
-/// - approved
-/// - rejected
-/// - suspended
 class AppRouter {
   AppRouter({
     required AuthController authController,
   }) : _authController = authController;
 
-  /// Controlador global de autenticación.
-  ///
-  /// GoRouter escucha este controlador porque AuthController extiende
-  /// ChangeNotifier. Cuando el usuario inicia sesión o cierra sesión,
-  /// notifyListeners() hace que el router vuelva a evaluar redirecciones.
   final AuthController _authController;
 
-  /// Instancia principal de GoRouter.
   late final GoRouter router = GoRouter(
     initialLocation: '/',
     refreshListenable: _authController,
     redirect: _redirect,
     routes: [
-      /*
-      |--------------------------------------------------------------------------
-      | Splash / Welcome
-      |--------------------------------------------------------------------------
-      */
-
       GoRoute(
         path: '/',
         name: RouteNames.splash,
@@ -66,7 +39,6 @@ class AppRouter {
           return const WelcomeScreen();
         },
       ),
-
       GoRoute(
         path: '/welcome',
         name: RouteNames.welcome,
@@ -74,20 +46,6 @@ class AppRouter {
           return const WelcomeScreen();
         },
       ),
-
-      /*
-      |--------------------------------------------------------------------------
-      | Login general
-      |--------------------------------------------------------------------------
-      |
-      | Este login debe permitir entrar a:
-      | - clientes.
-      | - afiliados/proveedores.
-      |
-      | El LoginScreen recibe AuthController para guardar sesión después
-      | de que Laravel responda correctamente.
-      */
-
       GoRoute(
         path: '/login',
         name: RouteNames.login,
@@ -97,13 +55,6 @@ class AppRouter {
           );
         },
       ),
-
-      /*
-      |--------------------------------------------------------------------------
-      | Registro de cliente
-      |--------------------------------------------------------------------------
-      */
-
       GoRoute(
         path: '/register',
         name: RouteNames.register,
@@ -114,14 +65,6 @@ class AppRouter {
         },
       ),
 
-      /*
-      |--------------------------------------------------------------------------
-      | Cliente / Exploración
-      |--------------------------------------------------------------------------
-      |
-      | Esta ruta queda pública porque existe "Continuar como invitado".
-      */
-
       GoRoute(
         path: '/client/explore',
         name: RouteNames.clientExplore,
@@ -129,10 +72,23 @@ class AppRouter {
           return const ExploreScreen();
         },
       ),
+      
+      GoRoute(
+        path: '/client/bookings',
+        name: 'clientBookings',
+        builder: (context, state) {
+          return const CustomerBookingsScreen();
+        },
+      ),
 
-      /// Alias de dashboard cliente.
-      ///
-      /// Por ahora el home real del cliente será ExploreScreen.
+      GoRoute(
+        path: '/client/favorites',
+        name: 'clientFavorites',
+        builder: (context, state) {
+          return const CustomerFavoritesScreen();
+        },
+      ),
+
       GoRoute(
         path: '/customer/dashboard',
         name: RouteNames.customerDashboard,
@@ -141,11 +97,24 @@ class AppRouter {
         },
       ),
 
-      /*
-      |--------------------------------------------------------------------------
-      | Registro de afiliado/proveedor
-      |--------------------------------------------------------------------------
-      */
+      GoRoute(
+        path: '/experiences/:id',
+        builder: (context, state) {
+          final experienceId = int.tryParse(
+            state.pathParameters['id'] ?? '',
+          );
+
+          if (experienceId == null) {
+            return const _RouteErrorPlaceholder(
+              message: 'ID de experiencia inválido.',
+            );
+          }
+
+          return _PublicExperienceDetailLoader(
+            experienceId: experienceId,
+          );
+        },
+      ),
 
       GoRoute(
         path: '/affiliate/register',
@@ -156,10 +125,6 @@ class AppRouter {
           );
         },
       ),
-
-      /// Ruta legacy.
-      ///
-      /// La mantenemos para no romper navegación vieja.
       GoRoute(
         path: '/provider/register',
         name: RouteNames.providerRegister,
@@ -169,10 +134,6 @@ class AppRouter {
           );
         },
       ),
-
-      /// Ruta legacy del login de proveedor.
-      ///
-      /// Ahora usamos el login general.
       GoRoute(
         path: '/provider/login',
         name: RouteNames.providerLogin,
@@ -182,13 +143,6 @@ class AppRouter {
           );
         },
       ),
-
-      /*
-      |--------------------------------------------------------------------------
-      | Estado de verificación del afiliado/proveedor
-      |--------------------------------------------------------------------------
-      */
-
       GoRoute(
         path: '/provider/verification-pending',
         name: RouteNames.providerVerificationPending,
@@ -198,13 +152,6 @@ class AppRouter {
           );
         },
       ),
-
-      /*
-      |--------------------------------------------------------------------------
-      | Dashboard proveedor
-      |--------------------------------------------------------------------------
-      */
-
       GoRoute(
         path: '/provider/dashboard',
         name: RouteNames.providerDashboard,
@@ -214,13 +161,6 @@ class AppRouter {
           );
         },
       ),
-
-      /*
-      |--------------------------------------------------------------------------
-      | Catálogo / Experiencias proveedor
-      |--------------------------------------------------------------------------
-      */
-
       GoRoute(
         path: '/provider/catalog',
         name: RouteNames.providerCatalog,
@@ -230,7 +170,6 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/provider/create-experience',
         name: RouteNames.providerCreateExperience,
@@ -240,7 +179,6 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/provider/edit-experience/:id',
         name: RouteNames.providerEditExperience,
@@ -261,17 +199,6 @@ class AppRouter {
           );
         },
       ),
-
-      /*
-      |--------------------------------------------------------------------------
-      | Calendario de experiencia
-      |--------------------------------------------------------------------------
-      |
-      | Nota:
-      | Ponemos la ruta add-schedule antes de la ruta general del calendario
-      | para evitar cualquier conflicto de matching con rutas dinámicas.
-      */
-
       GoRoute(
         path: '/provider/experience-calendar/:id/add-schedule',
         name: RouteNames.providerAddSchedule,
@@ -295,7 +222,6 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/provider/experience-calendar/:id',
         name: RouteNames.providerExperienceCalendar,
@@ -319,13 +245,6 @@ class AppRouter {
           );
         },
       ),
-
-      /*
-      |--------------------------------------------------------------------------
-      | Placeholders proveedor
-      |--------------------------------------------------------------------------
-      */
-
       GoRoute(
         path: '/provider/bookings',
         name: RouteNames.providerBookings,
@@ -336,7 +255,6 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/provider/analytics',
         name: RouteNames.providerAnalytics,
@@ -347,7 +265,6 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/provider/messages',
         name: RouteNames.providerMessages,
@@ -358,7 +275,6 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/provider/profile',
         name: RouteNames.providerProfile,
@@ -372,13 +288,6 @@ class AppRouter {
     ],
   );
 
-  /// Redirección global de rutas.
-  ///
-  /// Esta función decide a dónde puede entrar el usuario según:
-  /// - si está autenticado.
-  /// - si es cliente.
-  /// - si es afiliado/proveedor.
-  /// - si el proveedor está aprobado o pendiente.
   String? _redirect(BuildContext context, GoRouterState state) {
     final authStatus = _authController.status;
     final currentLocation = state.matchedLocation;
@@ -386,28 +295,26 @@ class AppRouter {
     final isChecking = authStatus == AuthStatus.checking;
     final isAuthenticated = authStatus == AuthStatus.authenticated;
 
-    /// Rutas públicas.
-    ///
-    /// Estas rutas pueden abrirse sin token.
-    ///
-    /// Importante:
-    /// /client/explore es pública porque existe "Continuar como invitado".
+    final isPublicExperienceRoute =
+        currentLocation.startsWith('/experiences/');
+
     final publicRoutes = <String>{
       '/',
       '/welcome',
       '/login',
       '/register',
       '/client/explore',
+      '/client/bookings',
+      '/client/favorites',
+      '/customer/dashboard',
       '/affiliate/register',
       '/provider/register',
       '/provider/login',
     };
 
-    final isPublicRoute = publicRoutes.contains(currentLocation);
+    final isPublicRoute =
+        publicRoutes.contains(currentLocation) || isPublicExperienceRoute;
 
-    /// Rutas de autenticación y registro.
-    ///
-    /// Si un usuario autenticado entra aquí, lo redirigimos a su home.
     final authRoutes = <String>{
       '/',
       '/welcome',
@@ -420,18 +327,10 @@ class AppRouter {
 
     final isAuthRoute = authRoutes.contains(currentLocation);
 
-    /// Mientras se revisa la sesión, mantenemos al usuario en la raíz.
-    ///
-    /// Esto evita que el router mande al login antes de saber
-    /// si existe una sesión guardada.
     if (isChecking) {
       return currentLocation == '/' ? null : '/';
     }
 
-    /// Usuario no autenticado.
-    ///
-    /// Puede entrar solamente a rutas públicas.
-    /// Si intenta abrir una ruta privada, lo mandamos al login.
     if (!isAuthenticated) {
       if (isPublicRoute) {
         return null;
@@ -440,15 +339,6 @@ class AppRouter {
       return '/login';
     }
 
-    /// Usuario autenticado.
-    ///
-    /// Normalizamos userType porque el backend podría devolver:
-    /// - customer
-    /// - client
-    /// - user
-    /// - provider
-    /// - affiliate
-    /// - afiliado
     final normalizedUserType = _normalizeUserTypeForRouter(
       _authController.userType,
     );
@@ -456,53 +346,24 @@ class AppRouter {
     final isProvider = normalizedUserType == 'provider';
     final isCustomer = normalizedUserType == 'customer';
 
-    /// Rutas privadas del proveedor.
-    ///
-    /// Incluye:
-    /// - dashboard
-    /// - catálogo
-    /// - crear experiencia
-    /// - editar experiencia
-    /// - calendario
-    /// - reservas
-    /// - analíticas
-    /// - mensajes
-    /// - perfil
-    ///
-    /// Excluimos:
-    /// - register
-    /// - login
-    /// - verification-pending
     final isProviderPrivateRoute = currentLocation.startsWith('/provider/') &&
         currentLocation != '/provider/register' &&
         currentLocation != '/provider/login' &&
         currentLocation != '/provider/verification-pending';
-
-    /*
-    |--------------------------------------------------------------------------
-    | Usuario afiliado/proveedor autenticado
-    |--------------------------------------------------------------------------
-    */
 
     if (isProvider) {
       final providerStatus = _normalizeProviderStatus(
         _authController.providerStatus,
       );
 
-      /// Si el proveedor intenta abrir login/register/splash,
-      /// lo mandamos a su pantalla correcta.
       if (isAuthRoute) {
         return _providerHomePath(providerStatus);
       }
 
-      /// Si el proveedor no está aprobado, no puede entrar a rutas privadas
-      /// como dashboard, catálogo, crear experiencia o calendario.
       if (isProviderPrivateRoute && providerStatus != 'approved') {
         return '/provider/verification-pending';
       }
 
-      /// Si el proveedor ya fue aprobado y entra a pending,
-      /// lo mandamos automáticamente al dashboard.
       if (currentLocation == '/provider/verification-pending' &&
           providerStatus == 'approved') {
         return '/provider/dashboard';
@@ -511,20 +372,11 @@ class AppRouter {
       return null;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Usuario cliente autenticado
-    |--------------------------------------------------------------------------
-    */
-
     if (isCustomer) {
-      /// Si el cliente abre login/register/splash,
-      /// lo mandamos a explorar.
       if (isAuthRoute) {
         return '/client/explore';
       }
 
-      /// Un cliente no debe entrar a rutas privadas del proveedor.
       if (isProviderPrivateRoute ||
           currentLocation == '/provider/verification-pending') {
         return '/client/explore';
@@ -532,14 +384,6 @@ class AppRouter {
 
       return null;
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Fallback seguro
-    |--------------------------------------------------------------------------
-    |
-    | Si llega un userType desconocido, tratamos al usuario como cliente.
-    */
 
     if (isAuthRoute) {
       return '/client/explore';
@@ -553,19 +397,6 @@ class AppRouter {
     return null;
   }
 
-  /// Normaliza el tipo de usuario para el router.
-  ///
-  /// El backend puede devolver distintos nombres dependiendo del flujo:
-  /// - customer
-  /// - client
-  /// - user
-  /// - provider
-  /// - affiliate
-  /// - afiliado
-  ///
-  /// Internamente el router solo trabaja con:
-  /// - customer
-  /// - provider
   String _normalizeUserTypeForRouter(String? userType) {
     final type = userType?.trim().toLowerCase() ?? '';
 
@@ -580,10 +411,6 @@ class AppRouter {
     return type.isEmpty ? 'customer' : type;
   }
 
-  /// Normaliza el estado del proveedor.
-  ///
-  /// Si viene null o vacío, lo tratamos como pending para evitar que
-  /// un proveedor sin status pueda entrar al dashboard.
   String _normalizeProviderStatus(String? providerStatus) {
     final status = providerStatus?.trim().toLowerCase() ?? '';
 
@@ -594,11 +421,6 @@ class AppRouter {
     return status;
   }
 
-  /// Decide la pantalla inicial de un proveedor autenticado.
-  ///
-  /// Reglas:
-  /// - approved -> dashboard.
-  /// - cualquier otro estado -> verification-pending.
   String _providerHomePath(String? providerStatus) {
     final status = _normalizeProviderStatus(providerStatus);
 
@@ -610,13 +432,96 @@ class AppRouter {
   }
 }
 
-/// Pantalla simple para mostrar errores de rutas dinámicas.
-///
-/// Ejemplo:
-/// Si alguien entra a:
-/// /provider/edit-experience/abc
-///
-/// Como "abc" no es un ID válido, mostramos esta pantalla.
+class _PublicExperienceDetailLoader extends StatefulWidget {
+  final int experienceId;
+
+  const _PublicExperienceDetailLoader({
+    required this.experienceId,
+  });
+
+  @override
+  State<_PublicExperienceDetailLoader> createState() =>
+      _PublicExperienceDetailLoaderState();
+}
+
+class _PublicExperienceDetailLoaderState
+    extends State<_PublicExperienceDetailLoader> {
+  final ExploreController _controller = ExploreController();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+  CustomerExperienceModel? _experience;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExperience();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadExperience() async {
+    try {
+      await _controller.initialize();
+
+      final matches = _controller.experiences.where(
+        (experience) => experience.id == widget.experienceId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _experience = matches.isNotEmpty ? matches.first : null;
+        _isLoading = false;
+        _errorMessage = _experience == null
+            ? 'No encontramos esta experiencia.'
+            : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'No pudimos cargar esta experiencia.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF8F8F8),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMessage != null || _experience == null) {
+      return _RouteErrorPlaceholder(
+        message: _errorMessage ?? 'Experiencia no encontrada.',
+      );
+    }
+
+    final experience = _experience!;
+
+    return ExperienceDetailScreen(
+      experience: experience,
+      initialIsFavorite: _controller.isFavorite(experience.id),
+      onFavoriteChanged: (isFavorite) {
+        if (_controller.isFavorite(experience.id) != isFavorite) {
+          _controller.toggleFavorite(experience.id);
+        }
+      },
+    );
+  }
+}
+
 class _RouteErrorPlaceholder extends StatelessWidget {
   const _RouteErrorPlaceholder({
     required this.message,
@@ -637,13 +542,6 @@ class _RouteErrorPlaceholder extends StatelessWidget {
   }
 }
 
-/// Placeholder simple para pantallas futuras del proveedor.
-///
-/// Se usa mientras construimos:
-/// - reservas.
-/// - analíticas.
-/// - mensajes.
-/// - perfil.
 class _SimpleProviderPlaceholder extends StatelessWidget {
   const _SimpleProviderPlaceholder({
     required this.title,

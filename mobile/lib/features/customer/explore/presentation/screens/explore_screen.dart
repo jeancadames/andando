@@ -1,14 +1,12 @@
 import 'dart:async';
 
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/explore_controller.dart';
 import '../../data/models/customer_experience_model.dart';
 import 'experience_detail_screen.dart';
 
-/// Pantalla principal de exploración para customers y visitantes.
-///
-/// Muestra experiencias creadas por proveedores desde ProviderExperience.
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
 
@@ -36,14 +34,35 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.dispose();
   }
 
-  /// Ejecuta búsqueda con pequeño delay para no llamar la API
-  /// en cada tecla inmediatamente.
   void _onSearchChanged(String value) {
     _debounce?.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 450), () {
       _controller.search(value);
     });
+  }
+
+  Future<void> _openExperienceDetail(
+    BuildContext context,
+    CustomerExperienceModel experience,
+  ) async {
+    final currentFavoriteState = _controller.isFavorite(experience.id);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ExperienceDetailScreen(
+          experience: experience,
+          initialIsFavorite: currentFavoriteState,
+          onFavoriteChanged: (isFavorite) {
+            final currentState = _controller.isFavorite(experience.id);
+
+            if (currentState != isFavorite) {
+              _controller.toggleFavorite(experience.id);
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -94,6 +113,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         subtitle: 'Experiencias recomendadas para ti',
                         experiences: _controller.popularExperiences,
                         controller: _controller,
+                        onOpenExperience: (experience) {
+                          _openExperienceDetail(context, experience);
+                        },
                       ),
                     ),
                     SliverToBoxAdapter(
@@ -102,6 +124,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         subtitle: 'Basadas en tus favoritos',
                         experiences: _controller.recommendedExperiences,
                         controller: _controller,
+                        onOpenExperience: (experience) {
+                          _openExperienceDetail(context, experience);
+                        },
                       ),
                     ),
                     SliverToBoxAdapter(
@@ -110,6 +135,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         subtitle: 'Opciones disponibles cerca de tu ubicación',
                         experiences: _controller.nearbyExperiences,
                         controller: _controller,
+                        onOpenExperience: (experience) {
+                          _openExperienceDetail(context, experience);
+                        },
                       ),
                     ),
                     const SliverToBoxAdapter(
@@ -127,7 +155,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 }
 
-/// Header superior con saludo y buscador.
 class _Header extends StatelessWidget {
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
@@ -218,7 +245,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Lista horizontal de categorías.
 class _CategoryList extends StatelessWidget {
   final ExploreController controller;
 
@@ -270,18 +296,19 @@ class _CategoryList extends StatelessWidget {
   }
 }
 
-/// Sección reutilizable de carrusel horizontal de experiencias.
 class _ExperienceCarouselSection extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<CustomerExperienceModel> experiences;
   final ExploreController controller;
+  final ValueChanged<CustomerExperienceModel> onOpenExperience;
 
   const _ExperienceCarouselSection({
     required this.title,
     required this.subtitle,
     required this.experiences,
     required this.controller,
+    required this.onOpenExperience,
   });
 
   @override
@@ -315,15 +342,7 @@ class _ExperienceCarouselSection extends StatelessWidget {
                   onFavoriteTap: () {
                     controller.toggleFavorite(experience.id);
                   },
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ExperienceDetailScreen(
-                          experience: experience,
-                        ),
-                      ),
-                    );
-                  },
+                  onTap: () => onOpenExperience(experience),
                 ),
               );
             },
@@ -334,7 +353,6 @@ class _ExperienceCarouselSection extends StatelessWidget {
   }
 }
 
-/// Título de sección.
 class _SectionTitle extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -373,7 +391,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-/// Card visual de experiencia.
 class _ExperienceCard extends StatelessWidget {
   final CustomerExperienceModel experience;
   final bool isFavorite;
@@ -429,6 +446,7 @@ class _ExperienceCard extends StatelessWidget {
                     top: 14,
                     right: 14,
                     child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: onFavoriteTap,
                       child: Container(
                         width: 38,
@@ -574,7 +592,6 @@ class _ExperienceCard extends StatelessWidget {
   }
 }
 
-/// Placeholder cuando no existe imagen.
 class _ImagePlaceholder extends StatelessWidget {
   const _ImagePlaceholder();
 
@@ -593,7 +610,6 @@ class _ImagePlaceholder extends StatelessWidget {
   }
 }
 
-/// Estado vacío.
 class _EmptyState extends StatelessWidget {
   final VoidCallback onClearFilters;
 
@@ -645,7 +661,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Estado de error.
 class _ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
@@ -699,7 +714,6 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-/// Navegación inferior visual para customer.
 class _ExploreBottomNavigation extends StatelessWidget {
   const _ExploreBottomNavigation();
 
@@ -707,6 +721,19 @@ class _ExploreBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return NavigationBar(
       selectedIndex: 0,
+      onDestinationSelected: (index) {
+        if (index == 0) {
+          return;
+        }
+
+        if (index == 1) {
+          context.go('/client/bookings');
+        }
+
+        if (index == 2) {
+          context.go('/client/favorites');
+        }
+      },
       destinations: const [
         NavigationDestination(
           icon: Icon(Icons.explore_outlined),

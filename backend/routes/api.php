@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\Client\ClientFavoriteExperienceController;
 use App\Http\Controllers\Api\Auth\LoginController;
+use App\Http\Controllers\Api\Client\ClientBookingController;
 use App\Http\Controllers\Api\Client\ExploreController;
 use App\Http\Controllers\Api\Customer\CustomerAuthController;
 use App\Http\Controllers\Api\Provider\ProviderAuthController;
@@ -9,17 +11,6 @@ use App\Http\Controllers\Api\Provider\ProviderExperienceController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceScheduleController;
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| Login general
-|--------------------------------------------------------------------------
-|
-| POST /api/auth/login
-|
-| Permite iniciar sesión a:
-| - clientes
-| - afiliados/proveedores
-*/
 Route::post('/auth/login', LoginController::class);
 
 Route::prefix('provider')->group(function () {
@@ -55,4 +46,12 @@ Route::prefix('client/explore')->group(function () {
     Route::get('/experiences', [ExploreController::class, 'index']);
     Route::get('/experiences/categories', [ExploreController::class, 'categories']);
     Route::get('/experiences/{id}', [ExploreController::class, 'show']);
+});
+
+Route::middleware('auth:sanctum')->prefix('client')->group(function () {
+    Route::get('/bookings', [ClientBookingController::class, 'index']);    
+    Route::post('/bookings', [ClientBookingController::class, 'store']);
+
+    Route::post('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'store']);
+    Route::delete('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'destroy']);
 });

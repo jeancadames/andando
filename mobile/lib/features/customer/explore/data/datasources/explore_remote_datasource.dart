@@ -3,19 +3,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../../../core/config/api_config.dart';
+import '../../../../../core/constants/storage_keys.dart';
+import '../../../../../core/storage/secure_storage.dart';
 import '../models/customer_experience_model.dart';
 
-/// DataSource remoto para la pantalla Explorar.
-///
-/// Se comunica con los endpoints públicos de Laravel:
-/// - GET /api/client/explore/experiences
-/// - GET /api/client/explore/experiences/categories
-/// - GET /api/client/explore/experiences/{id}
-///
-/// Este datasource puede ser usado por usuarios autenticados
-/// y también por visitantes.
 class ExploreRemoteDataSource {
-  /// Obtiene experiencias públicas disponibles para explorar.
+  final SecureStorage _secureStorage = SecureStorage();
+
   Future<List<CustomerExperienceModel>> getExperiences({
     String? search,
     String? category,
@@ -45,7 +39,7 @@ class ExploreRemoteDataSource {
 
     final response = await http.get(
       uri,
-      headers: _headers,
+      headers: await _headers(),
     );
 
     final body = _decodeResponse(response);
@@ -67,7 +61,6 @@ class ExploreRemoteDataSource {
         .toList();
   }
 
-  /// Obtiene el detalle público de una experiencia.
   Future<CustomerExperienceModel> getExperienceDetail({
     required int experienceId,
   }) async {
@@ -77,7 +70,7 @@ class ExploreRemoteDataSource {
 
     final response = await http.get(
       uri,
-      headers: _headers,
+      headers: await _headers(),
     );
 
     final body = _decodeResponse(response);
@@ -93,7 +86,6 @@ class ExploreRemoteDataSource {
     );
   }
 
-  /// Obtiene las categorías públicas disponibles.
   Future<List<String>> getCategories() async {
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/client/explore/experiences/categories',
@@ -101,7 +93,7 @@ class ExploreRemoteDataSource {
 
     final response = await http.get(
       uri,
-      headers: _headers,
+      headers: await _headers(),
     );
 
     final body = _decodeResponse(response);
@@ -117,15 +109,59 @@ class ExploreRemoteDataSource {
     return data.map((item) => item.toString()).toList();
   }
 
-  /// Headers estándar para endpoints públicos.
-  Map<String, String> get _headers {
+  Future<void> addFavorite({
+    required int experienceId,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/client/experiences/$experienceId/favorite',
+    );
+
+    final response = await http.post(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo agregar a favoritos.',
+      );
+    }
+  }
+
+  Future<void> removeFavorite({
+    required int experienceId,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/client/experiences/$experienceId/favorite',
+    );
+
+    final response = await http.delete(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo quitar de favoritos.',
+      );
+    }
+  }
+
+  Future<Map<String, String>> _headers() async {
+    final token = await _secureStorage.read(StorageKeys.authToken);
+
     return {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      if (token != null && token.trim().isNotEmpty)
+        'Authorization': 'Bearer $token',
     };
   }
 
-  /// Decodifica la respuesta HTTP de forma segura.
   Map<String, dynamic> _decodeResponse(http.Response response) {
     if (response.body.isEmpty) {
       return {};

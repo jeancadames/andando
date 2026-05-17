@@ -2,34 +2,18 @@
 
 namespace App\Http\Controllers\Api\Client;
 
-use App\Http\Controllers\Api\Client\ExploreController;
 use App\Http\Controllers\Controller;
+use App\Models\CustomerFavoriteExperience;
 use App\Models\ProviderExperience;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/**
- * Controlador público para explorar experiencias.
- *
- * Este controlador alimenta la pantalla "Explorar" del cliente.
- * Puede ser consumido por:
- * - usuarios customer autenticados
- * - visitantes sin iniciar sesión
- */
 class ExploreController extends Controller
 {
-    /**
-     * Lista experiencias publicadas y activas.
-     *
-     * Filtros soportados:
-     * - search: busca por título, descripción, provincia o ubicación.
-     * - category: filtra por categoría.
-     * - province: filtra por provincia.
-     */
     public function index(Request $request): JsonResponse
     {
         $query = ProviderExperience::query()
-            ->with(['coverPhoto', 'provider'])
+            ->with(['coverPhoto', 'provider', 'schedules'])
             ->withAvg([
                 'reviews as rating' => function ($query) {
                     $query->where('is_visible', true);
@@ -74,13 +58,10 @@ class ExploreController extends Controller
         ]);
     }
 
-    /**
-     * Muestra el detalle público de una experiencia.
-     */
     public function show(int $id): JsonResponse
     {
         $experience = ProviderExperience::query()
-            ->with(['photos', 'coverPhoto', 'provider'])
+            ->with(['photos', 'coverPhoto', 'provider', 'schedules'])
             ->withAvg([
                 'reviews as rating' => function ($query) {
                     $query->where('is_visible', true);
@@ -102,9 +83,6 @@ class ExploreController extends Controller
         ]);
     }
 
-    /**
-     * Devuelve las categorías disponibles.
-     */
     public function categories(): JsonResponse
     {
         $categories = ProviderExperience::query()
@@ -124,9 +102,6 @@ class ExploreController extends Controller
         ]);
     }
 
-    /**
-     * Formatea una experiencia para el frontend mobile.
-     */
     private function formatExperience(
         ProviderExperience $experience,
         bool $includeDetails = false
@@ -153,6 +128,9 @@ class ExploreController extends Controller
                 ? round((float) $experience->rating, 1)
                 : 0,
             'reviews_count' => (int) ($experience->reviews_count ?? 0),
+            'is_favorite' => $this->isFavoriteForCurrentUser($experience),
+            'available_dates' => $this->formatAvailableDates($experience),
+            'available_schedules' => $this->formatAvailableSchedules($experience),
             'provider' => [
                 'id' => $experience->provider?->id,
                 'business_name' => $experience->provider?->business_name,
@@ -179,12 +157,57 @@ class ExploreController extends Controller
         return $data;
     }
 
-        /**
-     * Formatea la URL de una foto.
-     *
-     * Si la imagen ya es una URL externa, se devuelve igual.
-     * Si es una ruta local, se convierte a URL pública de storage.
-     */
+    private function formatAvailableDates(ProviderExperience $experience)
+    {
+        return $experience->schedules
+            ->where('status', 'active')
+            ->where('starts_at', '>=', now())
+            ->sortBy('starts_at')
+            ->map(fn ($schedule) => $schedule->starts_at?->toIso8601String())
+            ->filter()
+            ->values();
+    }
+
+    private function formatAvailableSchedules(ProviderExperience $experience)
+    {
+        return $experience->schedules
+            ->where('status', 'active')
+            ->where('starts_at', '>=', now())
+            ->sortBy('starts_at')
+            ->map(function ($schedule) use ($experience) {
+                $reservedGuests = $schedule->bookings()
+                    ->whereIn('status', ['pending', 'confirmed'])
+                    ->sum('guests_count');
+
+                $availableSpots = max(0, $schedule->capacity - $reservedGuests);
+
+                return [
+                    'id' => $schedule->id,
+                    'starts_at' => $schedule->starts_at?->toIso8601String(),
+                    'capacity' => $schedule->capacity,
+                    'available_spots' => $availableSpots,
+                    'price' => (float) ($schedule->price ?? $experience->price),
+                    'currency' => $schedule->currency ?? $experience->currency ?? 'DOP',
+                ];
+            })
+            ->filter(fn ($schedule) => $schedule['available_spots'] > 0)
+            ->values();
+    }
+
+    private function isFavoriteForCurrentUser(ProviderExperience $experience): bool
+    {
+        $user = auth('sanctum')->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        return CustomerFavoriteExperience::query()
+            ->where('user_id', $user->id)
+            ->where('provider_experience_id', $experience->id)
+            ->exists();
+    }
+
     private function formatPhotoUrl(?string $path): ?string
     {
         if (!$path) {

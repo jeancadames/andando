@@ -1,9 +1,5 @@
 import 'package:intl/intl.dart';
 
-/// Modelo usado por el cliente para explorar experiencias.
-///
-/// Este modelo representa una experiencia creada por un proveedor
-/// desde el backend Laravel usando ProviderExperience.
 class CustomerExperienceModel {
   final int id;
   final String title;
@@ -20,9 +16,9 @@ class CustomerExperienceModel {
   final String? coverPhotoUrl;
   final double rating;
   final int reviewsCount;
-
-  /// Fechas disponibles para reservar.
+  final bool isFavorite;
   final List<DateTime> availableDates;
+  final List<CustomerExperienceScheduleModel> availableSchedules;
 
   const CustomerExperienceModel({
     required this.id,
@@ -40,7 +36,9 @@ class CustomerExperienceModel {
     required this.coverPhotoUrl,
     required this.rating,
     required this.reviewsCount,
+    required this.isFavorite,
     required this.availableDates,
+    required this.availableSchedules,
   });
 
   factory CustomerExperienceModel.fromJson(Map<String, dynamic> json) {
@@ -60,44 +58,14 @@ class CustomerExperienceModel {
       coverPhotoUrl: json['cover_photo_url']?.toString(),
       rating: _toDouble(json['rating']),
       reviewsCount: _toInt(json['reviews_count']),
-      availableDates: _parseAvailableDates(
-        json['available_dates'],
-      ),
+      isFavorite: _toBool(json['is_favorite']),
+      availableDates: _parseAvailableDates(json['available_dates']),
+      availableSchedules: _parseAvailableSchedules(json['available_schedules']),
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'category': category,
-      'description': description,
-      'duration': duration,
-      'location': location,
-      'province': province,
-      'price': price,
-      'currency': currency,
-      'capacity': capacity,
-      'cancellation_policy': cancellationPolicy,
-      'instant_confirmation': instantConfirmation,
-      'cover_photo_url': coverPhotoUrl,
-      'rating': rating,
-      'reviews_count': reviewsCount,
-      'available_dates': availableDates
-          .map((date) => date.toIso8601String())
-          .toList(),
-    };
-  }
-
-  /// Precio formateado con separador de miles.
-  ///
-  /// Ejemplo:
-  /// RD$4,200
-  /// RD$25,000
-  /// RD$1,250,000
   String get formattedPrice {
     final formatter = NumberFormat('#,###', 'en_US');
-
     final formattedNumber = formatter.format(price);
 
     if (currency == 'DOP') {
@@ -131,7 +99,6 @@ class CustomerExperienceModel {
     if (value is int) return value;
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
-
     return 0;
   }
 
@@ -140,20 +107,15 @@ class CustomerExperienceModel {
     if (value is int) return value.toDouble();
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0;
-
     return 0;
   }
 
   static bool _toBool(dynamic value) {
     if (value is bool) return value;
-
-    if (value is int) {
-      return value == 1;
-    }
+    if (value is int) return value == 1;
 
     if (value is String) {
       final normalized = value.toLowerCase();
-
       return normalized == 'true' || normalized == '1';
     }
 
@@ -161,23 +123,63 @@ class CustomerExperienceModel {
   }
 
   static List<DateTime> _parseAvailableDates(dynamic value) {
-    if (value == null) {
-      return [];
-    }
-
-    if (value is! List) {
-      return [];
-    }
+    if (value == null || value is! List) return [];
 
     return value
-        .map((item) {
-          if (item is String) {
-            return DateTime.tryParse(item);
-          }
-
-          return null;
-        })
+        .map((item) => item is String ? DateTime.tryParse(item) : null)
         .whereType<DateTime>()
         .toList();
+  }
+
+  static List<CustomerExperienceScheduleModel> _parseAvailableSchedules(
+    dynamic value,
+  ) {
+    if (value == null || value is! List) return [];
+
+    return value
+        .whereType<Map>()
+        .map((item) => CustomerExperienceScheduleModel.fromJson(
+              Map<String, dynamic>.from(item),
+            ))
+        .where((schedule) => schedule.availableSpots > 0)
+        .toList();
+  }
+}
+
+class CustomerExperienceScheduleModel {
+  final int id;
+  final DateTime startsAt;
+  final int capacity;
+  final int availableSpots;
+  final double price;
+  final String currency;
+
+  const CustomerExperienceScheduleModel({
+    required this.id,
+    required this.startsAt,
+    required this.capacity,
+    required this.availableSpots,
+    required this.price,
+    required this.currency,
+  });
+
+  factory CustomerExperienceScheduleModel.fromJson(Map<String, dynamic> json) {
+    return CustomerExperienceScheduleModel(
+      id: CustomerExperienceModel._toInt(json['id']),
+      startsAt: DateTime.tryParse(json['starts_at']?.toString() ?? '') ??
+          DateTime.now(),
+      capacity: CustomerExperienceModel._toInt(json['capacity']),
+      availableSpots: CustomerExperienceModel._toInt(json['available_spots']),
+      price: CustomerExperienceModel._toDouble(json['price']),
+      currency: json['currency']?.toString() ?? 'DOP',
+    );
+  }
+
+  String get formattedDate {
+    final day = startsAt.day.toString().padLeft(2, '0');
+    final month = startsAt.month.toString().padLeft(2, '0');
+    final year = startsAt.year.toString();
+
+    return '$day/$month/$year';
   }
 }

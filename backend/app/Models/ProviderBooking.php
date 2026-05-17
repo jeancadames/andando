@@ -10,6 +10,7 @@ class ProviderBooking extends Model
     protected $fillable = [
         'provider_id',
         'provider_experience_id',
+        'provider_experience_schedule_id',
         'user_id',
         'booking_code',
         'customer_name',
@@ -46,6 +47,14 @@ class ProviderBooking extends Model
     {
         return $this->belongsTo(ProviderExperience::class, 'provider_experience_id');
     }
+
+    public function schedule(): BelongsTo
+{
+    return $this->belongsTo(
+        ProviderExperienceSchedule::class,
+        'provider_experience_schedule_id'
+    );
+}
 
     /**
      * Cliente autenticado, si aplica.
