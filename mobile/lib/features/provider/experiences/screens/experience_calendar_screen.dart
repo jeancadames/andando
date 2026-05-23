@@ -259,7 +259,7 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: _schedules.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final schedule = _schedules[index];
         final canModify = schedule.booked == 0;

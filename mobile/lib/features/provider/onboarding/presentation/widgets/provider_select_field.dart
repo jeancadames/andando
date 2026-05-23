@@ -71,7 +71,7 @@ class ProviderSelectField extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: normalizedValue,
+          initialValue: normalizedValue,
           isExpanded: true,
           decoration: InputDecoration(
             filled: true,

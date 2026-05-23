@@ -1,10 +1,8 @@
-/**
- * Modelo que representa la respuesta del backend
- *
- * RESPONSABILIDAD:
- * - Convertir JSON → objeto Dart
- * - Tipar correctamente la data
- */
+/// Modelo que representa la respuesta del backend
+///
+/// RESPONSABILIDAD:
+/// - Convertir JSON → objeto Dart
+/// - Tipar correctamente la data
 class CustomerAuthResponse {
   const CustomerAuthResponse({
     required this.token,
@@ -22,9 +20,7 @@ class CustomerAuthResponse {
   final String userType;
   final String? userPhone;
 
-  /**
-   * Factory para transformar JSON a objeto
-   */
+  /// Factory para transformar JSON a objeto
   factory CustomerAuthResponse.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>;
 

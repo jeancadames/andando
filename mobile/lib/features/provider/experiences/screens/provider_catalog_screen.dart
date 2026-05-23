@@ -355,7 +355,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 96),
       itemCount: _displayExperiences.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
         final experience = _displayExperiences[index];
 
