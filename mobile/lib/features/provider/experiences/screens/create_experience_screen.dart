@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../services/provider_experience_service.dart';
 
+import 'package:go_router/go_router.dart';
+
 class CreateExperienceScreen extends StatefulWidget {
   final int? experienceId;
   final AuthController authController;
@@ -84,6 +86,8 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
   }
 
   Future<void> _loadExperience() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -94,6 +98,8 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         id: widget.experienceId!,
         token: widget.authController.token,
       );
+
+      if (!mounted) return;
 
       final loadedForm = ProviderExperienceForm.fromExperience(experience);
 
@@ -116,10 +122,14 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.cancellationPolicy = loadedForm.cancellationPolicy;
       });
     } catch (error) {
+      if (!mounted) return;
+
       setState(() {
         _error = error.toString();
       });
     } finally {
+      if (!mounted) return;
+
       setState(() {
         _isLoading = false;
       });
@@ -161,6 +171,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
       imageQuality: 82,
     );
 
+    if (!mounted) return;
     if (selected.isEmpty) return;
 
     setState(() {
@@ -193,7 +204,15 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         ),
       );
 
-      Navigator.pop(context, true);
+      final navigator = Navigator.of(context);
+
+      if (navigator.canPop()) {
+        navigator.pop(true);
+        return;
+      }
+
+      context.go('/provider/catalog');
+      return;
     } catch (error) {
       if (!mounted) return;
 
@@ -219,15 +238,27 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
     }
   }
 
-  void _back() {
-    if (_currentStep == 1) {
-      Navigator.pop(context);
+  Future<void> _back() async {
+    if (_currentStep > 1) {
+      if (!mounted) return;
+
+      setState(() {
+        _currentStep--;
+      });
+
       return;
     }
 
-    setState(() {
-      _currentStep--;
-    });
+    final navigator = Navigator.of(context);
+
+    if (navigator.canPop()) {
+      navigator.pop(false);
+      return;
+    }
+
+    if (!mounted) return;
+
+    context.go('/provider/dashboard');
   }
 
   void _toggleAmenity(String amenity) {
@@ -461,7 +492,7 @@ class _BasicInfoStep extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: _Input(
-                label: 'Capacidad *',
+                label: 'Capacidad (personas)*',
                 initialValue: form.capacity.toString(),
                 hint: '15',
                 keyboardType: TextInputType.number,

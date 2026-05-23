@@ -18,6 +18,8 @@ import '../../features/provider/experiences/screens/experience_calendar_screen.d
 import '../../features/provider/experiences/screens/provider_catalog_screen.dart';
 import '../../features/provider/onboarding/presentation/screens/provider_register_screen.dart';
 import '../../features/provider/onboarding/presentation/screens/provider_verification_pending_screen.dart';
+import '../../features/provider/profile/screens/provider_profile_screen.dart';
+import '../../features/provider/bookings/screens/provider_bookings_screen.dart';
 import 'route_names.dart';
 
 class AppRouter {
@@ -249,9 +251,8 @@ class AppRouter {
         path: '/provider/bookings',
         name: RouteNames.providerBookings,
         builder: (context, state) {
-          return const _SimpleProviderPlaceholder(
-            title: 'Reservas',
-            message: 'Pantalla de reservas pendiente.',
+          return ProviderBookingsScreen(
+            authController: _authController,
           );
         },
       ),
@@ -279,9 +280,18 @@ class AppRouter {
         path: '/provider/profile',
         name: RouteNames.providerProfile,
         builder: (context, state) {
+          return ProviderProfileScreen(
+            authController: _authController,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/provider/settings',
+        name: RouteNames.providerSettings,
+        builder: (context, state) {
           return const _SimpleProviderPlaceholder(
-            title: 'Perfil',
-            message: 'Pantalla de perfil pendiente.',
+            title: 'Configuración',
+            message: 'Pantalla de configuración pendiente.',
           );
         },
       ),

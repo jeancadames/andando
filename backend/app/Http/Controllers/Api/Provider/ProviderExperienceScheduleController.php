@@ -277,6 +277,65 @@ class ProviderExperienceScheduleController extends Controller
         ]);
     }
 
+    public function bookings(
+        Request $request,
+        ProviderExperience $experience,
+        ProviderExperienceSchedule $schedule
+    ): JsonResponse {
+        $this->authorizeProvider($request, $experience);
+        $this->authorizeSchedule($experience, $schedule);
+
+        $bookings = $schedule->bookings()
+            ->with('user')
+            ->whereNotIn('status', [
+                'cancelled',
+                'canceled',
+                'rejected',
+            ])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $formattedBookings = $bookings->map(function ($booking) {
+            return [
+                'id' => $booking->id,
+                'booking_code' => $booking->booking_code,
+                'client_name' => $booking->customer_name
+                    ?: optional($booking->user)->name
+                    ?: 'Cliente sin nombre',
+                'customer_phone' => $booking->customer_phone,
+                'customer_email' => $booking->customer_email,
+                'guests_count' => (int) $booking->guests_count,
+                'unit_price' => (float) $booking->unit_price,
+                'total_amount' => (float) $booking->total_amount,
+                'provider_earning' => (float) $booking->provider_earning,
+                'status' => $booking->status,
+                'booking_date' => optional($booking->booking_date)->toISOString(),
+            ];
+        })->values();
+
+        return response()->json([
+            'schedule' => [
+                'id' => $schedule->id,
+                'provider_experience_id' => $schedule->provider_experience_id,
+                'experience_title' => $experience->title,
+                'starts_at' => optional($schedule->starts_at)->toISOString(),
+                'timezone' => $schedule->timezone,
+                'capacity' => (int) $schedule->capacity,
+                'booked' => (int) $formattedBookings->sum('guests_count'),
+                'available' => max(
+                    (int) $schedule->capacity - (int) $formattedBookings->sum('guests_count'),
+                    0
+                ),
+                'price' => (float) $schedule->price,
+                'currency' => $schedule->currency,
+                'status' => $schedule->status,
+            ],
+            'data' => $formattedBookings,
+            'total_bookings' => $formattedBookings->count(),
+            'total_travelers' => (int) $formattedBookings->sum('guests_count'),
+        ]);
+    }
+
     private function generateStartDates(
         string $startDate,
         string $endDate,

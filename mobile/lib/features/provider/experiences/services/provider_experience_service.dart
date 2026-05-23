@@ -8,6 +8,8 @@ import '../models/provider_experience_schedule.dart';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/provider_schedule_bookings_response.dart';
+
 class ProviderExperienceForm {
   String title = '';
   String category = '';
@@ -314,6 +316,31 @@ class ProviderExperienceService {
     return data
         .map((item) => ProviderExperienceSchedule.fromJson(item))
         .toList();
+  }
+
+  Future<ProviderScheduleBookingsResponse> getScheduleBookings({
+    required int experienceId,
+    required int scheduleId,
+    required String? token,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId/bookings',
+      ),
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudieron cargar las reservas.',
+      );
+    }
+
+    return ProviderScheduleBookingsResponse.fromJson(body);
   }
 
   Future<void> createSchedule({

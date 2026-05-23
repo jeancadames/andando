@@ -654,7 +654,7 @@ class _MetricsGrid extends StatelessWidget {
       childAspectRatio: 2.65,
       children: [
         _MetricBox(
-          label: 'Reservas',
+          label: 'Personas',
           value: experience.bookingsCount.toString(),
           icon: Icons.groups_2_outlined,
           background: const Color(0xFFEFF6FF),

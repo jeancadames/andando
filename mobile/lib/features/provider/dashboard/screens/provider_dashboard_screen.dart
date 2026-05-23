@@ -579,6 +579,12 @@ class _BookingCard extends StatelessWidget {
                       label: booking.dateLabel,
                     ),
                     _SmallInfo(
+                      icon: Icons.receipt_long_outlined,
+                      label: booking.bookingsCount == 1
+                          ? '1 reserva'
+                          : '${booking.bookingsCount} reservas',
+                    ),
+                    _SmallInfo(
                       icon: Icons.group_outlined,
                       label: '${booking.guests} personas',
                     ),

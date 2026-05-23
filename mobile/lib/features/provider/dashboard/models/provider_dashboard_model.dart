@@ -104,35 +104,99 @@ class DashboardMetric {
 class UpcomingBookingModel {
   final int id;
   final String bookingCode;
+  final int providerExperienceId;
+  final int providerExperienceScheduleId;
   final String tour;
   final String? date;
   final String dateLabel;
   final int guests;
+  final int bookingsCount;
   final String status;
   final String statusLabel;
 
   UpcomingBookingModel({
     required this.id,
     required this.bookingCode,
+    required this.providerExperienceId,
+    required this.providerExperienceScheduleId,
     required this.tour,
     required this.date,
     required this.dateLabel,
     required this.guests,
+    required this.bookingsCount,
     required this.status,
     required this.statusLabel,
   });
 
   factory UpcomingBookingModel.fromJson(Map<String, dynamic> json) {
     return UpcomingBookingModel(
-      id: json['id'] is int ? json['id'] as int : 0,
+      id: _toInt(json['id']),
       bookingCode: json['booking_code']?.toString() ?? '',
+      providerExperienceId: _toInt(json['provider_experience_id']),
+      providerExperienceScheduleId:
+          _toInt(json['provider_experience_schedule_id']),
       tour: json['tour']?.toString() ?? 'Experiencia',
       date: json['date']?.toString(),
       dateLabel: json['date_label']?.toString() ?? 'Fecha no disponible',
-      guests: json['guests'] is int ? json['guests'] as int : 0,
+      guests: _toInt(json['guests']),
+      bookingsCount: _toInt(json['bookings_count'] ?? 1),
       status: json['status']?.toString() ?? 'pending',
       statusLabel: json['status_label']?.toString() ?? 'Pendiente',
     );
+  }
+
+  static int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+
+    return 0;
+  }
+}
+
+class ProviderUpcomingBookingsResponse {
+  final int totalGroups;
+  final int totalBookings;
+  final int totalTravelers;
+  final List<UpcomingBookingModel> bookings;
+
+  ProviderUpcomingBookingsResponse({
+    required this.totalGroups,
+    required this.totalBookings,
+    required this.totalTravelers,
+    required this.bookings,
+  });
+
+  factory ProviderUpcomingBookingsResponse.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final summary = Map<String, dynamic>.from(json['summary'] ?? {});
+    final data = json['data'] as List? ?? [];
+
+    return ProviderUpcomingBookingsResponse(
+      totalGroups: _toInt(summary['total_groups']),
+      totalBookings: _toInt(summary['total_bookings']),
+      totalTravelers: _toInt(summary['total_travelers']),
+      bookings: data
+          .map(
+            (item) => UpcomingBookingModel.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  static int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+
+    return 0;
   }
 }
 

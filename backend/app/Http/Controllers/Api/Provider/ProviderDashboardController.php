@@ -10,6 +10,7 @@ use App\Models\ProviderReview;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProviderDashboardController extends Controller
 {
@@ -148,27 +149,11 @@ class ProviderDashboardController extends Controller
         | Próximas reservas
         |--------------------------------------------------------------------------
         */
-        $upcomingBookings = ProviderBooking::query()
-            ->with('experience:id,title')
-            ->where('provider_id', $provider->id)
-            ->where('booking_date', '>=', $now)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->orderBy('booking_date')
-            ->limit(5)
-            ->get()
-            ->map(function (ProviderBooking $booking) {
-                return [
-                    'id' => $booking->id,
-                    'booking_code' => $booking->booking_code,
-                    'tour' => $booking->experience?->title ?? 'Experiencia no disponible',
-                    'date' => $booking->booking_date?->toISOString(),
-                    'date_label' => $booking->booking_date?->translatedFormat('d M, h:i A'),
-                    'guests' => $booking->guests_count,
-                    'status' => $booking->status,
-                    'status_label' => $this->bookingStatusLabel($booking->status),
-                ];
-            })
-            ->values();
+        $upcomingBookings = $this->buildUpcomingBookings(
+            providerId: $provider->id,
+            now: $now,
+            limit: 5,
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -252,6 +237,129 @@ class ProviderDashboardController extends Controller
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Devuelve todas las próximas salidas con reservas del afiliado.
+     *
+     * A diferencia del dashboard, aquí NO limitamos a 5.
+     * Agrupamos por experiencia + fecha programada para que una misma salida
+     * aparezca una sola vez aunque tenga varias reservas de distintos clientes.
+     */
+    public function upcomingBookings(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json([
+                'message' => 'No autenticado. Debes iniciar sesión nuevamente.',
+            ], 401);
+        }
+
+        $provider = Provider::query()
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (! $provider) {
+            return response()->json([
+                'message' => 'Tu usuario todavía no tiene un perfil de afiliado asociado.',
+            ], 404);
+        }
+
+        $bookings = $this->buildUpcomingBookings(
+            providerId: $provider->id,
+            now: now(),
+            limit: null,
+        );
+
+        return response()->json([
+            'summary' => [
+                'total_groups' => $bookings->count(),
+                'total_bookings' => (int) $bookings->sum('bookings_count'),
+                'total_travelers' => (int) $bookings->sum('guests'),
+            ],
+            'data' => $bookings,
+        ]);
+    }
+
+    private function buildUpcomingBookings(
+        int $providerId,
+        Carbon $now,
+        ?int $limit = 5,
+    ) {
+        $query = ProviderBooking::query()
+            ->join(
+                'provider_experiences as experiences',
+                'experiences.id',
+                '=',
+                'provider_bookings.provider_experience_id'
+            )
+            ->join(
+                'provider_experience_schedules as schedules',
+                'schedules.id',
+                '=',
+                'provider_bookings.provider_experience_schedule_id'
+            )
+            ->where('provider_bookings.provider_id', $providerId)
+            ->where('schedules.starts_at', '>=', $now)
+            ->whereIn('provider_bookings.status', ['pending', 'confirmed'])
+            ->groupBy(
+                'provider_bookings.provider_experience_id',
+                'provider_bookings.provider_experience_schedule_id',
+                'experiences.title',
+                'schedules.starts_at'
+            )
+            ->orderBy('schedules.starts_at');
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        return $query
+            ->get([
+                DB::raw('MIN(provider_bookings.id) as id'),
+                DB::raw('MIN(provider_bookings.booking_code) as booking_code'),
+                'provider_bookings.provider_experience_id',
+                'provider_bookings.provider_experience_schedule_id',
+                'experiences.title as tour',
+                'schedules.starts_at as schedule_starts_at',
+                DB::raw('COUNT(provider_bookings.id) as bookings_count'),
+                DB::raw('SUM(provider_bookings.guests_count) as guests'),
+                DB::raw("SUM(CASE WHEN provider_bookings.status = 'pending' THEN 1 ELSE 0 END) as pending_count"),
+            ])
+            ->map(function ($booking) {
+                $startsAt = $booking->schedule_starts_at
+                    ? Carbon::parse($booking->schedule_starts_at)
+                    : null;
+
+                $bookingsCount = (int) $booking->bookings_count;
+
+                $status = ((int) $booking->pending_count > 0)
+                    ? 'pending'
+                    : 'confirmed';
+
+                return [
+                    'id' => (int) $booking->id,
+                    'booking_code' => $bookingsCount === 1
+                        ? (string) $booking->booking_code
+                        : $bookingsCount . ' reservas',
+
+                    'provider_experience_id' => (int) $booking->provider_experience_id,
+                    'provider_experience_schedule_id' => (int) $booking->provider_experience_schedule_id,
+
+                    'tour' => $booking->tour ?? 'Experiencia no disponible',
+
+                    'date' => $startsAt?->toISOString(),
+                    'date_label' => $startsAt?->translatedFormat('d M, h:i A'),
+
+                    'guests' => (int) $booking->guests,
+                    'bookings_count' => $bookingsCount,
+
+                    'status' => $status,
+                    'status_label' => $this->bookingStatusLabel($status),
+                ];
+            })
+            ->values();
     }
 
     private function monthlyRevenueSeries(int $providerId, Carbon $now): array

@@ -53,4 +53,39 @@ class ProviderDashboardService {
           'No se pudo cargar el dashboard del afiliado.',
     );
   }
+
+  Future<ProviderUpcomingBookingsResponse> getUpcomingBookings({
+    required String? token,
+  }) async {
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('No hay sesión activa. Inicia sesión nuevamente.');
+    }
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/provider/bookings/upcoming');
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final Map<String, dynamic> body = response.body.isNotEmpty
+        ? Map<String, dynamic>.from(jsonDecode(response.body))
+        : {};
+
+    if (response.statusCode == 200) {
+      return ProviderUpcomingBookingsResponse.fromJson(body);
+    }
+
+    if (response.statusCode == 401) {
+      throw Exception('Tu sesión expiró. Inicia sesión nuevamente.');
+    }
+
+    throw Exception(
+      body['message']?.toString() ??
+          'No se pudieron cargar las próximas reservas.',
+    );
+  }
 }

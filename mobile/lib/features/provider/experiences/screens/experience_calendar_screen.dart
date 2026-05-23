@@ -5,6 +5,7 @@ import '../../../auth/application/auth_controller.dart';
 import '../models/provider_experience_schedule.dart';
 import '../services/provider_experience_service.dart';
 import 'add_schedule_screen.dart';
+import 'provider_schedule_bookings_screen.dart';
 
 class ExperienceCalendarScreen extends StatefulWidget {
   final int experienceId;
@@ -68,6 +69,23 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
     }
   }
 
+  Future<void> _openScheduleBookingsScreen(
+    ProviderExperienceSchedule schedule,
+  ) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProviderScheduleBookingsScreen(
+          authController: widget.authController,
+          experienceId: widget.experienceId,
+          scheduleId: schedule.id,
+        ),
+      ),
+    );
+
+    await _loadSchedules();
+  }
+
   Future<void> _deleteSchedule(ProviderExperienceSchedule schedule) async {
     try {
       await _service.deleteSchedule(
@@ -101,7 +119,7 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
     );
 
     if (created == true) {
-      _loadSchedules();
+      await _loadSchedules();
     }
   }
 
@@ -121,7 +139,7 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
     );
 
     if (updated == true) {
-      _loadSchedules();
+      await _loadSchedules();
     }
   }
 
@@ -266,6 +284,7 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
 
         return _ScheduleCard(
           schedule: schedule,
+          onBookings: () => _openScheduleBookingsScreen(schedule),
           onEdit: canModify ? () => _openEditScheduleScreen(schedule) : null,
           onDelete: canModify ? () => _deleteSchedule(schedule) : null,
         );
@@ -276,19 +295,19 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
 
 class _ScheduleCard extends StatelessWidget {
   final ProviderExperienceSchedule schedule;
+  final VoidCallback onBookings;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   const _ScheduleCard({
     required this.schedule,
+    required this.onBookings,
     required this.onEdit,
     required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    // No usamos toLocal() aquí por ahora, porque el backend devuelve la hora
-    // con Z, pero representa la hora de salida configurada.
     final startsAt = DateTime.tryParse(schedule.startsAt);
 
     final safeCapacity = schedule.capacity <= 0 ? 1 : schedule.capacity;
@@ -384,15 +403,7 @@ class _ScheduleCard extends StatelessWidget {
                         label: 'Ver reservas ($safeBooked)',
                         icon: Icons.people,
                         filled: true,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'La pantalla de reservas se conectará cuando creemos el flujo de clientes.',
-                              ),
-                            ),
-                          );
-                        },
+                        onTap: onBookings,
                       )
                     : _ScheduleActionButton(
                         label: 'Editar fecha',
