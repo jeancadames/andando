@@ -70,6 +70,7 @@ Route::prefix('provider')->group(function () {
         Route::post('/logout', [ProviderAuthController::class, 'logout']);
 
         Route::get('/dashboard', ProviderDashboardController::class);
+        Route::get('/bookings/upcoming', [ProviderDashboardController::class, 'upcomingBookings']);
 
         Route::get('/experiences', [ProviderExperienceController::class, 'index']);
         Route::post('/experiences', [ProviderExperienceController::class, 'store']);
@@ -83,6 +84,8 @@ Route::prefix('provider')->group(function () {
         Route::post('/experiences/{experience}/schedules', [ProviderExperienceScheduleController::class, 'store']);
         Route::put('/experiences/{experience}/schedules/{schedule}', [ProviderExperienceScheduleController::class, 'update']);
         Route::delete('/experiences/{experience}/schedules/{schedule}', [ProviderExperienceScheduleController::class, 'destroy']);
+
+        Route::get('/experiences/{experience}/schedules/{schedule}/bookings',[ProviderExperienceScheduleController::class, 'bookings']);
     });
 });
 

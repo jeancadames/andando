@@ -80,4 +80,5 @@ class RouteNames {
   static const String providerAnalytics = 'providerAnalytics';
   static const String providerMessages = 'providerMessages';
   static const String providerProfile = 'providerProfile';
+  static const String providerSettings = 'providerSettings';
 }

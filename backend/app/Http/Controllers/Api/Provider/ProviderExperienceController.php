@@ -34,10 +34,16 @@ class ProviderExperienceController extends Controller
                     $query->where('status', 'active')
                         ->where('starts_at', '>=', now());
                 },
-                'bookings as bookings_count' => function ($query) {
-                    $query->whereIn('status', ['confirmed', 'completed']);
-                },
             ])
+            ->withSum([
+                'bookings as bookings_count' => function ($query) {
+                    $query->whereNotIn('status', [
+                        'cancelled',
+                        'canceled',
+                        'rejected',
+                    ]);
+                },
+            ], 'guests_count')
             ->withSum([
                 'bookings as revenue' => function ($query) {
                     $query->whereIn('status', ['confirmed', 'completed']);
