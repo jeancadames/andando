@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../../data/models/customer_booking_model.dart';
 import '../controllers/customer_booking_controller.dart';
 
@@ -103,7 +103,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
               ),
             ),
           ),
-          bottomNavigationBar: const _CustomerBottomNavigation(),
+          bottomNavigationBar: const CustomerBottomNavigation(
+            currentItem: CustomerBottomNavItem.bookings,
+          ),
         );
       },
     );
@@ -587,9 +589,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                             _DetailRow(label: 'Hora de inicio', value: booking.formattedTime),
                             _DetailRow(
                               label: 'Duración',
-                              value: booking.duration?.trim().isNotEmpty == true
-                                  ? booking.duration!
-                                  : 'No especificada',
+                              value: booking.displayDuration,
                             ),
                             _DetailRow(
                               label: 'Viajeros',
@@ -1097,48 +1097,3 @@ class _BookingErrorState extends StatelessWidget {
   }
 }
 
-class _CustomerBottomNavigation extends StatelessWidget {
-  const _CustomerBottomNavigation();
-
-  @override
-  Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: 1,
-      onDestinationSelected: (index) {
-        if (index == 0) {
-          context.go('/client/explore');
-        }
-
-        if (index == 1) {
-          return;
-        }
-
-        if (index == 2) {
-          context.go('/client/favorites');
-        }
-      },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.explore_outlined),
-          selectedIcon: Icon(Icons.explore),
-          label: 'Explorar',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.calendar_month_outlined),
-          selectedIcon: Icon(Icons.calendar_month),
-          label: 'Reservas',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.favorite_border_rounded),
-          selectedIcon: Icon(Icons.favorite_rounded),
-          label: 'Favoritos',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline_rounded),
-          selectedIcon: Icon(Icons.person_rounded),
-          label: 'Perfil',
-        ),
-      ],
-    );
-  }
-}

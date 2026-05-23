@@ -226,12 +226,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
           duration: widget.experience.displayDuration,
           unitPrice: formattedUnitPrice,
           totalPrice: formattedTotal,
-          includedItems: const [
-            'Transporte incluido',
-            'Almuerzo',
-            'Guía certificado',
-            'Seguro',
-          ],
+          includedItems: widget.experience.displayAmenities,
         );
       },
     );
@@ -515,6 +510,9 @@ class _MainInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final amenities = experience.displayAmenities;
+    final itinerary = experience.displayItinerary;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 26),
       decoration: BoxDecoration(
@@ -673,15 +671,14 @@ class _MainInfoCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Wrap(
+          Wrap(
             spacing: 18,
             runSpacing: 12,
-            children: [
-              _IncludeItem(text: 'Transporte incluido'),
-              _IncludeItem(text: 'Almuerzo'),
-              _IncludeItem(text: 'Guía certificado'),
-              _IncludeItem(text: 'Seguro'),
-            ],
+            children: amenities
+                .map(
+                  (item) => _IncludeItem(text: item),
+                )
+                .toList(),
           ),
           const SizedBox(height: 22),
           const Divider(),
@@ -695,12 +692,12 @@ class _MainInfoCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          const _ItineraryItem(time: '07:00', text: 'Recogida en hotel'),
-          const _ItineraryItem(time: '09:30', text: 'Llegada al destino'),
-          const _ItineraryItem(time: '10:00', text: 'Inicio de la experiencia'),
-          const _ItineraryItem(time: '13:00', text: 'Almuerzo típico'),
-          const _ItineraryItem(time: '15:00', text: 'Tiempo libre'),
-          const _ItineraryItem(time: '17:00', text: 'Regreso'),
+          ...itinerary.map(
+            (item) => _ItineraryItem(
+              time: item.time,
+              text: item.activity,
+            ),
+          ),
         ],
       ),
     );

@@ -13,7 +13,7 @@ class ExploreController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = ProviderExperience::query()
-            ->with(['coverPhoto', 'provider', 'schedules'])
+            ->with(['coverPhoto', 'photos', 'provider', 'schedules'])
             ->withAvg([
                 'reviews as rating' => function ($query) {
                     $query->where('is_visible', true);
@@ -108,6 +108,12 @@ class ExploreController extends Controller
     ): array {
         $coverPhoto = $experience->coverPhoto;
 
+        $firstPhoto = $experience->relationLoaded('photos')
+            ? $experience->photos->sortBy('sort_order')->first()
+            : $experience->photos()->orderBy('sort_order')->first();
+
+        $displayPhoto = $coverPhoto ?? $firstPhoto;
+
         $data = [
             'id' => $experience->id,
             'title' => $experience->title,
@@ -121,9 +127,11 @@ class ExploreController extends Controller
             'capacity' => $experience->capacity,
             'cancellation_policy' => $experience->cancellation_policy,
             'instant_confirmation' => true,
-            'cover_photo_url' => $coverPhoto
-                ? $this->formatPhotoUrl($coverPhoto->path)
+
+            'cover_photo_url' => $displayPhoto
+                ? $this->formatPhotoUrl($displayPhoto->path)
                 : null,
+
             'rating' => $experience->rating
                 ? round((float) $experience->rating, 1)
                 : 0,
@@ -146,12 +154,15 @@ class ExploreController extends Controller
             $data['not_included'] = $experience->not_included ?? [];
             $data['requirements'] = $experience->requirements ?? [];
 
-            $data['photos'] = $experience->photos->map(fn ($photo) => [
-                'id' => $photo->id,
-                'url' => asset('storage/' . ltrim($photo->path, '/')),
-                'is_cover' => $photo->is_cover,
-                'sort_order' => $photo->sort_order,
-            ])->values();
+            $data['photos'] = $experience->photos
+                ->sortBy('sort_order')
+                ->map(fn ($photo) => [
+                    'id' => $photo->id,
+                    'url' => $this->formatPhotoUrl($photo->path),
+                    'is_cover' => $photo->is_cover,
+                    'sort_order' => $photo->sort_order,
+                ])
+                ->values();
         }
 
         return $data;
@@ -210,14 +221,10 @@ class ExploreController extends Controller
 
     private function formatPhotoUrl(?string $path): ?string
     {
-        if (!$path) {
+        if (! $path) {
             return null;
         }
 
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return $path;
-        }
-
-        return asset('storage/' . ltrim($path, '/'));
+        return url('/api/storage/' . ltrim($path, '/'));
     }
 }

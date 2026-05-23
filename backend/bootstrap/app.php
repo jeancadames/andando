@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CorsForStorage;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -31,10 +32,19 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         /**
-         * Agrega middleware CORS para permitir peticiones desde Flutter Web.
+         * CORS general para rutas API.
          */
         $middleware->append(HandleCors::class);
+
+        /**
+         * Alias para aplicar CORS específicamente a archivos públicos
+         * servidos desde /storage.
+         */
+        $middleware->alias([
+            'storage.cors' => CorsForStorage::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->create();

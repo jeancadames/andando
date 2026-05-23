@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Client;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
+use App\Models\ProviderExperience;
 use App\Models\ProviderExperienceSchedule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,11 +13,27 @@ use Illuminate\Support\Str;
 
 class ClientBookingController extends Controller
 {
+    /**
+     * Lista las reservas del cliente autenticado.
+     *
+     * Este endpoint alimenta la pantalla "Mis Reservas" en Flutter.
+     *
+     * Carga:
+     * - experiencia relacionada
+     * - foto de portada
+     * - galería de fotos como fallback
+     * - schedule reservado
+     *
+     * Importante:
+     * Si la experiencia no tiene una foto marcada como portada,
+     * se usa la primera foto disponible.
+     */
     public function index(Request $request): JsonResponse
     {
         $bookings = ProviderBooking::query()
             ->with([
                 'experience.coverPhoto',
+                'experience.photos',
                 'schedule',
             ])
             ->where('user_id', $request->user()->id)
@@ -33,9 +50,18 @@ class ClientBookingController extends Controller
                     'experience_title' => $experience?->title ?? 'Experiencia',
                     'location' => $experience?->location,
                     'province' => $experience?->province,
-                    'cover_photo_url' => $experience?->coverPhoto
-                        ? $this->formatPhotoUrl($experience->coverPhoto->path)
-                        : null,
+
+                    /**
+                     * Foto principal de la experiencia reservada.
+                     *
+                     * Usa:
+                     * 1. coverPhoto si existe.
+                     * 2. primera foto por sort_order si no hay portada.
+                     */
+                    'cover_photo_url' => $this->resolveExperienceCoverPhotoUrl(
+                        $experience,
+                    ),
+
                     'booking_date' => $booking->booking_date?->toIso8601String(),
                     'starts_at' => $schedule?->starts_at?->toIso8601String()
                         ?? $booking->booking_date?->toIso8601String(),
@@ -57,11 +83,32 @@ class ClientBookingController extends Controller
         ]);
     }
 
+    /**
+     * Crea una reserva para el cliente autenticado.
+     *
+     * Valida:
+     * - que exista el schedule
+     * - que el schedule esté activo
+     * - que existan cupos suficientes
+     *
+     * Luego calcula:
+     * - precio unitario
+     * - total
+     * - ganancia del proveedor
+     */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'provider_experience_schedule_id' => ['required', 'integer', 'exists:provider_experience_schedules,id'],
-            'guests_count' => ['required', 'integer', 'min:1'],
+            'provider_experience_schedule_id' => [
+                'required',
+                'integer',
+                'exists:provider_experience_schedules,id',
+            ],
+            'guests_count' => [
+                'required',
+                'integer',
+                'min:1',
+            ],
         ]);
 
         $user = $request->user();
@@ -74,6 +121,12 @@ class ClientBookingController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            /**
+             * Calculamos los cupos ya reservados para este schedule.
+             *
+             * Solo contamos reservas pending/confirmed porque son las que
+             * todavía ocupan cupos.
+             */
             $reservedGuests = ProviderBooking::query()
                 ->where('provider_experience_schedule_id', $schedule->id)
                 ->whereIn('status', ['pending', 'confirmed'])
@@ -117,16 +170,65 @@ class ClientBookingController extends Controller
         ], 201);
     }
 
-    private function formatPhotoUrl(?string $path): ?string
-    {
-        if (!$path) {
+    /**
+     * Resuelve la imagen principal de una experiencia.
+     *
+     * Prioridad:
+     * 1. Foto marcada como portada.
+     * 2. Primera foto disponible ordenada por sort_order.
+     * 3. null si no hay fotos.
+     */
+    private function resolveExperienceCoverPhotoUrl(
+        ?ProviderExperience $experience,
+    ): ?string {
+        if (! $experience) {
             return null;
         }
 
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+        $coverPhoto = $experience->coverPhoto;
+
+        $firstPhoto = $experience->relationLoaded('photos')
+            ? $experience->photos->sortBy('sort_order')->first()
+            : $experience->photos()->orderBy('sort_order')->first();
+
+        $photo = $coverPhoto ?? $firstPhoto;
+
+        if (! $photo) {
+            return null;
+        }
+
+        return $this->formatPhotoUrl($photo->path);
+    }
+
+    /**
+     * Genera una URL pública compatible con Flutter Web.
+     *
+     * Antes usábamos:
+     * /storage/...
+     *
+     * Pero en desarrollo con:
+     * php artisan serve
+     *
+     * .htaccess no se aplica, así que los headers CORS no llegan a Flutter Web.
+     *
+     * Por eso ahora usamos:
+     * /api/storage/...
+     *
+     * Esa ruta sí pasa por Laravel y devuelve la imagen con headers CORS.
+     */
+    private function formatPhotoUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        if (
+            str_starts_with($path, 'http://') ||
+            str_starts_with($path, 'https://')
+        ) {
             return $path;
         }
 
-        return asset('storage/' . ltrim($path, '/'));
+        return url('/api/storage/' . ltrim($path, '/'));
     }
 }

@@ -5,20 +5,52 @@
 
     RewriteEngine On
 
+    #
+    # ---------------------------------------------------------
+    # CORS PARA FLUTTER WEB
+    # ---------------------------------------------------------
+    #
+    # Permite que Flutter Web, corriendo en localhost con otro puerto,
+    # pueda cargar imágenes desde Laravel:
+    #
+    # http://localhost:xxxxx  ->  http://127.0.0.1:8000/storage/...
+    #
+    # Sin estos headers, Chrome bloquea las imágenes aunque respondan 200 OK.
+    #
+    <IfModule mod_headers.c>
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        Header always set Access-Control-Allow-Headers "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-XSRF-TOKEN"
+    </IfModule>
+
+    #
+    # Responde correctamente a preflight requests OPTIONS.
+    #
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+
+    #
     # Handle Authorization Header
+    #
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    #
     # Handle X-XSRF-Token Header
+    #
     RewriteCond %{HTTP:x-xsrf-token} .
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
+    #
     # Redirect Trailing Slashes If Not A Folder...
+    #
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
+    #
     # Send Requests To Front Controller...
+    #
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]

@@ -5,6 +5,7 @@ import '../../data/models/customer_experience_model.dart';
 
 class ExploreController extends ChangeNotifier {
   final ExploreRemoteDataSource _dataSource;
+  ExploreRemoteDataSource get dataSource => _dataSource;
 
   ExploreController({
     ExploreRemoteDataSource? dataSource,

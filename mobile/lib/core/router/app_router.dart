@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+
+import '../../features/customer/profile/presentation/screens/customer_profile_screen.dart';
+import '../../features/customer/profile/presentation/screens/edit_customer_profile_screen.dart';
+import '../../features/customer/profile/presentation/screens/customer_profile_settings_screen.dart';
 import '../../features/customer/booking/presentation/screens/customer_bookings_screen.dart';
 import '../../features/customer/favorites/presentation/screens/customer_favorites_screen.dart';
 import '../../features/auth/application/auth_controller.dart';
@@ -86,6 +90,32 @@ class AppRouter {
         name: 'clientFavorites',
         builder: (context, state) {
           return const CustomerFavoritesScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/customer/profile',
+        name: 'customerProfile',
+        builder: (context, state) {
+          return CustomerProfileScreen(
+            authController: _authController,
+          );
+        },
+      ),
+
+      GoRoute(
+        path: '/customer/profile/edit',
+        name: 'customerProfileEdit',
+        builder: (context, state) {
+          return const EditCustomerProfileScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/customer/profile/settings',
+        name: 'customerProfileSettings',
+        builder: (context, state) {
+          return const CustomerProfileSettingsScreen();
         },
       ),
 

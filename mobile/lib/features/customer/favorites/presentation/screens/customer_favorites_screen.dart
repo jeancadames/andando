@@ -4,8 +4,20 @@ import 'package:go_router/go_router.dart';
 import '../../../explore/data/models/customer_experience_model.dart';
 import '../../../explore/presentation/controllers/explore_controller.dart';
 import '../../../explore/presentation/screens/experience_detail_screen.dart';
+import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../widgets/favorite_experience_card.dart';
 
+/// Pantalla de favoritos del cliente.
+///
+/// Esta pantalla muestra las experiencias que el usuario ha marcado como
+/// favoritas desde Explorar o desde el detalle de una experiencia.
+///
+/// Importante:
+/// - Usa [ExploreController] porque los favoritos dependen del mismo listado
+///   de experiencias usado en Explorar.
+/// - Al abrir el detalle, no usa directamente la experiencia del listado.
+///   Primero consulta el endpoint de detalle para traer la información completa:
+///   amenities, itinerary, schedules, cupos, etc.
 class CustomerFavoritesScreen extends StatefulWidget {
   const CustomerFavoritesScreen({super.key});
 
@@ -15,52 +27,124 @@ class CustomerFavoritesScreen extends StatefulWidget {
 }
 
 class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
+  /// Controlador encargado de:
+  /// - cargar experiencias
+  /// - cargar favoritos
+  /// - agregar/quitar favoritos
+  /// - exponer estados de loading/error
   final ExploreController _controller = ExploreController();
 
   @override
   void initState() {
     super.initState();
+
+    /// Carga inicial de experiencias y favoritos.
     _controller.initialize();
   }
 
   @override
   void dispose() {
+    /// Liberamos el controlador para evitar memory leaks.
     _controller.dispose();
     super.dispose();
   }
 
+  /// Lista filtrada de experiencias favoritas.
+  ///
+  /// El backend/controlador mantiene una lista de IDs favoritos.
+  /// Aquí cruzamos esos IDs con las experiencias cargadas.
   List<CustomerExperienceModel> get _favoriteExperiences {
     return _controller.experiences.where((experience) {
       return _controller.favoriteExperienceIds.contains(experience.id);
     }).toList();
   }
 
+  /// Abre la pantalla de detalle de una experiencia favorita.
+  ///
+  /// Antes de navegar al detalle, consulta el endpoint específico:
+  ///
+  /// GET /client/explore/experiences/{id}
+  ///
+  /// Esto es necesario porque la experiencia que viene del listado puede estar
+  /// resumida y no traer:
+  /// - amenities
+  /// - itinerary
+  /// - available_schedules
+  /// - cupos reales
   Future<void> _openExperienceDetail(
     CustomerExperienceModel experience,
   ) async {
-    final currentFavoriteState = _controller.isFavorite(experience.id);
+    var didOpenLoadingDialog = false;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ExperienceDetailScreen(
-          experience: experience,
-          initialIsFavorite: currentFavoriteState,
-          onFavoriteChanged: (isFavorite) {
-            final currentState = _controller.isFavorite(experience.id);
+    try {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
+      );
 
-            if (currentState != isFavorite) {
-              _controller.toggleFavorite(experience.id);
-            }
-          },
+      didOpenLoadingDialog = true;
+
+      /// Traemos la experiencia completa desde el backend.
+      final detailExperience = await _controller.dataSource.getExperienceDetail(
+        experienceId: experience.id,
+      );
+
+      if (!mounted) return;
+
+      /// Cerramos el loader antes de abrir el detalle.
+      if (didOpenLoadingDialog) {
+        Navigator.of(context).pop();
+        didOpenLoadingDialog = false;
+      }
+
+      final currentFavoriteState = _controller.isFavorite(experience.id);
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ExperienceDetailScreen(
+            experience: detailExperience,
+            initialIsFavorite: currentFavoriteState,
+            onFavoriteChanged: (isFavorite) {
+              final currentState = _controller.isFavorite(experience.id);
+
+              /// Evita hacer doble toggle si el estado ya coincide.
+              if (currentState != isFavorite) {
+                _controller.toggleFavorite(experience.id);
+              }
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      /// Cerramos el loader en caso de error.
+      if (didOpenLoadingDialog) {
+        Navigator.of(context).pop();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _controller,
+
+      /// AnimatedBuilder reconstruye la pantalla cada vez que el controlador
+      /// llama notifyListeners().
       builder: (context, _) {
         final favorites = _favoriteExperiences;
         final favoriteCount = favorites.length;
@@ -69,6 +153,7 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
           backgroundColor: const Color(0xFFF8F8F8),
           body: SafeArea(
             child: RefreshIndicator(
+              /// Pull-to-refresh para recargar experiencias y favoritos.
               onRefresh: _controller.loadExperiences,
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -79,6 +164,7 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
                     ),
                   ),
 
+                  /// Estado de carga inicial.
                   if (_controller.isLoading)
                     const SliverFillRemaining(
                       hasScrollBody: false,
@@ -86,6 +172,8 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
                         child: CircularProgressIndicator(),
                       ),
                     )
+
+                  /// Estado de error.
                   else if (_controller.errorMessage != null)
                     SliverFillRemaining(
                       hasScrollBody: false,
@@ -94,6 +182,8 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
                         onRetry: _controller.loadExperiences,
                       ),
                     )
+
+                  /// Estado vacío.
                   else if (favorites.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
@@ -103,6 +193,8 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
                         },
                       ),
                     )
+
+                  /// Lista de experiencias favoritas.
                   else
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 110),
@@ -114,7 +206,11 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
 
                           return FavoriteExperienceCard(
                             experience: experience,
+
+                            /// Abre el detalle con data completa desde backend.
                             onTap: () => _openExperienceDetail(experience),
+
+                            /// Quita o agrega favorito desde la card.
                             onFavoriteTap: () {
                               _controller.toggleFavorite(experience.id);
                             },
@@ -126,13 +222,21 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
               ),
             ),
           ),
-          bottomNavigationBar: const _FavoritesBottomNavigation(),
+          bottomNavigationBar: const CustomerBottomNavigation(
+            currentItem: CustomerBottomNavItem.favorites,
+          ),
         );
       },
     );
   }
 }
 
+/// Header superior de la pantalla de favoritos.
+///
+/// Muestra:
+/// - título
+/// - subtítulo
+/// - cantidad de experiencias guardadas
 class _FavoritesHeader extends StatelessWidget {
   final int favoriteCount;
 
@@ -215,6 +319,9 @@ class _FavoritesHeader extends StatelessWidget {
   }
 }
 
+/// Estado vacío de favoritos.
+///
+/// Se muestra cuando el usuario no tiene experiencias guardadas.
 class _FavoritesEmptyState extends StatelessWidget {
   final VoidCallback onExploreTap;
 
@@ -291,6 +398,9 @@ class _FavoritesEmptyState extends StatelessWidget {
   }
 }
 
+/// Estado de error de favoritos.
+///
+/// Se muestra cuando falla la carga de experiencias o favoritos.
 class _FavoritesErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
@@ -344,44 +454,3 @@ class _FavoritesErrorState extends StatelessWidget {
   }
 }
 
-class _FavoritesBottomNavigation extends StatelessWidget {
-  const _FavoritesBottomNavigation();
-
-  @override
-  Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: 2,
-      onDestinationSelected: (index) {
-        if (index == 0) {
-          context.go('/client/explore');
-        }
-
-        if (index == 1) {
-          context.go('/client/bookings');
-        }
-      },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.explore_outlined),
-          selectedIcon: Icon(Icons.explore),
-          label: 'Explorar',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.calendar_month_outlined),
-          selectedIcon: Icon(Icons.calendar_month),
-          label: 'Reservas',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.favorite_border_rounded),
-          selectedIcon: Icon(Icons.favorite_rounded),
-          label: 'Favoritos',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline_rounded),
-          selectedIcon: Icon(Icons.person_rounded),
-          label: 'Perfil',
-        ),
-      ],
-    );
-  }
-}

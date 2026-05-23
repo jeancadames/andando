@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../../shared/widgets/customer_bottom_navigation.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 
@@ -46,23 +48,57 @@ class _ExploreScreenState extends State<ExploreScreen> {
     BuildContext context,
     CustomerExperienceModel experience,
   ) async {
-    final currentFavoriteState = _controller.isFavorite(experience.id);
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
+      );
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ExperienceDetailScreen(
-          experience: experience,
-          initialIsFavorite: currentFavoriteState,
-          onFavoriteChanged: (isFavorite) {
-            final currentState = _controller.isFavorite(experience.id);
+      final detailExperience = await _controller.dataSource
+          .getExperienceDetail(
+        experienceId: experience.id,
+      );
 
-            if (currentState != isFavorite) {
-              _controller.toggleFavorite(experience.id);
-            }
-          },
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      final currentFavoriteState = _controller.isFavorite(experience.id);
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ExperienceDetailScreen(
+            experience: detailExperience,
+            initialIsFavorite: currentFavoriteState,
+            onFavoriteChanged: (isFavorite) {
+              final currentState =
+                  _controller.isFavorite(experience.id);
+
+              if (currentState != isFavorite) {
+                _controller.toggleFavorite(experience.id);
+              }
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -148,7 +184,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
               ),
             ),
           ),
-          bottomNavigationBar: const _ExploreBottomNavigation(),
+          bottomNavigationBar: const CustomerBottomNavigation(
+            currentItem: CustomerBottomNavItem.explore,
+          ),
         );
       },
     );
@@ -409,6 +447,10 @@ class _ExperienceCard extends StatelessWidget {
     final hasImage = experience.coverPhotoUrl != null &&
         experience.coverPhotoUrl!.trim().isNotEmpty;
 
+        debugPrint('EXPERIENCIA: ${experience.title}');
+        debugPrint('COVER PHOTO URL: ${experience.coverPhotoUrl}');
+        debugPrint('HAS IMAGE: $hasImage');
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -436,7 +478,10 @@ class _ExperienceCard extends StatelessWidget {
                         ? Image.network(
                             experience.coverPhotoUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) {
+                            errorBuilder: (context, error, stackTrace) {
+                              debugPrint('ERROR IMAGEN EXPLORE: $error');
+                              debugPrint('URL IMAGEN EXPLORE: ${experience.coverPhotoUrl}');
+
                               return const _ImagePlaceholder();
                             },
                           )
@@ -710,52 +755,6 @@ class _ErrorState extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ExploreBottomNavigation extends StatelessWidget {
-  const _ExploreBottomNavigation();
-
-  @override
-  Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: 0,
-      onDestinationSelected: (index) {
-        if (index == 0) {
-          return;
-        }
-
-        if (index == 1) {
-          context.go('/client/bookings');
-        }
-
-        if (index == 2) {
-          context.go('/client/favorites');
-        }
-      },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.explore_outlined),
-          selectedIcon: Icon(Icons.explore),
-          label: 'Explorar',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.calendar_month_outlined),
-          selectedIcon: Icon(Icons.calendar_month),
-          label: 'Reservas',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.favorite_border_rounded),
-          selectedIcon: Icon(Icons.favorite_rounded),
-          label: 'Favoritos',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline_rounded),
-          selectedIcon: Icon(Icons.person_rounded),
-          label: 'Perfil',
-        ),
-      ],
     );
   }
 }

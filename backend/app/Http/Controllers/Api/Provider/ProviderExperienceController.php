@@ -28,7 +28,7 @@ class ProviderExperienceController extends Controller
 
         $query = ProviderExperience::query()
             ->where('provider_id', $provider->id)
-            ->with('coverPhoto')
+            ->with(['coverPhoto', 'photos'])
             ->withCount([
                 'schedules as schedules_count' => function ($query) {
                     $query->where('status', 'active')
@@ -384,6 +384,12 @@ class ProviderExperienceController extends Controller
     {
         $coverPhoto = $experience->coverPhoto;
 
+        $firstPhoto = $experience->relationLoaded('photos')
+            ? $experience->photos->sortBy('sort_order')->first()
+            : $experience->photos()->orderBy('sort_order')->first();
+
+        $displayPhoto = $coverPhoto ?? $firstPhoto;
+
         return [
             'id' => $experience->id,
             'title' => $experience->title,
@@ -407,14 +413,14 @@ class ProviderExperienceController extends Controller
             'is_active' => $experience->is_active,
             'published_at' => optional($experience->published_at)->toISOString(),
 
-            'cover_photo_url' => $coverPhoto
-                ? asset('storage/' . ltrim($coverPhoto->path, '/'))
+            'cover_photo_url' => $displayPhoto
+                ? asset('storage/' . ltrim($displayPhoto->path, '/'))
                 : null,
 
             'photos' => $experience->relationLoaded('photos')
                 ? $experience->photos->map(fn ($photo) => [
                     'id' => $photo->id,
-                    'url' => asset('storage/' . ltrim($coverPhoto->path, '/')),
+                    'url' => asset('storage/' . ltrim($photo->path, '/')),
                     'is_cover' => $photo->is_cover,
                     'sort_order' => $photo->sort_order,
                 ])->values()
