@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Provider\ProviderAuthController;
 use App\Http\Controllers\Api\Provider\ProviderDashboardController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceScheduleController;
+use App\Http\Controllers\Api\Provider\ProviderAnalyticsController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -86,6 +87,9 @@ Route::prefix('provider')->group(function () {
         Route::delete('/experiences/{experience}/schedules/{schedule}', [ProviderExperienceScheduleController::class, 'destroy']);
 
         Route::get('/experiences/{experience}/schedules/{schedule}/bookings',[ProviderExperienceScheduleController::class, 'bookings']);
+
+        Route::get('/analytics', ProviderAnalyticsController::class);
+        
     });
 });
 

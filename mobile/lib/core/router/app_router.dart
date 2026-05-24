@@ -24,6 +24,7 @@ import '../../features/provider/onboarding/presentation/screens/provider_registe
 import '../../features/provider/onboarding/presentation/screens/provider_verification_pending_screen.dart';
 import '../../features/provider/profile/screens/provider_profile_screen.dart';
 import '../../features/provider/bookings/screens/provider_bookings_screen.dart';
+import '../../features/provider/analytics/screens/provider_analytics_screen.dart';
 import 'route_names.dart';
 
 class AppRouter {
@@ -290,9 +291,20 @@ class AppRouter {
         path: '/provider/analytics',
         name: RouteNames.providerAnalytics,
         builder: (context, state) {
-          return const _SimpleProviderPlaceholder(
-            title: 'Analíticas',
-            message: 'Pantalla de analíticas pendiente.',
+          /// Pantalla real de análisis estadístico del afiliado.
+          ///
+          /// Esta ruta está protegida por la lógica general del router:
+          /// - Si el usuario no está autenticado, lo manda a /login.
+          /// - Si el usuario es proveedor pero no está aprobado, lo manda a
+          ///   /provider/verification-pending.
+          /// - Si el proveedor está aprobado, puede ver esta pantalla.
+          ///
+          /// Le pasamos el AuthController porque ProviderAnalyticsScreen necesita
+          /// el token guardado para consultar:
+          ///
+          /// GET /api/provider/analytics
+          return ProviderAnalyticsScreen(
+            authController: _authController,
           );
         },
       ),

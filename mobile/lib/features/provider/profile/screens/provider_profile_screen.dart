@@ -7,6 +7,22 @@ import '../../../auth/application/auth_controller.dart';
 import '../../dashboard/models/provider_dashboard_model.dart';
 import '../../dashboard/services/provider_dashboard_service.dart';
 
+/// Pantalla principal del perfil del afiliado/proveedor.
+///
+/// Responsabilidades:
+/// - Cargar información básica del proveedor.
+/// - Mostrar avatar, nombre, estado de verificación y métricas.
+/// - Permitir navegar hacia catálogo, analytics y configuración.
+/// - Permitir cerrar sesión.
+/// - Mantener activo el ícono de Perfil en el bottom navigation.
+///
+/// En esta versión solo se homologan visualmente:
+/// - Mis experiencias
+/// - Análisis detallado
+/// - Configuración
+/// - Cerrar sesión
+///
+/// No se cambia la lógica existente de carga, navegación ni logout.
 class ProviderProfileScreen extends StatefulWidget {
   final AuthController authController;
 
@@ -30,11 +46,15 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   void initState() {
     super.initState();
 
+    /// Carga los datos del perfil usando el token actual del afiliado.
     _profileFuture = _service.getDashboard(
       token: widget.authController.token,
     );
   }
 
+  /// Recarga el perfil desde el backend.
+  ///
+  /// Se usa con RefreshIndicator.
   Future<void> _refreshProfile() async {
     setState(() {
       _profileFuture = _service.getDashboard(
@@ -45,6 +65,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     await _profileFuture;
   }
 
+  /// Muestra confirmación antes de cerrar sesión.
+  ///
+  /// Esto evita que el afiliado cierre sesión por accidente.
   Future<void> _confirmLogout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -77,6 +100,12 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     await _logout();
   }
 
+  /// Cierra la sesión del afiliado.
+  ///
+  /// La lógica existente se mantiene:
+  /// - llama al AuthController
+  /// - vuelve al welcome si sale bien
+  /// - muestra SnackBar si hay error
   Future<void> _logout() async {
     if (_isLoggingOut) return;
 
@@ -107,18 +136,22 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     }
   }
 
+  /// Navega al dashboard principal del proveedor.
   void _goToDashboard() {
     context.goNamed(RouteNames.providerDashboard);
   }
 
+  /// Navega al catálogo de experiencias del proveedor.
   void _goToCatalog() {
     context.goNamed(RouteNames.providerCatalog);
   }
 
+  /// Navega a la pantalla de análisis estadístico del proveedor.
   void _goToAnalytics() {
     context.goNamed(RouteNames.providerAnalytics);
   }
 
+  /// Navega a configuración del proveedor.
   void _goToSettings() {
     context.goNamed(RouteNames.providerSettings);
   }
@@ -177,12 +210,24 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                                 stats: dashboard.stats,
                               ),
                               const SizedBox(height: 18),
+
+                              /// Menú homologado visualmente con CustomerProfile.
+                              ///
+                              /// Solo cambia la apariencia de los accesos.
+                              /// La navegación sigue siendo la misma.
                               _ProfileMenu(
                                 onCatalog: _goToCatalog,
                                 onAnalytics: _goToAnalytics,
                                 onSettings: _goToSettings,
                               ),
+
                               const SizedBox(height: 18),
+
+                              /// Botón de logout homologado visualmente con
+                              /// CustomerProfile.
+                              ///
+                              /// La lógica de confirmación y cierre de sesión
+                              /// sigue siendo la misma.
                               _LogoutButton(
                                 isLoading: _isLoggingOut,
                                 onTap: _confirmLogout,
@@ -210,6 +255,14 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 }
 
+/// Header superior del perfil.
+///
+/// Muestra:
+/// - botón para volver al dashboard
+/// - título Perfil
+/// - avatar con iniciales
+/// - nombre del afiliado
+/// - estado de verificación
 class _ProfileHero extends StatelessWidget {
   final ProviderDashboardModel dashboard;
   final VoidCallback onBack;
@@ -374,12 +427,14 @@ class _ProfileHero extends StatelessWidget {
     );
   }
 
+  /// Determina si el proveedor se debe mostrar como verificado.
   static bool _isVerified(String? status) {
     final value = status?.trim().toLowerCase() ?? '';
 
     return value == 'approved' || value == 'active';
   }
 
+  /// Obtiene iniciales a partir del nombre del afiliado.
   static String _initialsFromName(String name) {
     final parts = name
         .trim()
@@ -398,6 +453,9 @@ class _ProfileHero extends StatelessWidget {
   }
 }
 
+/// Estado visual del proveedor.
+///
+/// Muestra si está verificado, en revisión, rechazado o suspendido.
 class _VerificationPill extends StatelessWidget {
   final bool isVerified;
   final String? status;
@@ -431,9 +489,7 @@ class _VerificationPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isVerified
-                ? Icons.verified_user_outlined
-                : Icons.info_outline,
+            isVerified ? Icons.verified_user_outlined : Icons.info_outline,
             color: isVerified
                 ? const Color(0xFF15803D)
                 : const Color(0xFFA16207),
@@ -455,6 +511,7 @@ class _VerificationPill extends StatelessWidget {
     );
   }
 
+  /// Convierte el status técnico en un texto entendible.
   String _statusLabel(String? value) {
     final status = value?.trim().toLowerCase() ?? '';
 
@@ -471,6 +528,9 @@ class _VerificationPill extends StatelessWidget {
   }
 }
 
+/// Grid de métricas principales del proveedor.
+///
+/// Esta sección se deja igual que estaba.
 class _ProfileStatsGrid extends StatelessWidget {
   final ProviderDashboardStats stats;
 
@@ -517,6 +577,9 @@ class _ProfileStatsGrid extends StatelessWidget {
   }
 }
 
+/// Tarjeta individual de métrica.
+///
+/// Esta sección se deja igual que estaba.
 class _ProfileStatCard extends StatelessWidget {
   final String label;
   final String value;
@@ -613,6 +676,12 @@ class _ProfileStatCard extends StatelessWidget {
   }
 }
 
+/// Lista de accesos rápidos del perfil del afiliado.
+///
+/// Esta sección sí fue homologada con el customer profile:
+/// - cada acceso es una tarjeta separada
+/// - no usa una card contenedora con divisores
+/// - mantiene el mismo onTap de la versión anterior
 class _ProfileMenu extends StatelessWidget {
   final VoidCallback onCatalog;
   final VoidCallback onAnalytics;
@@ -626,47 +695,39 @@ class _ProfileMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: _ProfileColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.025),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _ProfileMenuItem(
-            icon: Icons.calendar_month_outlined,
-            title: 'Mis experiencias',
-            subtitle: 'Administra tu catálogo publicado',
-            onTap: onCatalog,
-          ),
-          const Divider(height: 1, color: _ProfileColors.border),
-          _ProfileMenuItem(
-            icon: Icons.trending_up,
-            title: 'Análisis detallado',
-            subtitle: 'Métricas, reportes e ingresos',
-            onTap: onAnalytics,
-          ),
-          const Divider(height: 1, color: _ProfileColors.border),
-          _ProfileMenuItem(
-            icon: Icons.settings_outlined,
-            title: 'Configuración',
-            subtitle: 'Preferencias de cuenta',
-            onTap: onSettings,
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        _ProfileMenuItem(
+          icon: Icons.calendar_month_outlined,
+          title: 'Mis experiencias',
+          subtitle: 'Administra tu catálogo publicado',
+          onTap: onCatalog,
+        ),
+        _ProfileMenuItem(
+          icon: Icons.trending_up,
+          title: 'Análisis detallado',
+          subtitle: 'Métricas, reportes e ingresos',
+          onTap: onAnalytics,
+        ),
+        _ProfileMenuItem(
+          icon: Icons.settings_outlined,
+          title: 'Configuración',
+          subtitle: 'Preferencias de cuenta',
+          onTap: onSettings,
+        ),
+      ],
     );
   }
 }
 
+/// Item individual del menú del perfil.
+///
+/// Estilo homologado al perfil del cliente:
+/// - tarjeta blanca
+/// - sombra suave
+/// - radio 18
+/// - icono en caja azul clara
+/// - chevron a la derecha
 class _ProfileMenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -682,64 +743,72 @@ class _ProfileMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(17),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(
-                  icon,
-                  color: _ProfileColors.primary,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: _ProfileColors.text,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: _ProfileColors.mutedText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right,
-                color: _ProfileColors.mutedText,
-              ),
-            ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 14,
+            offset: Offset(0, 8),
           ),
+        ],
+      ),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            icon,
+            color: _ProfileColors.primary,
+            size: 23,
+          ),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: _ProfileColors.text,
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            color: _ProfileColors.mutedText,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: Color(0xFF9CA3AF),
         ),
       ),
     );
   }
 }
 
+/// Botón de cerrar sesión.
+///
+/// Esta sección sí fue homologada con el customer profile:
+/// - OutlinedButton.icon
+/// - rojo destructivo
+/// - borde suave
+/// - ancho completo
+///
+/// La lógica de logout no cambia.
 class _LogoutButton extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onTap;
@@ -751,50 +820,37 @@ class _LogoutButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        onTap: isLoading ? null : onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          width: double.infinity,
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : onTap,
+        icon: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFFDC2626),
+                ),
+              )
+            : const Icon(Icons.logout_rounded),
+        label: Text(
+          isLoading ? 'Cerrando sesión...' : 'Cerrar sesión',
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFFDC2626),
+          side: const BorderSide(
+            color: Color(0xFFFCA5A5),
+          ),
           padding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 17,
+            vertical: 15,
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFFCA5A5)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (isLoading)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.red,
-                  ),
-                )
-              else
-                const Icon(
-                  Icons.logout,
-                  color: Colors.red,
-                  size: 20,
-                ),
-              const SizedBox(width: 9),
-              Text(
-                isLoading ? 'Cerrando sesión...' : 'Cerrar sesión',
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
@@ -802,6 +858,9 @@ class _LogoutButton extends StatelessWidget {
   }
 }
 
+/// Bottom navigation del flujo de proveedor.
+///
+/// Se deja igual que estaba.
 class _ProviderBottomNav extends StatelessWidget {
   final int currentIndex;
   final VoidCallback onDashboard;
@@ -865,6 +924,9 @@ class _ProviderBottomNav extends StatelessWidget {
   }
 }
 
+/// Item individual del bottom navigation.
+///
+/// Se deja igual que estaba.
 class _BottomNavItem extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -933,6 +995,9 @@ class _BottomNavItem extends StatelessWidget {
   }
 }
 
+/// Estado visual para errores de carga.
+///
+/// Se deja igual que estaba.
 class _ProfileError extends StatelessWidget {
   final String message;
   final Future<void> Function() onRetry;
@@ -980,6 +1045,9 @@ class _ProfileError extends StatelessWidget {
   }
 }
 
+/// Colores locales del perfil del proveedor.
+///
+/// Mantiene el azul principal de AndanDO desde AppColors.
 class _ProfileColors {
   static const Color primary = AppColors.primaryBlue;
   static const Color background = Color(0xFFF8FAFC);
