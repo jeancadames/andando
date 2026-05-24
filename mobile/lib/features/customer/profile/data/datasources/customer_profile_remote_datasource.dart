@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -12,10 +13,8 @@ import '../models/customer_profile_model.dart';
 /// Consume:
 /// - GET  /api/client/profile
 /// - PUT  /api/client/profile
+/// - POST /api/client/profile/photo
 /// - POST /api/client/logout
-///
-/// Este datasource lee el token desde SecureStorage,
-/// siguiendo el mismo patrón usado en reservas.
 class CustomerProfileRemoteDataSource {
   CustomerProfileRemoteDataSource({
     SecureStorage? secureStorage,
@@ -32,7 +31,7 @@ class CustomerProfileRemoteDataSource {
 
     final response = await _client.get(
       uri,
-      headers: await _headers(),
+      headers: await _jsonHeaders(),
     );
 
     final body = _decodeResponse(response);
@@ -62,7 +61,7 @@ class CustomerProfileRemoteDataSource {
 
     final response = await _client.put(
       uri,
-      headers: await _headers(),
+      headers: await _jsonHeaders(),
       body: jsonEncode({
         'name': name,
         'phone': phone,
@@ -91,13 +90,55 @@ class CustomerProfileRemoteDataSource {
     );
   }
 
+  /// Actualiza la foto de perfil del cliente.
+  ///
+  /// Envía multipart/form-data con la llave:
+  /// - avatar
+  Future<CustomerProfileUser> updateProfilePhoto({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/profile/photo');
+
+    final request = http.MultipartRequest('POST', uri);
+
+    request.headers.addAll(
+      await _authHeaders(),
+    );
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'avatar',
+        bytes,
+        filename: fileName,
+      ),
+    );
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo actualizar la foto de perfil.',
+      );
+    }
+
+    final data = Map<String, dynamic>.from(body['data'] ?? {});
+
+    return CustomerProfileUser.fromJson(
+      Map<String, dynamic>.from(data['user'] ?? {}),
+    );
+  }
+
   /// Cierra sesión en backend.
   Future<void> logout() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/client/logout');
 
     final response = await _client.post(
       uri,
-      headers: await _headers(),
+      headers: await _jsonHeaders(),
     );
 
     final body = _decodeResponse(response);
@@ -111,13 +152,23 @@ class CustomerProfileRemoteDataSource {
     await _secureStorage.delete(StorageKeys.authToken);
   }
 
-  /// Headers estándar para requests autenticadas.
-  Future<Map<String, String>> _headers() async {
+  /// Headers para requests JSON.
+  Future<Map<String, String>> _jsonHeaders() async {
+    return {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      ...await _authHeaders(),
+    };
+  }
+
+  /// Headers de autenticación.
+  ///
+  /// No incluye Content-Type porque multipart lo genera automáticamente.
+  Future<Map<String, String>> _authHeaders() async {
     final token = await _secureStorage.read(StorageKeys.authToken);
 
     return {
       'Accept': 'application/json',
-      'Content-Type': 'application/json',
       if (token != null && token.trim().isNotEmpty)
         'Authorization': 'Bearer $token',
     };

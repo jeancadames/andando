@@ -77,7 +77,7 @@ class CustomerBookingModel {
       return 'Fecha no disponible';
     }
 
-    return DateFormat('dd/MM/yyyy').format(date);
+    return DateFormat('d MMM y', 'es').format(date);
   }
 
   /// Hora con formato AM/PM.

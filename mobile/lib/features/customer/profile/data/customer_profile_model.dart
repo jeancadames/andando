@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 /// Modelo principal del perfil del cliente.
 ///
 /// Representa la respuesta completa de:
@@ -35,14 +37,10 @@ class CustomerProfileModel {
 /// Información básica del usuario.
 class CustomerProfileUser {
   final int id;
-
   final String name;
   final String email;
-
   final String? phone;
-
   final String? avatarUrl;
-
   final String? birthDate;
   final String? gender;
   final String? nationality;
@@ -68,13 +66,11 @@ class CustomerProfileUser {
 
   factory CustomerProfileUser.fromJson(Map<String, dynamic> json) {
     return CustomerProfileUser(
-      id: json['id'] ?? 0,
+      id: _toInt(json['id']),
       name: json['name']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString(),
-
       avatarUrl: json['avatar_url']?.toString(),
-
       birthDate: json['birth_date']?.toString(),
       gender: json['gender']?.toString(),
       nationality: json['nationality']?.toString(),
@@ -84,9 +80,14 @@ class CustomerProfileUser {
       country: json['country']?.toString(),
     );
   }
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
 }
 
-/// Estadísticas mostradas en el header del perfil.
+/// Estadísticas mostradas en el perfil.
 class CustomerProfileStats {
   final int toursCount;
   final int reviewsCount;
@@ -102,30 +103,30 @@ class CustomerProfileStats {
 
   factory CustomerProfileStats.fromJson(Map<String, dynamic> json) {
     return CustomerProfileStats(
-      toursCount: json['tours_count'] ?? 0,
-      reviewsCount: json['reviews_count'] ?? 0,
-      favoritesCount: json['favorites_count'] ?? 0,
-      pendingBookingsCount: json['pending_bookings_count'] ?? 0,
+      toursCount: _toInt(json['tours_count']),
+      reviewsCount: _toInt(json['reviews_count']),
+      favoritesCount: _toInt(json['favorites_count']),
+      pendingBookingsCount: _toInt(json['pending_bookings_count']),
     );
+  }
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
 /// Próxima aventura/reserva futura.
 class CustomerNextBooking {
   final int id;
-
   final String bookingCode;
   final String status;
-
   final String? experienceTitle;
   final String? experienceLocation;
   final String? experienceProvince;
-
   final String? bookingDate;
   final String? startsAt;
-
   final int guestsCount;
-
   final double totalAmount;
   final String? currency;
 
@@ -145,22 +146,50 @@ class CustomerNextBooking {
 
   factory CustomerNextBooking.fromJson(Map<String, dynamic> json) {
     return CustomerNextBooking(
-      id: json['id'] ?? 0,
+      id: _toInt(json['id']),
       bookingCode: json['booking_code']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
-
       experienceTitle: json['experience_title']?.toString(),
       experienceLocation: json['experience_location']?.toString(),
       experienceProvince: json['experience_province']?.toString(),
-
       bookingDate: json['booking_date']?.toString(),
       startsAt: json['starts_at']?.toString(),
-
-      guestsCount: json['guests_count'] ?? 0,
-
-      totalAmount: (json['total_amount'] ?? 0).toDouble(),
-
+      guestsCount: _toInt(json['guests_count']),
+      totalAmount: _toDouble(json['total_amount']),
       currency: json['currency']?.toString(),
     );
+  }
+
+  /// Fecha de reserva en formato corto y claro.
+  ///
+  /// Ejemplo:
+  /// - 29 may 2026
+  /// - 5 jun 2026
+  ///
+  /// Se usa en la tarjeta "Próxima aventura" del perfil.
+  String? get formattedBookingDate {
+    if (bookingDate == null || bookingDate!.trim().isEmpty) {
+      return null;
+    }
+
+    final parsedDate = DateTime.tryParse(bookingDate!);
+
+    if (parsedDate == null) {
+      return bookingDate;
+    }
+
+    return DateFormat('d MMM y', 'es').format(parsedDate);
+  }
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _toDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

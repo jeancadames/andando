@@ -278,7 +278,7 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
       return 'Seleccionar';
     }
 
-    return DateFormat('dd/MM/yyyy').format(date);
+    return DateFormat('d MMM y', 'es').format(date);
   }
 
   String _formatTimeForApi(TimeOfDay time) {

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../../../auth/application/auth_controller.dart';
@@ -9,12 +11,8 @@ import '../../data/models/customer_profile_model.dart';
 /// Administra:
 /// - carga del perfil.
 /// - actualización de datos personales.
+/// - actualización de foto de perfil.
 /// - cierre de sesión local y remoto.
-///
-/// IMPORTANTE:
-/// [authController] es opcional porque:
-/// - CustomerProfileScreen sí lo necesita para cerrar sesión correctamente.
-/// - EditCustomerProfileScreen no lo necesita porque solo edita datos.
 class CustomerProfileController extends ChangeNotifier {
   CustomerProfileController({
     AuthController? authController,
@@ -27,6 +25,7 @@ class CustomerProfileController extends ChangeNotifier {
 
   bool isLoading = false;
   bool isSaving = false;
+  bool isUploadingPhoto = false;
   bool isLoggingOut = false;
 
   String? errorMessage;
@@ -82,13 +81,7 @@ class CustomerProfileController extends ChangeNotifier {
         country: country,
       );
 
-      if (profile != null) {
-        profile = CustomerProfileModel(
-          user: updatedUser,
-          stats: profile!.stats,
-          nextBooking: profile!.nextBooking,
-        );
-      }
+      _replaceUser(updatedUser);
 
       return true;
     } catch (error) {
@@ -100,10 +93,34 @@ class CustomerProfileController extends ChangeNotifier {
     }
   }
 
+  /// Actualiza la foto de perfil.
+  Future<bool> updateProfilePhoto({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    isUploadingPhoto = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updatedUser = await _dataSource.updateProfilePhoto(
+        bytes: bytes,
+        fileName: fileName,
+      );
+
+      _replaceUser(updatedUser);
+
+      return true;
+    } catch (error) {
+      errorMessage = error.toString();
+      return false;
+    } finally {
+      isUploadingPhoto = false;
+      notifyListeners();
+    }
+  }
+
   /// Cierra sesión en backend y luego limpia la sesión global local.
-  ///
-  /// Aunque el backend responda 401, igual limpiamos la sesión local
-  /// porque para el usuario el resultado esperado es salir de la cuenta.
   Future<bool> logout() async {
     isLoggingOut = true;
     errorMessage = null;
@@ -113,13 +130,24 @@ class CustomerProfileController extends ChangeNotifier {
       await _dataSource.logout();
       await _authController?.logout();
       return true;
-    } catch (error) {
+    } catch (_) {
       await _authController?.logout();
       return true;
     } finally {
       isLoggingOut = false;
       notifyListeners();
     }
+  }
+
+  /// Reemplaza el usuario dentro del perfil sin perder stats ni próxima reserva.
+  void _replaceUser(CustomerProfileUser updatedUser) {
+    if (profile == null) return;
+
+    profile = CustomerProfileModel(
+      user: updatedUser,
+      stats: profile!.stats,
+      nextBooking: profile!.nextBooking,
+    );
   }
 
   /// Limpia errores visibles en UI.

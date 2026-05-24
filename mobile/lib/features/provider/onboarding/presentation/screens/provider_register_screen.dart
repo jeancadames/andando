@@ -184,7 +184,7 @@ void _goBack() {
   Future<void> _pickFile({
     required void Function(PlatformFile file) onSelected,
   }) async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       withData: true,
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],

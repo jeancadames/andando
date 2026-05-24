@@ -454,12 +454,8 @@ class CustomerExperienceScheduleModel {
   /// Ejemplo:
   /// 29/05/2026
   String get formattedDate {
-    final day = startsAt.day.toString().padLeft(2, '0');
-    final month = startsAt.month.toString().padLeft(2, '0');
-    final year = startsAt.year.toString();
-
-    return '$day/$month/$year';
-  }
+  return DateFormat('d MMM y', 'es').format(startsAt);
+}
 
   /// Hora del schedule con AM/PM.
   ///

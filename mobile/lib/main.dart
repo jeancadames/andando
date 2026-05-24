@@ -1,45 +1,50 @@
 import 'package:flutter/material.dart';
 
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'app.dart';
 import 'core/router/app_router.dart';
 import 'core/storage/secure_storage.dart';
 import 'features/auth/application/auth_controller.dart';
 
-// main() es el punto de entrada de toda app Flutter.
-//
-// Cuando la app abre, Flutter ejecuta esta función primero.
+/// main() es el punto de entrada principal de la aplicación.
+///
+/// Aquí:
+/// - inicializamos Flutter
+/// - inicializamos locales de fechas
+/// - restauramos sesión
+/// - configuramos router
+/// - montamos la app
 Future<void> main() async {
-  // Esto asegura que Flutter esté inicializado antes de usar plugins.
-  //
-  // Es importante porque flutter_secure_storage es un plugin nativo.
+  /// Necesario antes de usar plugins nativos.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Creamos el servicio de almacenamiento seguro.
+  /// Inicializa soporte de fechas en español.
+  ///
+  /// Esto es requerido para:
+  /// DateFormat('d MMM y', 'es')
+  ///
+  /// Ejemplo:
+  /// 29 may 2026
+  await initializeDateFormatting('es');
+
+  /// Servicio de almacenamiento seguro.
   final secureStorage = SecureStorage();
 
-  // Creamos el controlador global de autenticación.
+  /// Controlador global de autenticación.
   final authController = AuthController(
     secureStorage: secureStorage,
   );
 
-  // Antes de mostrar la app, revisamos si existe sesión guardada.
-  //
-  // Si hay token:
-  // AuthController quedará como authenticated.
-  //
-  // Si no hay token:
-  // AuthController quedará como unauthenticated.
+  /// Revisamos si existe sesión guardada.
   await authController.checkAuthStatus();
 
-  // Creamos el router y le pasamos el AuthController.
-  //
-  // Así el router puede decidir si manda al usuario a Welcome,
-  // Explore, Dashboard, etc.
+  /// Router principal de la app.
   final appRouter = AppRouter(
     authController: authController,
   );
 
-  // runApp monta la aplicación en pantalla.
+  /// Monta la aplicación.
   runApp(
     AndandoApp(
       appRouter: appRouter,

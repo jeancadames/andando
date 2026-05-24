@@ -789,7 +789,7 @@ class _ExperienceHeader extends StatelessWidget {
 
     if (date == null) return value;
 
-    return DateFormat('dd/M/yyyy').format(date);
+    return DateFormat('d MMM y', 'es').format(date);
   }
 }
 
