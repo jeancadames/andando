@@ -505,21 +505,17 @@ class _PublicExperienceDetailLoaderState
   }
 
   Future<void> _loadExperience() async {
-    try {
-      await _controller.initialize();
-
-      final matches = _controller.experiences.where(
-        (experience) => experience.id == widget.experienceId,
+     try {
+      final experience = await _controller.getExperienceDetail(
+        widget.experienceId,
       );
 
       if (!mounted) return;
 
       setState(() {
-        _experience = matches.isNotEmpty ? matches.first : null;
+        _experience = experience;
         _isLoading = false;
-        _errorMessage = _experience == null
-            ? 'No encontramos esta experiencia.'
-            : null;
+        _errorMessage = null;
       });
     } catch (_) {
       if (!mounted) return;

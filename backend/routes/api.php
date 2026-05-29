@@ -122,6 +122,7 @@ Route::middleware('auth:sanctum')->prefix('client')->group(function () {
 
     Route::get('/bookings', [ClientBookingController::class, 'index']);
     Route::post('/bookings', [ClientBookingController::class, 'store']);
+    Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
 
     Route::post('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'store']);
     Route::delete('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'destroy']);

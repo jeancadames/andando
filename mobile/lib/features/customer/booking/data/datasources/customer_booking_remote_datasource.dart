@@ -64,4 +64,26 @@ class CustomerBookingRemoteDataSource {
       jsonDecode(response.body),
     );
   }
+
+  Future<void> cancelBooking({
+    required int bookingId,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/client/bookings/$bookingId/cancel',
+    );
+
+    final response = await _client.patch(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo cancelar la reserva.',
+      );
+    }
+  }
+
 }

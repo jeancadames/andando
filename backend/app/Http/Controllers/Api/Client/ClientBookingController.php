@@ -13,23 +13,10 @@ use Illuminate\Support\Str;
 
 class ClientBookingController extends Controller
 {
-    /**
-     * Lista las reservas del cliente autenticado.
-     *
-     * Este endpoint alimenta la pantalla "Mis Reservas" en Flutter.
-     *
-     * Carga:
-     * - experiencia relacionada
-     * - foto de portada
-     * - galería de fotos como fallback
-     * - schedule reservado
-     *
-     * Importante:
-     * Si la experiencia no tiene una foto marcada como portada,
-     * se usa la primera foto disponible.
-     */
     public function index(Request $request): JsonResponse
     {
+        $this->markCompletedBookingsForUser($request->user()->id);
+
         $bookings = ProviderBooking::query()
             ->with([
                 'experience.coverPhoto',
@@ -45,26 +32,17 @@ class ClientBookingController extends Controller
 
                 return [
                     'id' => $booking->id,
+                    'experience_id' => $booking->provider_experience_id,
                     'booking_code' => $booking->booking_code,
                     'status' => $booking->status,
                     'experience_title' => $experience?->title ?? 'Experiencia',
                     'location' => $experience?->location,
                     'province' => $experience?->province,
-
-                    /**
-                     * Foto principal de la experiencia reservada.
-                     *
-                     * Usa:
-                     * 1. coverPhoto si existe.
-                     * 2. primera foto por sort_order si no hay portada.
-                     */
-                    'cover_photo_url' => $this->resolveExperienceCoverPhotoUrl(
-                        $experience,
-                    ),
-
+                    'cover_photo_url' => $this->resolveExperienceCoverPhotoUrl($experience),
                     'booking_date' => $booking->booking_date?->toIso8601String(),
                     'starts_at' => $schedule?->starts_at?->toIso8601String()
                         ?? $booking->booking_date?->toIso8601String(),
+                    'ends_at' => $schedule?->ends_at?->toIso8601String(),
                     'guests_count' => (int) $booking->guests_count,
                     'unit_price' => (float) $booking->unit_price,
                     'total_amount' => (float) $booking->total_amount,
@@ -83,19 +61,6 @@ class ClientBookingController extends Controller
         ]);
     }
 
-    /**
-     * Crea una reserva para el cliente autenticado.
-     *
-     * Valida:
-     * - que exista el schedule
-     * - que el schedule esté activo
-     * - que existan cupos suficientes
-     *
-     * Luego calcula:
-     * - precio unitario
-     * - total
-     * - ganancia del proveedor
-     */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -121,12 +86,6 @@ class ClientBookingController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            /**
-             * Calculamos los cupos ya reservados para este schedule.
-             *
-             * Solo contamos reservas pending/confirmed porque son las que
-             * todavía ocupan cupos.
-             */
             $reservedGuests = ProviderBooking::query()
                 ->where('provider_experience_schedule_id', $schedule->id)
                 ->whereIn('status', ['pending', 'confirmed'])
@@ -146,7 +105,7 @@ class ClientBookingController extends Controller
                 'provider_experience_id' => $schedule->provider_experience_id,
                 'provider_experience_schedule_id' => $schedule->id,
                 'user_id' => $user->id,
-                'booking_code' => 'ANDO-' . strtoupper(Str::random(8)),
+                'booking_code' => $this->generateUniqueBookingCode(),
                 'customer_name' => $user->name,
                 'customer_phone' => $user->phone ?? null,
                 'customer_email' => $user->email,
@@ -170,14 +129,101 @@ class ClientBookingController extends Controller
         ], 201);
     }
 
-    /**
-     * Resuelve la imagen principal de una experiencia.
-     *
-     * Prioridad:
-     * 1. Foto marcada como portada.
-     * 2. Primera foto disponible ordenada por sort_order.
-     * 3. null si no hay fotos.
-     */
+    public function cancel(Request $request, ProviderBooking $booking): JsonResponse
+    {
+        if ($booking->user_id !== $request->user()->id) {
+            abort(403, 'No tienes permiso para cancelar esta reserva.');
+        }
+
+        if (in_array($booking->status, ['completed', 'cancelled'], true)) {
+            return response()->json([
+                'message' => 'Esta reserva ya no puede ser cancelada.',
+            ], 422);
+        }
+
+        $booking->load('schedule');
+
+        $startsAt = $booking->schedule?->starts_at ?? $booking->booking_date;
+
+        if ($startsAt && $startsAt->lte(now())) {
+            return response()->json([
+                'message' => 'No puedes cancelar una reserva que ya inició.',
+            ], 422);
+        }
+
+        $booking->update([
+            'status' => 'cancelled',
+        ]);
+
+        return response()->json([
+            'message' => 'Reserva cancelada correctamente.',
+            'data' => [
+                'id' => $booking->id,
+                'booking_code' => $booking->booking_code,
+                'status' => $booking->status,
+            ],
+        ]);
+    }
+
+    private function markCompletedBookingsForUser(int $userId): void
+    {
+        $bookings = ProviderBooking::query()
+            ->with(['schedule', 'experience'])
+            ->where('user_id', $userId)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->get();
+
+        foreach ($bookings as $booking) {
+            $startsAt = $booking->schedule?->starts_at ?? $booking->booking_date;
+
+            if (! $startsAt) {
+                continue;
+            }
+
+            $endsAt = $booking->schedule?->ends_at;
+
+            if (! $endsAt) {
+                $durationHours = $this->extractDurationHours(
+                    $booking->experience?->duration
+                );
+
+                $endsAt = $startsAt->copy()->addHours($durationHours);
+            }
+
+            if ($endsAt->lte(now())) {
+                $booking->update([
+                    'status' => 'completed',
+                ]);
+            }
+        }
+    }
+
+    private function extractDurationHours(?string $duration): int
+    {
+        if (! $duration) {
+            return 8;
+        }
+
+        if (preg_match('/(\d+)/', $duration, $matches)) {
+            return max(1, (int) $matches[1]);
+        }
+
+        return 8;
+    }
+
+    private function generateUniqueBookingCode(): string
+    {
+        do {
+            $code = 'ANDO-' . strtoupper(Str::random(8));
+        } while (
+            ProviderBooking::query()
+                ->where('booking_code', $code)
+                ->exists()
+        );
+
+        return $code;
+    }
+
     private function resolveExperienceCoverPhotoUrl(
         ?ProviderExperience $experience,
     ): ?string {
@@ -200,22 +246,6 @@ class ClientBookingController extends Controller
         return $this->formatPhotoUrl($photo->path);
     }
 
-    /**
-     * Genera una URL pública compatible con Flutter Web.
-     *
-     * Antes usábamos:
-     * /storage/...
-     *
-     * Pero en desarrollo con:
-     * php artisan serve
-     *
-     * .htaccess no se aplica, así que los headers CORS no llegan a Flutter Web.
-     *
-     * Por eso ahora usamos:
-     * /api/storage/...
-     *
-     * Esa ruta sí pasa por Laravel y devuelve la imagen con headers CORS.
-     */
     private function formatPhotoUrl(?string $path): ?string
     {
         if (! $path) {

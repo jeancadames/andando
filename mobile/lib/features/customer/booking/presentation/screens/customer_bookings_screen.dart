@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../../data/models/customer_booking_model.dart';
 import '../controllers/customer_booking_controller.dart';
@@ -14,12 +15,16 @@ class CustomerBookingsScreen extends StatefulWidget {
 class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   final CustomerBookingController _controller = CustomerBookingController();
 
+  bool _autoOpenedBooking = false;
+
   int selectedTab = 0;
 
   @override
   void initState() {
     super.initState();
-    _controller.initialize();
+    _controller.initialize().then((_) {
+    _openBookingFromQueryIfNeeded();
+});
   }
 
   @override
@@ -37,8 +42,113 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   void _openBookingDetails(CustomerBookingModel booking) {
     showDialog<void>(
       context: context,
-      builder: (_) => _BookingDetailsDialog(booking: booking),
+      builder: (_) => _BookingDetailsDialog(
+        booking: booking,
+        onCancelBooking: () async {
+          Navigator.of(context).pop();
+          await _confirmCancelBooking(booking);
+        },
+      ),
     );
+  }
+
+  Future<void> _confirmCancelBooking(CustomerBookingModel booking) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Cancelar reserva'),
+          content: Text(
+            '¿Seguro que quieres cancelar la reserva ${booking.bookingCode}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('No'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sí, cancelar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final success = await _controller.cancelBooking(booking.id);
+
+    if (!mounted) return;
+
+    if (success) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+            ),
+            title: const Text('Reserva cancelada'),
+            content: Text(
+              'La reserva ${booking.bookingCode} fue cancelada correctamente.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Entendido'),
+              ),
+            ],
+          );
+        },
+      );
+
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _controller.errorMessage ?? 'No se pudo cancelar la reserva.',
+        ),
+      ),
+    );
+  }
+
+  void _openBookingFromQueryIfNeeded() {
+    if (!mounted || _autoOpenedBooking) return;
+
+    final bookingCode = GoRouterState.of(context).uri.queryParameters['bookingCode'];
+
+    if (bookingCode == null || bookingCode.trim().isEmpty) {
+      return;
+    }
+
+    final allBookings = [
+      ..._controller.upcomingBookings,
+      ..._controller.completedBookings,
+    ];
+
+    final matches = allBookings.where(
+      (booking) => booking.bookingCode == bookingCode,
+    );
+
+    if (matches.isEmpty) {
+      return;
+    }
+
+    final booking = matches.first;
+
+    setState(() {
+      selectedTab = booking.isCompleted ? 1 : 0;
+      _autoOpenedBooking = true;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _openBookingDetails(booking);
+    });
   }
 
   @override
@@ -456,9 +566,22 @@ class _BookingCard extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.chat_bubble_outline_rounded, size: 17),
-                        label: Text(isCompletedTab ? 'Reservar otra vez' : 'Contactar'),
+                        onPressed: () {
+                          if (isCompletedTab) {
+                            context.push('/experiences/${booking.experienceId}');
+                          }
+                        },
+                        icon: Icon(
+                          isCompletedTab
+                              ? Icons.refresh_rounded
+                              : Icons.chat_bubble_outline_rounded,
+                          size: 17,
+                        ),
+                        label: Text(
+                          isCompletedTab
+                              ? 'Reservar otra vez'
+                              : 'Contactar',
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF111827),
                           side: BorderSide.none,
@@ -486,9 +609,11 @@ class _BookingCard extends StatelessWidget {
 
 class _BookingDetailsDialog extends StatelessWidget {
   final CustomerBookingModel booking;
+  final Future<void> Function() onCancelBooking;
 
   const _BookingDetailsDialog({
     required this.booking,
+    required this.onCancelBooking,
   });
 
   @override
@@ -682,13 +807,15 @@ class _BookingDetailsDialog extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (!booking.isCompleted) ...[
+                      if (!booking.isCompleted && booking.status.toLowerCase() != 'cancelled') ...[
                         const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
                           height: 54,
                           child: ElevatedButton(
-                            onPressed: () {},
+                            onPressed: () async {
+                              await onCancelBooking();
+                            },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFDE2E6),
                               foregroundColor: const Color(0xFFDC2626),

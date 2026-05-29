@@ -16,7 +16,11 @@ class CustomerBookingController extends ChangeNotifier {
   List<CustomerBookingModel> bookings = [];
 
   List<CustomerBookingModel> get upcomingBookings {
-    return bookings.where((booking) => booking.isUpcoming).toList();
+    return bookings.where((booking) {
+      final status = booking.status.toLowerCase();
+
+      return status != 'completed' && status != 'cancelled';
+    }).toList();
   }
 
   List<CustomerBookingModel> get completedBookings {
@@ -41,4 +45,28 @@ class CustomerBookingController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<bool> cancelBooking(int bookingId) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _dataSource.cancelBooking(
+        bookingId: bookingId,
+      );
+
+      await loadBookings();
+
+      return true;
+    } catch (error) {
+      errorMessage = error.toString();
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+
 }
