@@ -17,6 +17,10 @@ class CustomerBookingModel {
   final String currency;
   final String? pickupPoint;
   final String? duration;
+  final bool hasReview;
+  final int? reviewId;
+  final int? reviewRating;
+  final String? reviewComment;
 
   const CustomerBookingModel({
     required this.id,
@@ -35,6 +39,10 @@ class CustomerBookingModel {
     required this.currency,
     required this.pickupPoint,
     required this.duration,
+    required this.hasReview,
+    required this.reviewId,
+    required this.reviewRating,
+    required this.reviewComment,
   });
 
   factory CustomerBookingModel.fromJson(Map<String, dynamic> json) {
@@ -55,6 +63,12 @@ class CustomerBookingModel {
       currency: json['currency']?.toString() ?? 'DOP',
       pickupPoint: json['pickup_point']?.toString(),
       duration: json['duration']?.toString(),
+      hasReview: _toBool(json['has_review']),
+      reviewId: json['review_id'] == null ? null : _toInt(json['review_id']),
+      reviewRating: json['review_rating'] == null
+          ? null
+          : _toInt(json['review_rating']),
+      reviewComment: json['review_comment']?.toString(),
     );
   }
 
@@ -188,4 +202,14 @@ class CustomerBookingModel {
     if (value == null) return null;
     return DateTime.tryParse(value.toString());
   }
+
+  static bool _toBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is int) return value == 1;
+  if (value is String) {
+    return value == '1' || value.toLowerCase() == 'true';
+  }
+  return false;
+}
+
 }

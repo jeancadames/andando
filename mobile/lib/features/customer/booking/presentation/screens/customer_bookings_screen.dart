@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/router/route_names.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../../data/models/customer_booking_model.dart';
@@ -15,16 +16,28 @@ class CustomerBookingsScreen extends StatefulWidget {
 class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   final CustomerBookingController _controller = CustomerBookingController();
 
-  bool _autoOpenedBooking = false;
+  String? _lastOpenedBookingCode;
+  bool _isOpeningBookingFromQuery = false;
 
   int selectedTab = 0;
 
   @override
   void initState() {
     super.initState();
+
     _controller.initialize().then((_) {
-    _openBookingFromQueryIfNeeded();
-});
+      _openBookingFromQueryIfNeeded();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _openBookingFromQueryIfNeeded();
+    });
   }
 
   @override
@@ -116,14 +129,25 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     );
   }
 
-  void _openBookingFromQueryIfNeeded() {
-    if (!mounted || _autoOpenedBooking) return;
+  Future<void> _openBookingFromQueryIfNeeded() async {
+    if (!mounted || _isOpeningBookingFromQuery) return;
 
-    final bookingCode = GoRouterState.of(context).uri.queryParameters['bookingCode'];
+    final bookingCode =
+        GoRouterState.of(context).uri.queryParameters['bookingCode'];
 
     if (bookingCode == null || bookingCode.trim().isEmpty) {
       return;
     }
+
+    if (_lastOpenedBookingCode == bookingCode) {
+      return;
+    }
+
+    _isOpeningBookingFromQuery = true;
+
+    await _controller.loadBookings();
+
+    if (!mounted) return;
 
     final allBookings = [
       ..._controller.upcomingBookings,
@@ -135,6 +159,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     );
 
     if (matches.isEmpty) {
+      _isOpeningBookingFromQuery = false;
       return;
     }
 
@@ -142,11 +167,13 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
 
     setState(() {
       selectedTab = booking.isCompleted ? 1 : 0;
-      _autoOpenedBooking = true;
+      _lastOpenedBookingCode = bookingCode;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
+      _isOpeningBookingFromQuery = false;
       _openBookingDetails(booking);
     });
   }
@@ -205,6 +232,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                             booking: booking,
                             isCompletedTab: selectedTab == 1,
                             onDetailsTap: () => _openBookingDetails(booking),
+                            onReviewCreated: _controller.loadBookings,
                           );
                         },
                       ),
@@ -372,11 +400,13 @@ class _BookingCard extends StatelessWidget {
   final CustomerBookingModel booking;
   final bool isCompletedTab;
   final VoidCallback onDetailsTap;
+  final Future<void> Function() onReviewCreated;
 
   const _BookingCard({
     required this.booking,
     required this.isCompletedTab,
     required this.onDetailsTap,
+    required this.onReviewCreated,
   });
 
   @override
@@ -531,9 +561,7 @@ class _BookingCard extends StatelessWidget {
                       ),
                       label: const Text(
                         'Ver detalles',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                       style: TextButton.styleFrom(
                         foregroundColor: const Color(0xFF003B73),
@@ -546,12 +574,51 @@ class _BookingCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.download_rounded, size: 18),
-                        label: const Text('Descargar'),
+                        onPressed: isCompletedTab
+                            ? () async {
+
+                                final created = await context.push<bool>(
+                                  '/client/bookings/${booking.id}/review',
+                                  extra: booking,
+                                );
+
+                                if (created == true && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        booking.hasReview
+                                            ? 'Reseña actualizada correctamente.'
+                                            : 'Reseña publicada correctamente.',
+                                      ),
+                                    ),
+                                  );
+
+                                  await onReviewCreated();
+                                }
+                              }
+                            : () {},
+                        icon: Icon(
+                          isCompletedTab
+                              ? booking.hasReview
+                                  ? Icons.check_circle_outline_rounded
+                                  : Icons.star_border_rounded
+                              : Icons.download_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          isCompletedTab
+                              ? booking.hasReview
+                                  ? 'Editar reseña'
+                                  : 'Calificar experiencia'
+                              : 'Descargar',
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF003B73),
-                          foregroundColor: Colors.white,
+                          backgroundColor: isCompletedTab && booking.hasReview
+                              ? const Color(0xFFE5E7EB)
+                              : const Color(0xFF003B73),
+                          foregroundColor: isCompletedTab && booking.hasReview
+                              ? const Color(0xFF374151)
+                              : Colors.white,
                           minimumSize: const Size(0, 48),
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -578,9 +645,7 @@ class _BookingCard extends StatelessWidget {
                           size: 17,
                         ),
                         label: Text(
-                          isCompletedTab
-                              ? 'Reservar otra vez'
-                              : 'Contactar',
+                          isCompletedTab ? 'Reservar otra vez' : 'Contactar',
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF111827),

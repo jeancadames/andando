@@ -78,6 +78,9 @@ class ProviderExperience extends Model
 
     public function reviews(): HasMany
     {
-        return $this->hasMany(ProviderReview::class, 'provider_id', 'provider_id');
+        return $this->hasMany(
+            ProviderReview::class,
+            'provider_experience_id'
+        );
     }
 }

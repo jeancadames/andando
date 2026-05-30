@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-
+import '../../features/customer/reviews/presentation/screens/experience_reviews_screen.dart';
+import '../../features/customer/booking/data/models/customer_booking_model.dart';
+import '../../features/customer/reviews/presentation/screens/create_review_screen.dart';
 import '../../features/customer/profile/presentation/screens/customer_profile_screen.dart';
 import '../../features/customer/profile/presentation/screens/edit_customer_profile_screen.dart';
 import '../../features/customer/profile/presentation/screens/customer_profile_settings_screen.dart';
@@ -88,6 +90,28 @@ class AppRouter {
       ),
 
       GoRoute(
+        path: '/client/bookings/:bookingId/review',
+        name: RouteNames.createReview,
+        builder: (context, state) {
+          final bookingId = int.tryParse(
+            state.pathParameters['bookingId'] ?? '',
+          );
+
+          final booking = state.extra as CustomerBookingModel?;
+
+          if (bookingId == null || booking == null) {
+            return const _RouteErrorPlaceholder(
+              message: 'No pudimos abrir la pantalla de reseña.',
+            );
+          }
+
+          return CreateReviewScreen(
+            booking: booking,
+          );
+        },
+      ),
+
+      GoRoute(
         path: '/client/favorites',
         name: 'clientFavorites',
         builder: (context, state) {
@@ -144,6 +168,30 @@ class AppRouter {
 
           return _PublicExperienceDetailLoader(
             experienceId: experienceId,
+          );
+        },
+      ),
+
+      GoRoute(
+        path: '/experiences/:experienceId/reviews',
+        name: RouteNames.experienceReviews,
+        builder: (context, state) {
+          final experienceId = int.tryParse(
+            state.pathParameters['experienceId'] ?? '',
+          );
+
+          final extra = state.extra as Map<String, dynamic>?;
+
+          if (experienceId == null) {
+            return const _RouteErrorPlaceholder(
+              message: 'No pudimos abrir las reseñas.',
+            );
+          }
+
+          return ExperienceReviewsScreen(
+            experienceId: experienceId,
+            averageRating: (extra?['averageRating'] as num?)?.toDouble() ?? 0,
+            totalReviews: (extra?['totalReviews'] as int?) ?? 0,
           );
         },
       ),

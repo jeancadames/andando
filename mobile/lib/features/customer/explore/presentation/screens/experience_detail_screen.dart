@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../reviews/presentation/widgets/experience_reviews_section.dart';
 import '../../data/models/customer_experience_model.dart';
 import '../../../reservations/data/datasources/customer_booking_remote_datasource.dart';
 
@@ -25,6 +26,8 @@ class ExperienceDetailScreen extends StatefulWidget {
 
 class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   late bool isFavorite;
+  late double _currentRating;
+  late int _currentReviewsCount;
 
   int travelers = 1;
   bool isReserving = false;
@@ -110,6 +113,9 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
     isFavorite = widget.initialIsFavorite;
     selectedSchedule = null;
+
+    _currentRating = widget.experience.rating;
+    _currentReviewsCount = widget.experience.reviewsCount;
 
     _availableSchedules = List<CustomerExperienceScheduleModel>.from(
       widget.experience.availableSchedules,
@@ -362,7 +368,27 @@ Future<void> _reserveExperience() async {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
-              child: _MainInfoCard(experience: experience),
+              child: _MainInfoCard(
+                experience: experience,
+                rating: _currentRating,
+                reviewsCount: _currentReviewsCount,
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
+              child: ExperienceReviewsSection(
+                experienceId: experience.id,
+                averageRating: _currentRating,
+                totalReviews: _currentReviewsCount,
+                onSummaryChanged: (rating, total) {
+                  setState(() {
+                    _currentRating = rating;
+                    _currentReviewsCount = total;
+                  });
+                },
+              ),
             ),
           ),
           SliverToBoxAdapter(
@@ -514,9 +540,13 @@ Future<void> _reserveExperience() async {
 
 class _MainInfoCard extends StatelessWidget {
   final CustomerExperienceModel experience;
+  final double rating;
+  final int reviewsCount;
 
   const _MainInfoCard({
     required this.experience,
+    required this.rating,
+    required this.reviewsCount,
   });
 
   @override
@@ -619,7 +649,7 @@ class _MainInfoCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    '${experience.rating.toStringAsFixed(1)} (${experience.reviewsCount} reseñas)',
+                    '${rating.toStringAsFixed(1)} ($reviewsCount reseñas)',
                     style: const TextStyle(
                       fontSize: 15,
                       color: Color(0xFF111827),

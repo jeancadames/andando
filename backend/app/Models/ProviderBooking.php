@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -63,4 +64,12 @@ class ProviderBooking extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function review(): HasOne
+{
+    return $this->hasOne(
+        ProviderReview::class,
+        'provider_booking_id'
+    );
+}
 }

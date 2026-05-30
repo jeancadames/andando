@@ -81,4 +81,8 @@ class RouteNames {
   static const String providerMessages = 'providerMessages';
   static const String providerProfile = 'providerProfile';
   static const String providerSettings = 'providerSettings';
+  static const String createReview = 'createReview';
+
+  // Reviews de usuarios
+  static const String experienceReviews = 'experienceReviews';
 }
