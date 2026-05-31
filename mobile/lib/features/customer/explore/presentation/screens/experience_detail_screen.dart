@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../reviews/presentation/widgets/experience_reviews_section.dart';
 import '../../data/models/customer_experience_model.dart';
 import '../../../reservations/data/datasources/customer_booking_remote_datasource.dart';
 
@@ -24,6 +26,8 @@ class ExperienceDetailScreen extends StatefulWidget {
 
 class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   late bool isFavorite;
+  late double _currentRating;
+  late int _currentReviewsCount;
 
   int travelers = 1;
   bool isReserving = false;
@@ -109,6 +113,9 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
     isFavorite = widget.initialIsFavorite;
     selectedSchedule = null;
+
+    _currentRating = widget.experience.rating;
+    _currentReviewsCount = widget.experience.reviewsCount;
 
     _availableSchedules = List<CustomerExperienceScheduleModel>.from(
       widget.experience.availableSchedules,
@@ -205,82 +212,92 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   });
 }
 
-  Future<void> _reserveExperience() async {
-    if (!canReserve || selectedSchedule == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecciona una fecha y cantidad válida de viajeros.'),
-        ),
-      );
-      return;
-    }
+Future<void> _reserveExperience() async {
+  if (!canReserve || selectedSchedule == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Selecciona una fecha y cantidad válida de viajeros.'),
+      ),
+    );
+    return;
+  }
 
-    final shouldConfirm = await showDialog<bool>(
+  final shouldConfirm = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return _BookingReviewDialog(
+        experienceTitle: widget.experience.title,
+        date: selectedSchedule!.formattedDate,
+        travelers: travelers,
+        duration: widget.experience.displayDuration,
+        unitPrice: formattedUnitPrice,
+        totalPrice: formattedTotal,
+        includedItems: widget.experience.displayAmenities,
+      );
+    },
+  );
+
+  if (shouldConfirm != true) {
+    return;
+  }
+
+  setState(() {
+    isReserving = true;
+  });
+
+  try {
+    final reservedTotal = formattedTotal;
+
+    final booking = await _bookingDataSource.createBooking(
+      scheduleId: selectedSchedule!.id,
+      guestsCount: travelers,
+    );
+
+    _decreaseAvailableSpotsAfterBooking();
+
+    if (!mounted) return;
+
+    final goToBooking = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return _BookingReviewDialog(
-          experienceTitle: widget.experience.title,
-          date: selectedSchedule!.formattedDate,
-          travelers: travelers,
-          duration: widget.experience.displayDuration,
-          unitPrice: formattedUnitPrice,
-          totalPrice: formattedTotal,
-          includedItems: widget.experience.displayAmenities,
+        return _BookingSuccessDialog(
+          bookingCode: booking.bookingCode,
+          totalPrice: reservedTotal,
         );
       },
     );
 
-    if (shouldConfirm != true) {
-      return;
-    }
+    if (goToBooking == true && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
 
-    setState(() {
-      isReserving = true;
-    });
-
-    try {
-      final booking = await _bookingDataSource.createBooking(
-        scheduleId: selectedSchedule!.id,
-        guestsCount: travelers,
-      );
-
-      _decreaseAvailableSpotsAfterBooking();
-
-      if (!mounted) return;
-
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) {
-          return _BookingSuccessDialog(
-            bookingCode: booking.bookingCode,
-            totalPrice: formattedTotal,
-          );
-        },
-      );
-    } on CustomerBookingException catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
-    } catch (_) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo crear la reserva. Inténtalo nuevamente.'),
-        ),
-      );
-    } finally {
-      if (!mounted) return;
-
-      setState(() {
-        isReserving = false;
+        context.go('/client/bookings?bookingCode=${booking.bookingCode}');
       });
     }
+  } on CustomerBookingException catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error.message)),
+    );
+  } catch (_) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No se pudo crear la reserva. Inténtalo nuevamente.'),
+      ),
+    );
+  } finally {
+    if (!mounted) return;
+
+    setState(() {
+      isReserving = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +368,27 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
-              child: _MainInfoCard(experience: experience),
+              child: _MainInfoCard(
+                experience: experience,
+                rating: _currentRating,
+                reviewsCount: _currentReviewsCount,
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
+              child: ExperienceReviewsSection(
+                experienceId: experience.id,
+                averageRating: _currentRating,
+                totalReviews: _currentReviewsCount,
+                onSummaryChanged: (rating, total) {
+                  setState(() {
+                    _currentRating = rating;
+                    _currentReviewsCount = total;
+                  });
+                },
+              ),
             ),
           ),
           SliverToBoxAdapter(
@@ -503,9 +540,13 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
 class _MainInfoCard extends StatelessWidget {
   final CustomerExperienceModel experience;
+  final double rating;
+  final int reviewsCount;
 
   const _MainInfoCard({
     required this.experience,
+    required this.rating,
+    required this.reviewsCount,
   });
 
   @override
@@ -608,7 +649,7 @@ class _MainInfoCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    '${experience.rating.toStringAsFixed(1)} (${experience.reviewsCount} reseñas)',
+                    '${rating.toStringAsFixed(1)} ($reviewsCount reseñas)',
                     style: const TextStyle(
                       fontSize: 15,
                       color: Color(0xFF111827),
@@ -870,7 +911,9 @@ class _ScheduleSelectorState extends State<_ScheduleSelector> {
                 ),
               ),
               Text(
-                '${schedule.availableSpots} cupos',
+                schedule.availableSpots == 1
+                ? '1 cupo disponible'
+                : '${schedule.availableSpots} cupos disponibles',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -1346,7 +1389,7 @@ class _DetailImagePlaceholder extends StatelessWidget {
   }
 }
 
-class _BookingReviewDialog extends StatelessWidget {
+class _BookingReviewDialog extends StatefulWidget {
   final String experienceTitle;
   final String date;
   final int travelers;
@@ -1364,6 +1407,45 @@ class _BookingReviewDialog extends StatelessWidget {
     required this.totalPrice,
     required this.includedItems,
   });
+
+  @override
+  State<_BookingReviewDialog> createState() => _BookingReviewDialogState();
+}
+
+class _BookingReviewDialogState extends State<_BookingReviewDialog> {
+  bool acceptedLiability = false;
+
+  void _openInfoModal({
+    required String title,
+    required String content,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(title),
+          content: SingleChildScrollView(
+            child: Text(
+              content,
+              style: const TextStyle(
+                height: 1.45,
+                color: Color(0xFF475569),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1425,13 +1507,15 @@ class _BookingReviewDialog extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    _SummaryRow(label: 'Experiencia', value: experienceTitle),
-                    _SummaryRow(label: 'Fecha', value: date),
+                    _SummaryRow(label: 'Experiencia', value: widget.experienceTitle),
+                    _SummaryRow(label: 'Fecha', value: widget.date),
                     _SummaryRow(
                       label: 'Viajeros',
-                      value: travelers == 1 ? '1 persona' : '$travelers personas',
+                      value: widget.travelers == 1
+                          ? '1 persona'
+                          : '${widget.travelers} personas',
                     ),
-                    _SummaryRow(label: 'Duración', value: duration),
+                    _SummaryRow(label: 'Duración', value: widget.duration),
                   ],
                 ),
               ),
@@ -1446,13 +1530,13 @@ class _BookingReviewDialog extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _PriceRow(
-                label: '$unitPrice x $travelers viajero(s)',
-                value: totalPrice,
+                label: '${widget.unitPrice} x ${widget.travelers} viajero(s)',
+                value: widget.totalPrice,
               ),
               const Divider(height: 28),
               _PriceRow(
                 label: 'Total',
-                value: totalPrice,
+                value: widget.totalPrice,
                 isTotal: true,
               ),
               const SizedBox(height: 26),
@@ -1481,9 +1565,9 @@ class _BookingReviewDialog extends StatelessWidget {
                 icon: Icons.check_rounded,
                 iconColor: const Color(0xFF003B73),
                 title: 'Qué incluye',
-                text: includedItems.join(', '),
+                text: widget.includedItems.join(', '),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -1491,12 +1575,87 @@ class _BookingReviewDialog extends StatelessWidget {
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: const Text(
-                  'Al confirmar esta reserva, aceptas nuestros Términos y Condiciones y Política de Privacidad.',
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text(
+                      'Al confirmar esta reserva, aceptas nuestros ',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                    ),
+                    InkWell(
+                      onTap: () => _openInfoModal(
+                        title: 'Términos y Condiciones',
+                        content:
+                            'Al reservar en AndanDO, aceptas cumplir con las normas de la experiencia, llegar a tiempo al punto de encuentro, proveer información real y respetar las políticas del proveedor. Las reservas están sujetas a disponibilidad, condiciones climáticas y reglas operativas del afiliado.',
+                      ),
+                      child: const Text(
+                        'Términos y Condiciones',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF003B73),
+                          fontWeight: FontWeight.w900,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      ' y ',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                    ),
+                    InkWell(
+                      onTap: () => _openInfoModal(
+                        title: 'Política de Privacidad',
+                        content:
+                            'AndanDO utiliza tus datos personales únicamente para gestionar tu reserva, contactar al proveedor, enviar confirmaciones y mejorar tu experiencia. No compartimos información sensible con terceros fuera de lo necesario para operar la reserva.',
+                      ),
+                      child: const Text(
+                        'Política de Privacidad',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF003B73),
+                          fontWeight: FontWeight.w900,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      '.',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              CheckboxListTile(
+                value: acceptedLiability,
+                onChanged: (value) {
+                  setState(() {
+                    acceptedLiability = value ?? false;
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Acepto el documento de descargo de responsabilidad en caso de accidente.',
                   style: TextStyle(
                     fontSize: 13,
-                    height: 1.4,
-                    color: Color(0xFF475569),
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                subtitle: InkWell(
+                  onTap: () => _openInfoModal(
+                    title: 'Descargo de responsabilidad',
+                    content:
+                        'Reconozco que algunas experiencias pueden incluir riesgos propios de actividades turísticas, transporte, caminatas, actividades acuáticas o al aire libre. Acepto seguir las instrucciones del guía o proveedor, informar cualquier condición médica relevante y liberar a AndanDO de responsabilidad por incidentes derivados del incumplimiento de normas, negligencia personal o eventos fuera del control de la plataforma.',
+                  ),
+                  child: const Text(
+                    'Leer documento de descargo',
+                    style: TextStyle(
+                      color: Color(0xFF003B73),
+                      fontWeight: FontWeight.w800,
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
                 ),
               ),
@@ -1505,10 +1664,14 @@ class _BookingReviewDialog extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: acceptedLiability
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF003B73),
+                    disabledBackgroundColor: const Color(0xFFCBD5E1),
                     foregroundColor: Colors.white,
+                    disabledForegroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -1564,20 +1727,149 @@ class _BookingSuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
       ),
-      title: const Text('Reserva creada'),
-      content: Text(
-        'Tu reserva fue creada correctamente.\n\nCódigo: $bookingCode\nTotal: $totalPrice',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Aceptar'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: const BoxDecoration(
+                color: Color(0xFFD1FAE5),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_rounded,
+                size: 42,
+                color: Color(0xFF059669),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Reserva creada',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Tu reserva fue creada correctamente.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'Código de reserva',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    bookingCode,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF003B73),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Total pagado',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        totalPrice,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF003B73),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop(true),
+                icon: const Icon(Icons.calendar_month_rounded),
+                label: const Text('Ver mi reserva'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF003B73),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text(
+                  'Seguir explorando',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

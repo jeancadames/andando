@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../auth/application/auth_controller.dart';
+import 'package:intl/intl.dart';
 
 import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../controllers/customer_profile_controller.dart';
@@ -655,7 +656,7 @@ class _NextAdventureSection extends StatelessWidget {
                 const SizedBox(height: 8),
                 _ProfileInfoRow(
                   icon: Icons.calendar_month_outlined,
-                  text: date!,
+                  text: _formatProfileDate(date),
                 ),
               ],
               if (guestsCount != null && guestsCount! > 0) ...[
@@ -675,7 +676,10 @@ class _NextAdventureSection extends StatelessWidget {
                   if (totalAmount != null)
                     Expanded(
                       child: Text(
-                        '${currency ?? 'DOP'} ${totalAmount!.toStringAsFixed(0)}',
+                        _formatProfileCurrency(
+                          amount: totalAmount,
+                          currency: currency,
+                        ),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -742,6 +746,70 @@ class _ProfileInfoRow extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Formatea fechas de perfil de forma homogénea con Reservas.
+/// Ejemplo: sáb, 30 may 2026
+String _formatProfileDate(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return '';
+  }
+
+  final parsedDate = DateTime.tryParse(value);
+
+  if (parsedDate == null) {
+    return value;
+  }
+
+  const weekdays = [
+    'lun',
+    'mar',
+    'mié',
+    'jue',
+    'vie',
+    'sáb',
+    'dom',
+  ];
+
+  const months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sept',
+    'oct',
+    'nov',
+    'dic',
+  ];
+
+  final weekday = weekdays[parsedDate.weekday - 1];
+  final month = months[parsedDate.month - 1];
+
+  return '$weekday, ${parsedDate.day} $month ${parsedDate.year}';
+}
+
+/// Formatea montos de perfil de forma homogénea con Reservas.
+/// Ejemplo: RD$10,000
+String _formatProfileCurrency({
+  required double? amount,
+  required String? currency,
+}) {
+  if (amount == null) {
+    return '';
+  }
+
+  final formatter = NumberFormat('#,###', 'en_US');
+  final formattedAmount = formatter.format(amount);
+
+  if ((currency ?? 'DOP').toUpperCase() == 'DOP') {
+    return 'RD\$$formattedAmount';
+  }
+
+  return '${currency ?? ''} $formattedAmount';
 }
 
 /// Lista de accesos rápidos del perfil.

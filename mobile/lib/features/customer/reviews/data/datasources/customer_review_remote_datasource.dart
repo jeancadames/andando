@@ -5,10 +5,9 @@ import 'package:http/http.dart' as http;
 import '../../../../../core/config/api_config.dart';
 import '../../../../../core/constants/storage_keys.dart';
 import '../../../../../core/storage/secure_storage.dart';
-import '../models/customer_booking_model.dart';
 
-class CustomerBookingRemoteDataSource {
-  CustomerBookingRemoteDataSource({
+class CustomerReviewRemoteDataSource {
+  CustomerReviewRemoteDataSource({
     SecureStorage? secureStorage,
     http.Client? client,
   })  : _secureStorage = secureStorage ?? SecureStorage(),
@@ -17,31 +16,30 @@ class CustomerBookingRemoteDataSource {
   final SecureStorage _secureStorage;
   final http.Client _client;
 
-  Future<List<CustomerBookingModel>> getBookings() async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/client/bookings');
+  Future<void> createReview({
+    required int bookingId,
+    required int rating,
+    required String? comment,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/reviews');
 
-    final response = await _client.get(
+    final response = await _client.post(
       uri,
       headers: await _headers(),
+      body: jsonEncode({
+        'booking_id': bookingId,
+        'rating': rating,
+        'comment': comment,
+      }),
     );
 
     final body = _decodeResponse(response);
 
-    if (response.statusCode != 200) {
+    if (response.statusCode != 201) {
       throw Exception(
-        body['message'] ?? 'No se pudieron cargar tus reservas.',
+        body['message'] ?? 'No se pudo publicar la reseña.',
       );
     }
-
-    final List data = body['data'] ?? [];
-
-    return data
-        .map(
-          (item) => CustomerBookingModel.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
-        )
-        .toList();
   }
 
   Future<Map<String, String>> _headers() async {
@@ -56,34 +54,35 @@ class CustomerBookingRemoteDataSource {
   }
 
   Map<String, dynamic> _decodeResponse(http.Response response) {
-    if (response.body.isEmpty) {
-      return {};
-    }
+    if (response.body.isEmpty) return {};
 
     return Map<String, dynamic>.from(
       jsonDecode(response.body),
     );
   }
 
-  Future<void> cancelBooking({
-    required int bookingId,
+  Future<void> updateReview({
+    required int reviewId,
+    required int rating,
+    required String? comment,
   }) async {
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/client/bookings/$bookingId/cancel',
-    );
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/reviews/$reviewId');
 
-    final response = await _client.patch(
+    final response = await _client.put(
       uri,
       headers: await _headers(),
+      body: jsonEncode({
+        'rating': rating,
+        'comment': comment,
+      }),
     );
 
     final body = _decodeResponse(response);
 
     if (response.statusCode != 200) {
       throw Exception(
-        body['message'] ?? 'No se pudo cancelar la reserva.',
+        body['message'] ?? 'No se pudo actualizar la reseña.',
       );
     }
   }
-
 }

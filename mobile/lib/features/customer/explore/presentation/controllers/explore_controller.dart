@@ -5,6 +5,7 @@ import '../../data/models/customer_experience_model.dart';
 
 class ExploreController extends ChangeNotifier {
   final ExploreRemoteDataSource _dataSource;
+
   ExploreRemoteDataSource get dataSource => _dataSource;
 
   ExploreController({
@@ -88,6 +89,20 @@ class ExploreController extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<CustomerExperienceModel> getExperienceDetail(int experienceId) async {
+    final experience = await _dataSource.getExperienceDetail(
+      experienceId: experienceId,
+    );
+
+    if (experience.isFavorite) {
+      favoriteExperienceIds.add(experience.id);
+    } else {
+      favoriteExperienceIds.remove(experience.id);
+    }
+
+    return experience;
   }
 
   Future<void> loadCategories() async {

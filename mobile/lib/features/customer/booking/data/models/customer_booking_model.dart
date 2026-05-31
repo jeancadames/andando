@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 
 class CustomerBookingModel {
   final int id;
+  final int experienceId;
   final String bookingCode;
   final String status;
   final String experienceTitle;
@@ -16,9 +17,14 @@ class CustomerBookingModel {
   final String currency;
   final String? pickupPoint;
   final String? duration;
+  final bool hasReview;
+  final int? reviewId;
+  final int? reviewRating;
+  final String? reviewComment;
 
   const CustomerBookingModel({
     required this.id,
+    required this.experienceId,
     required this.bookingCode,
     required this.status,
     required this.experienceTitle,
@@ -33,11 +39,16 @@ class CustomerBookingModel {
     required this.currency,
     required this.pickupPoint,
     required this.duration,
+    required this.hasReview,
+    required this.reviewId,
+    required this.reviewRating,
+    required this.reviewComment,
   });
 
   factory CustomerBookingModel.fromJson(Map<String, dynamic> json) {
     return CustomerBookingModel(
       id: _toInt(json['id']),
+      experienceId: _toInt(json['experience_id']),
       bookingCode: json['booking_code']?.toString() ?? '',
       status: json['status']?.toString() ?? 'pending',
       experienceTitle: json['experience_title']?.toString() ?? '',
@@ -52,6 +63,12 @@ class CustomerBookingModel {
       currency: json['currency']?.toString() ?? 'DOP',
       pickupPoint: json['pickup_point']?.toString(),
       duration: json['duration']?.toString(),
+      hasReview: _toBool(json['has_review']),
+      reviewId: json['review_id'] == null ? null : _toInt(json['review_id']),
+      reviewRating: json['review_rating'] == null
+          ? null
+          : _toInt(json['review_rating']),
+      reviewComment: json['review_comment']?.toString(),
     );
   }
 
@@ -77,7 +94,35 @@ class CustomerBookingModel {
       return 'Fecha no disponible';
     }
 
-    return DateFormat('d MMM y', 'es').format(date);
+    const weekdays = [
+      'lun',
+      'mar',
+      'mié',
+      'jue',
+      'vie',
+      'sáb',
+      'dom',
+    ];
+
+    const months = [
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sept',
+      'oct',
+      'nov',
+      'dic',
+    ];
+
+    final weekday = weekdays[date.weekday - 1];
+    final month = months[date.month - 1];
+
+    return '$weekday, ${date.day} $month ${date.year}';
   }
 
   /// Hora con formato AM/PM.
@@ -157,4 +202,14 @@ class CustomerBookingModel {
     if (value == null) return null;
     return DateTime.tryParse(value.toString());
   }
+
+  static bool _toBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is int) return value == 1;
+  if (value is String) {
+    return value == '1' || value.toLowerCase() == 'true';
+  }
+  return false;
+}
+
 }

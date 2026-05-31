@@ -454,8 +454,36 @@ class CustomerExperienceScheduleModel {
   /// Ejemplo:
   /// 29/05/2026
   String get formattedDate {
-  return DateFormat('d MMM y', 'es').format(startsAt);
-}
+    const weekdays = [
+      'lun',
+      'mar',
+      'mié',
+      'jue',
+      'vie',
+      'sáb',
+      'dom',
+    ];
+
+    const months = [
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sept',
+      'oct',
+      'nov',
+      'dic',
+    ];
+
+    final weekday = weekdays[startsAt.weekday - 1];
+    final month = months[startsAt.month - 1];
+
+    return '$weekday, ${startsAt.day} $month ${startsAt.year}';
+  }
 
   /// Hora del schedule con AM/PM.
   ///

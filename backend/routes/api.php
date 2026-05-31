@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Client\ClientReviewController;
 use App\Http\Controllers\Api\Client\ClientProfileController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Client\ClientBookingController;
@@ -111,6 +112,7 @@ Route::prefix('client/explore')->group(function () {
     Route::get('/experiences', [ExploreController::class, 'index']);
     Route::get('/experiences/categories', [ExploreController::class, 'categories']);
     Route::get('/experiences/{id}', [ExploreController::class, 'show']);
+    Route::get('/experiences/{experience}/reviews', [ClientReviewController::class, 'experienceReviews']);
 });
 
 /*
@@ -126,7 +128,14 @@ Route::middleware('auth:sanctum')->prefix('client')->group(function () {
 
     Route::get('/bookings', [ClientBookingController::class, 'index']);
     Route::post('/bookings', [ClientBookingController::class, 'store']);
+    Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
 
     Route::post('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'store']);
     Route::delete('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'destroy']);
-});
+
+    Route::get('/experiences/{experience}/reviews', [ClientReviewController::class, 'experienceReviews']);
+    Route::post('/reviews', [ClientReviewController::class, 'store']);
+    Route::put('/reviews/{review}', [ClientReviewController::class, 'update']);
+    Route::delete('/reviews/{review}', [ClientReviewController::class, 'destroy']);
+
+    });
