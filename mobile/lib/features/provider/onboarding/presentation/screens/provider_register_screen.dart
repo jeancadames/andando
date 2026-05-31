@@ -69,10 +69,48 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
     super.dispose();
   }
 
+  String _normalizeDominicanPhone(String value) {
+  final digits = value.replaceAll(RegExp(r'\D'), '');
+
+  // Permite formato internacional: +1 809 123 4567
+  if (digits.length == 11 && digits.startsWith('1')) {
+    return digits.substring(1);
+  }
+
+    return digits;
+  }
+
+  bool _isValidEmail(String value) {
+    final email = value.trim();
+
+    final emailRegex = RegExp(
+      r'^[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$',
+    );
+
+    return emailRegex.hasMatch(email);
+  }
+
+  bool _isValidDominicanPhone(String value) {
+    final phone = _normalizeDominicanPhone(value);
+
+    // RD: 809, 829 o 849 + 7 dígitos.
+    // El primer dígito después del código de área debe ser 2-9.
+    return RegExp(r'^(809|829|849)[2-9]\d{6}$').hasMatch(phone);
+  }
+
+  String _dominicanPhoneForApi(String value) {
+    final phone = _normalizeDominicanPhone(value);
+    return '+1$phone';
+  }
+
   void _syncControllersToFormData() {
     _formData.fullName = _fullNameController.text.trim();
     _formData.email = _emailController.text.trim();
-    _formData.phone = _phoneController.text.trim();
+    final rawPhone = _phoneController.text.trim();
+
+    _formData.phone = _isValidDominicanPhone(rawPhone)
+        ? _dominicanPhoneForApi(rawPhone)
+        : rawPhone;
     _formData.password = _passwordController.text;
     _formData.confirmPassword = _confirmPasswordController.text;
 
@@ -88,8 +126,8 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
     switch (_currentStep) {
       case 1:
         return _formData.fullName.isNotEmpty &&
-            _formData.email.contains('@') &&
-            _formData.phone.isNotEmpty &&
+            _isValidEmail(_emailController.text) &&
+            _isValidDominicanPhone(_phoneController.text) &&
             _formData.password.length >= 8 &&
             _formData.password == _formData.confirmPassword;
 
@@ -126,9 +164,18 @@ void _goBack() {
 
   void _handleContinue() {
     if (!_canProceed()) {
+      var message = 'Completa los campos requeridos para continuar.';
+
+      if (_currentStep == 1 &&
+          _phoneController.text.trim().isNotEmpty &&
+          !_isValidDominicanPhone(_phoneController.text)) {
+        message =
+            'Ingresa un teléfono dominicano válido. Ej: 809-123-4567, 829-123-4567 o +1 849-123-4567.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Completa los campos requeridos para continuar.'),
+        SnackBar(
+          content: Text(message),
         ),
       );
       return;
@@ -287,6 +334,10 @@ void _goBack() {
           confirmPasswordController: _confirmPasswordController,
           showPassword: _showPassword,
           showConfirmPassword: _showConfirmPassword,
+          emailErrorText: _emailController.text.trim().isNotEmpty &&
+              !_isValidEmail(_emailController.text)
+          ? 'Ingresa un correo válido. Ej: nombre@dominio.com.'
+          : null,
           onTogglePassword: () {
             setState(() {
               _showPassword = !_showPassword;

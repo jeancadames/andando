@@ -24,6 +24,7 @@ class StepPersonalInfo extends StatelessWidget {
     super.key,
     required this.fullNameController,
     required this.emailController,
+    this.emailErrorText,
     required this.phoneController,
     required this.passwordController,
     required this.confirmPasswordController,
@@ -39,6 +40,8 @@ class StepPersonalInfo extends StatelessWidget {
 
   /// Controlador del campo correo electrónico.
   final TextEditingController emailController;
+  final String? emailErrorText;
+
 
   /// Controlador del campo teléfono.
   final TextEditingController phoneController;
@@ -123,18 +126,39 @@ class StepPersonalInfo extends StatelessWidget {
           onChanged: onChanged,
         ),
 
+        if (emailErrorText != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            emailErrorText!,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.primaryRed,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+
         const SizedBox(height: 20),
 
         ProviderTextField(
           label: 'Teléfono',
           controller: phoneController,
-          hintText: '+1 (809) 000-0000',
+          hintText: '809-123-4567',
           prefixIcon: Icons.phone_outlined,
           keyboardType: TextInputType.phone,
           onChanged: onChanged,
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 8),
+
+        const Text(
+          'Debe ser un número dominicano válido. Ej: 809-123-4567, 829-123-4567 o 849-123-4567.',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.mutedForeground,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
 
         ProviderTextField(
           label: 'Contraseña',

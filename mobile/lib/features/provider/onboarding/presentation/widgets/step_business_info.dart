@@ -115,24 +115,52 @@ class StepBusinessInfo extends StatelessWidget {
     ),
   ];
 
-  /// Provincias disponibles.
+  /// Provincias de República Dominicana + Distrito Nacional.
   ///
   /// Para el MVP dejamos una lista local.
   /// Más adelante esto puede venir desde backend.
   static const List<_SelectOption> _provinces = [
     _SelectOption(value: 'Distrito Nacional', label: 'Distrito Nacional'),
-    _SelectOption(value: 'Santo Domingo', label: 'Santo Domingo'),
-    _SelectOption(value: 'Santiago', label: 'Santiago'),
-    _SelectOption(value: 'La Vega', label: 'La Vega'),
-    _SelectOption(value: 'Puerto Plata', label: 'Puerto Plata'),
-    _SelectOption(value: 'San Cristóbal', label: 'San Cristóbal'),
+    _SelectOption(value: 'Azua', label: 'Azua'),
+    _SelectOption(value: 'Bahoruco', label: 'Bahoruco'),
+    _SelectOption(value: 'Barahona', label: 'Barahona'),
+    _SelectOption(value: 'Dajabón', label: 'Dajabón'),
     _SelectOption(value: 'Duarte', label: 'Duarte'),
+    _SelectOption(value: 'El Seibo', label: 'El Seibo'),
+    _SelectOption(value: 'Elías Piña', label: 'Elías Piña'),
+    _SelectOption(value: 'Espaillat', label: 'Espaillat'),
+    _SelectOption(value: 'Hato Mayor', label: 'Hato Mayor'),
+    _SelectOption(value: 'Hermanas Mirabal', label: 'Hermanas Mirabal'),
+    _SelectOption(value: 'Independencia', label: 'Independencia'),
     _SelectOption(value: 'La Altagracia', label: 'La Altagracia'),
+    _SelectOption(value: 'La Romana', label: 'La Romana'),
+    _SelectOption(value: 'La Vega', label: 'La Vega'),
+    _SelectOption(
+      value: 'María Trinidad Sánchez',
+      label: 'María Trinidad Sánchez',
+    ),
+    _SelectOption(value: 'Monseñor Nouel', label: 'Monseñor Nouel'),
+    _SelectOption(value: 'Monte Cristi', label: 'Monte Cristi'),
+    _SelectOption(value: 'Monte Plata', label: 'Monte Plata'),
+    _SelectOption(value: 'Pedernales', label: 'Pedernales'),
+    _SelectOption(value: 'Peravia', label: 'Peravia'),
+    _SelectOption(value: 'Puerto Plata', label: 'Puerto Plata'),
+    _SelectOption(value: 'Samaná', label: 'Samaná'),
+    _SelectOption(value: 'San Cristóbal', label: 'San Cristóbal'),
+    _SelectOption(value: 'San José de Ocoa', label: 'San José de Ocoa'),
+    _SelectOption(value: 'San Juan', label: 'San Juan'),
     _SelectOption(
       value: 'San Pedro de Macorís',
       label: 'San Pedro de Macorís',
     ),
-    _SelectOption(value: 'Espaillat', label: 'Espaillat'),
+    _SelectOption(value: 'Sánchez Ramírez', label: 'Sánchez Ramírez'),
+    _SelectOption(value: 'Santiago', label: 'Santiago'),
+    _SelectOption(
+      value: 'Santiago Rodríguez',
+      label: 'Santiago Rodríguez',
+    ),
+    _SelectOption(value: 'Santo Domingo', label: 'Santo Domingo'),
+    _SelectOption(value: 'Valverde', label: 'Valverde'),
   ];
 
   @override
@@ -317,6 +345,7 @@ class _StepSelectField extends StatelessWidget {
         DropdownButtonFormField<String>(
           value: selectedValue,
           isExpanded: true,
+          menuMaxHeight: 320,
 
           /// Fuerza texto oscuro.
           ///
@@ -373,6 +402,8 @@ class _StepSelectField extends StatelessWidget {
 
           hint: Text(
             placeholder,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFF8A94A6),
               fontSize: 16,
@@ -385,6 +416,8 @@ class _StepSelectField extends StatelessWidget {
               value: option.value,
               child: Text(
                 option.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.textDark,
                   fontSize: 16,

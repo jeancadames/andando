@@ -7,6 +7,7 @@ import '../models/provider_experience.dart';
 import '../services/provider_experience_service.dart';
 import 'create_experience_screen.dart';
 import 'experience_calendar_screen.dart';
+import '../widgets/provider_experience_reviews_button.dart';
 
 class ProviderCatalogScreen extends StatefulWidget {
   const ProviderCatalogScreen({
@@ -361,6 +362,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
 
         return _ExperienceCard(
           experience: experience,
+          authController: widget.authController,
           onCalendar: () => _openCalendar(experience),
           onEdit: () => _openEdit(experience),
           onDelete: () => _deleteExperience(experience),
@@ -436,7 +438,7 @@ class _TabButton extends StatelessWidget {
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.07),
+                      color: Colors.black.withOpacity(0.07),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -461,12 +463,14 @@ class _TabButton extends StatelessWidget {
 
 class _ExperienceCard extends StatelessWidget {
   final ProviderExperience experience;
+  final AuthController authController;
   final VoidCallback onCalendar;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _ExperienceCard({
     required this.experience,
+    required this.authController,
     required this.onCalendar,
     required this.onEdit,
     required this.onDelete,
@@ -524,6 +528,8 @@ class _ExperienceCard extends StatelessWidget {
             ],
             const SizedBox(height: 16),
             _CardActions(
+              experience: experience,
+              authController: authController,
               isDraft: isDraft,
               onCalendar: onCalendar,
               onEdit: onEdit,
@@ -533,22 +539,18 @@ class _ExperienceCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _formatRevenue(double revenue) {
-    if (revenue >= 1000) {
-      return 'RD\$${(revenue / 1000).toStringAsFixed(0)}k';
-    }
-
-    return 'RD\$${revenue.toStringAsFixed(0)}';
-  }
 }
 
 class _CardActions extends StatelessWidget {
+  final ProviderExperience experience;
+  final AuthController authController;
   final bool isDraft;
   final VoidCallback onCalendar;
   final VoidCallback onEdit;
 
   const _CardActions({
+    required this.experience,
+    required this.authController,
     required this.isDraft,
     required this.onCalendar,
     required this.onEdit,
@@ -556,33 +558,42 @@ class _CardActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: Row(
-        children: [
-          Expanded(
-            child: _CatalogActionButton(
-              label: isDraft ? 'Configurar Fechas' : 'Ver Calendario',
-              onTap: onCalendar,
-              backgroundColor:
-                  isDraft ? Colors.white : _CatalogColors.primary,
-              borderColor: _CatalogColors.primary,
-              textColor:
-                  isDraft ? _CatalogColors.primary : Colors.white,
-            ),
+    return Column(
+      children: [
+        SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              Expanded(
+                child: _CatalogActionButton(
+                  label: isDraft ? 'Configurar Fechas' : 'Ver Calendario',
+                  onTap: onCalendar,
+                  backgroundColor:
+                      isDraft ? Colors.white : _CatalogColors.primary,
+                  borderColor: _CatalogColors.primary,
+                  textColor: isDraft ? _CatalogColors.primary : Colors.white,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _CatalogActionButton(
+                  label: 'Editar',
+                  onTap: onEdit,
+                  backgroundColor: Colors.white,
+                  borderColor: _CatalogColors.borderDark,
+                  textColor: _CatalogColors.text,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _CatalogActionButton(
-              label: 'Editar',
-              onTap: onEdit,
-              backgroundColor: Colors.white,
-              borderColor: _CatalogColors.borderDark,
-              textColor: _CatalogColors.text,
-            ),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        ProviderExperienceReviewsButton(
+          authController: authController,
+          experienceId: experience.id,
+          experienceTitle: experience.title,
+        ),
+      ],
     );
   }
 }
@@ -645,45 +656,50 @@ class _MetricsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 8,
-      mainAxisSpacing: 8,
-      childAspectRatio: 2.65,
+    return Row(
       children: [
-        _MetricBox(
-          label: 'Personas',
-          value: experience.bookingsCount.toString(),
-          icon: Icons.groups_2_outlined,
-          background: const Color(0xFFEFF6FF),
-          iconColor: const Color(0xFF1D4ED8),
-          valueColor: const Color(0xFF1D4ED8),
+        Expanded(
+          child: _MetricBox(
+            label: 'Personas',
+            value: experience.bookingsCount.toString(),
+            icon: Icons.groups_2_outlined,
+            background: const Color(0xFFEFF6FF),
+            iconColor: const Color(0xFF1D4ED8),
+            valueColor: const Color(0xFF1D4ED8),
+          ),
         ),
-        _MetricBox(
-          label: 'Ingresos',
-          value: _formatRevenue(experience.revenue),
-          icon: Icons.trending_up,
-          background: const Color(0xFFEFFBF3),
-          iconColor: const Color(0xFF16A34A),
-          valueColor: const Color(0xFF16A34A),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _MetricBox(
+            label: 'Ingresos',
+            value: _formatRevenue(experience.revenue),
+            icon: Icons.trending_up,
+            background: const Color(0xFFEFFBF3),
+            iconColor: const Color(0xFF16A34A),
+            valueColor: const Color(0xFF16A34A),
+          ),
         ),
-        _MetricBox(
-          label: 'Vistas',
-          value: experience.views.toString(),
-          icon: Icons.visibility_outlined,
-          background: const Color(0xFFFAF5FF),
-          iconColor: const Color(0xFF9333EA),
-          valueColor: const Color(0xFF9333EA),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _MetricBox(
+            label: 'Vistas',
+            value: experience.views.toString(),
+            icon: Icons.visibility_outlined,
+            background: const Color(0xFFFAF5FF),
+            iconColor: const Color(0xFF9333EA),
+            valueColor: const Color(0xFF9333EA),
+          ),
         ),
-        _MetricBox(
-          label: 'Rating',
-          value: experience.rating.toStringAsFixed(1),
-          icon: Icons.star,
-          background: const Color(0xFFFFFBEA),
-          iconColor: const Color(0xFFEAB308),
-          valueColor: const Color(0xFFA16207),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _MetricBox(
+            label: 'Rating',
+            value: experience.rating.toStringAsFixed(1),
+            icon: Icons.star,
+            background: const Color(0xFFFFFBEA),
+            iconColor: const Color(0xFFEAB308),
+            valueColor: const Color(0xFFA16207),
+          ),
         ),
       ],
     );
@@ -813,51 +829,49 @@ class _MetricBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 72,
       padding: const EdgeInsets.symmetric(
-        horizontal: 10,
+        horizontal: 6,
         vertical: 8,
       ),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             icon,
-            size: 18,
+            size: 17,
             color: iconColor,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: valueColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: valueColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    height: 1,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 5),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                color: valueColor,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(
+                color: valueColor,
+                fontSize: 8.5,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
             ),
           ),
         ],

@@ -1,12 +1,23 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../auth/application/auth_controller.dart';
 import '../services/provider_experience_service.dart';
 
 import 'package:go_router/go_router.dart';
+
+String _durationNumberForInput(String value) {
+  final match = RegExp(r'\d+').firstMatch(value);
+  return match?.group(0) ?? '';
+}
+
+bool _isPositiveIntegerText(String value) {
+  final number = int.tryParse(value.trim());
+  return number != null && number > 0;
+}
 
 class CreateExperienceScreen extends StatefulWidget {
   final int? experienceId;
@@ -50,19 +61,37 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
 
   final List<String> _provinces = const [
     'Distrito Nacional',
-    'Santo Domingo',
-    'Santiago',
-    'La Vega',
-    'Puerto Plata',
-    'San Cristóbal',
-    'Duarte',
-    'La Altagracia',
-    'San Pedro de Macorís',
-    'Espaillat',
-    'Samaná',
+    'Azua',
+    'Bahoruco',
     'Barahona',
-    'Pedernales',
+    'Dajabón',
+    'Duarte',
+    'El Seibo',
+    'Elías Piña',
+    'Espaillat',
+    'Hato Mayor',
+    'Hermanas Mirabal',
+    'Independencia',
+    'La Altagracia',
+    'La Romana',
+    'La Vega',
+    'María Trinidad Sánchez',
+    'Monseñor Nouel',
+    'Monte Cristi',
     'Monte Plata',
+    'Pedernales',
+    'Peravia',
+    'Puerto Plata',
+    'Samaná',
+    'San Cristóbal',
+    'San José de Ocoa',
+    'San Juan',
+    'San Pedro de Macorís',
+    'Sánchez Ramírez',
+    'Santiago',
+    'Santiago Rodríguez',
+    'Santo Domingo',
+    'Valverde',
   ];
 
   final List<String> _amenities = const [
@@ -107,7 +136,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.title = loadedForm.title;
         _form.category = loadedForm.category;
         _form.description = loadedForm.description;
-        _form.duration = loadedForm.duration;
+        _form.duration = _durationNumberForInput(loadedForm.duration);
         _form.capacity = loadedForm.capacity;
         _form.price = loadedForm.price;
         _form.currency = loadedForm.currency;
@@ -139,28 +168,35 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
   bool _canProceed() {
     switch (_currentStep) {
       case 1:
+        final durationHours = _durationNumberForInput(_form.duration);
+
         return _form.title.trim().isNotEmpty &&
             _form.category.trim().isNotEmpty &&
             _form.description.trim().isNotEmpty &&
-            _form.duration.trim().isNotEmpty &&
+            _isPositiveIntegerText(durationHours) &&
             _form.capacity > 0;
+
       case 2:
         return widget.isEditing || _form.photos.length >= 3;
+
       case 3:
         return _form.price > 0 &&
             _form.startLocation.trim().isNotEmpty &&
             _form.province.trim().isNotEmpty &&
             _form.pickupPoints.any((item) => item.trim().isNotEmpty);
+
       case 4:
         return _form.itinerary.length >= 2 &&
             _form.itinerary.every(
               (item) =>
-                  item['time']!.trim().isNotEmpty &&
-                  item['activity']!.trim().isNotEmpty,
+                  (item['time'] ?? '').trim().isNotEmpty &&
+                  (item['activity'] ?? '').trim().isNotEmpty,
             );
+
       case 5:
         return _form.included.any((item) => item.trim().isNotEmpty) &&
             _form.cancellationPolicy.trim().isNotEmpty;
+
       default:
         return false;
     }
@@ -185,6 +221,8 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
     });
 
     try {
+      _form.duration = _durationNumberForInput(_form.duration);
+
       await _service.saveExperience(
         form: _form,
         token: widget.authController.token,
@@ -352,6 +390,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
           categories: _categories,
           onChanged: () => setState(() {}),
         );
+
       case 2:
         return _PhotosStep(
           photos: _form.photos,
@@ -362,17 +401,20 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
             });
           },
         );
+
       case 3:
         return _PriceLocationStep(
           form: _form,
           provinces: _provinces,
           onChanged: () => setState(() {}),
         );
+
       case 4:
         return _ItineraryStep(
           form: _form,
           onChanged: () => setState(() {}),
         );
+
       case 5:
         return _RulesStep(
           form: _form,
@@ -380,6 +422,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
           onToggleAmenity: _toggleAmenity,
           onChanged: () => setState(() {}),
         );
+
       default:
         return const SizedBox.shrink();
     }
@@ -481,10 +524,15 @@ class _BasicInfoStep extends StatelessWidget {
             Expanded(
               child: _Input(
                 label: 'Duración *',
-                initialValue: form.duration,
-                hint: 'Ej: 8 horas',
+                initialValue: _durationNumberForInput(form.duration),
+                hint: '8',
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                suffixText: 'horas',
                 onChanged: (value) {
-                  form.duration = value;
+                  form.duration = value.trim();
                   onChanged();
                 },
               ),
@@ -492,12 +540,15 @@ class _BasicInfoStep extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: _Input(
-                label: 'Capacidad (personas)*',
-                initialValue: form.capacity.toString(),
+                label: 'Capacidad *',
+                initialValue: form.capacity <= 0 ? '' : form.capacity.toString(),
                 hint: '15',
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
                 onChanged: (value) {
-                  form.capacity = int.tryParse(value) ?? 1;
+                  form.capacity = int.tryParse(value) ?? 0;
                   onChanged();
                 },
               ),
@@ -529,7 +580,7 @@ class _PhotosStep extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.08),
+            color: Colors.blue.withOpacity(0.08),
             borderRadius: BorderRadius.circular(18),
           ),
           child: const Text(
@@ -583,11 +634,23 @@ class _PhotosStep extends StatelessWidget {
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white,
-                    child: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => onRemove(index),
+                  child: Material(
+                    color: Colors.red,
+                    shape: const CircleBorder(),
+                    elevation: 3,
+                    child: InkWell(
+                      onTap: () => onRemove(index),
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.delete_outline,
+                          size: 22,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -686,6 +749,9 @@ class _PriceLocationStep extends StatelessWidget {
           hint: '3500',
           keyboardType: TextInputType.number,
           prefixIcon: Icons.attach_money,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+          ],
           onChanged: (value) {
             form.price = double.tryParse(value) ?? 0;
             onChanged();
@@ -767,17 +833,25 @@ class _ItineraryStep extends StatelessWidget {
                       ),
                   ],
                 ),
-                TextFormField(
-                  initialValue: item['time'],
-                  decoration: const InputDecoration(labelText: 'Hora'),
+                const SizedBox(height: 8),
+                _ItineraryTimePickerField(
+                  value: item['time'] ?? '',
                   onChanged: (value) {
                     item['time'] = value;
                     onChanged();
                   },
                 ),
+                const SizedBox(height: 12),
                 TextFormField(
-                  initialValue: item['activity'],
-                  decoration: const InputDecoration(labelText: 'Actividad'),
+                  initialValue: item['activity'] ?? '',
+                  decoration: InputDecoration(
+                    labelText: 'Actividad *',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
                   onChanged: (value) {
                     item['activity'] = value;
                     onChanged();
@@ -796,6 +870,100 @@ class _ItineraryStep extends StatelessWidget {
           label: const Text('Agregar paso'),
         ),
       ],
+    );
+  }
+}
+
+class _ItineraryTimePickerField extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _ItineraryTimePickerField({
+    required this.value,
+    required this.onChanged,
+  });
+
+  TimeOfDay _initialTimeFromValue(String value) {
+    final normalized = value.trim().toUpperCase();
+
+    final match = RegExp(
+      r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$',
+    ).firstMatch(normalized);
+
+    if (match == null) {
+      return const TimeOfDay(hour: 8, minute: 0);
+    }
+
+    var hour = int.tryParse(match.group(1) ?? '') ?? 8;
+    final minute = int.tryParse(match.group(2) ?? '') ?? 0;
+    final period = match.group(3);
+
+    if (period == 'PM' && hour < 12) {
+      hour += 12;
+    }
+
+    if (period == 'AM' && hour == 12) {
+      hour = 0;
+    }
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return const TimeOfDay(hour: 8, minute: 0);
+    }
+
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final period = time.hour >= 12 ? 'PM' : 'AM';
+    final hour12 = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+
+    return '$hour12:$minute $period';
+  }
+
+  Future<void> _pickTime(BuildContext context) async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _initialTimeFromValue(value),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            alwaysUse24HourFormat: false,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (selected == null) return;
+
+    onChanged(_formatTime(selected));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue = value.trim().isNotEmpty;
+
+    return InkWell(
+      onTap: () => _pickTime(context),
+      borderRadius: BorderRadius.circular(18),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Hora *',
+          filled: true,
+          fillColor: Colors.white,
+          prefixIcon: const Icon(Icons.access_time),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Text(
+          hasValue ? value : 'Seleccionar hora',
+          style: TextStyle(
+            color: hasValue ? Colors.black87 : Colors.grey,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -923,6 +1091,8 @@ class _Input extends StatelessWidget {
   final int maxLines;
   final TextInputType? keyboardType;
   final IconData? prefixIcon;
+  final String? suffixText;
+  final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String> onChanged;
 
   const _Input({
@@ -933,6 +1103,8 @@ class _Input extends StatelessWidget {
     this.maxLines = 1,
     this.keyboardType,
     this.prefixIcon,
+    this.suffixText,
+    this.inputFormatters,
   });
 
   @override
@@ -941,11 +1113,13 @@ class _Input extends StatelessWidget {
       initialValue: initialValue,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+        suffixText: suffixText,
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
@@ -973,13 +1147,22 @@ class _DropdownInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final optionExists = value != null && items.contains(value);
+    final selectedValue = optionExists ? value : null;
+
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      value: selectedValue,
+      isExpanded: true,
+      menuMaxHeight: 320,
       items: items
           .map(
-            (item) => DropdownMenuItem(
+            (item) => DropdownMenuItem<String>(
               value: item,
-              child: Text(labels?[item] ?? item),
+              child: Text(
+                labels?[item] ?? item,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           )
           .toList(),
@@ -1011,6 +1194,10 @@ class _EditableStringList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      items.add('');
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

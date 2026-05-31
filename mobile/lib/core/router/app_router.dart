@@ -9,24 +9,29 @@ import '../../features/customer/profile/presentation/screens/edit_customer_profi
 import '../../features/customer/profile/presentation/screens/customer_profile_settings_screen.dart';
 import '../../features/customer/booking/presentation/screens/customer_bookings_screen.dart';
 import '../../features/customer/favorites/presentation/screens/customer_favorites_screen.dart';
+
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
+
 import '../../features/customer/auth/presentation/screens/customer_register_screen.dart';
 import '../../features/customer/explore/data/models/customer_experience_model.dart';
 import '../../features/customer/explore/presentation/controllers/explore_controller.dart';
 import '../../features/customer/explore/presentation/screens/experience_detail_screen.dart';
 import '../../features/customer/explore/presentation/screens/explore_screen.dart';
+
 import '../../features/provider/dashboard/screens/provider_dashboard_screen.dart';
 import '../../features/provider/experiences/screens/add_schedule_screen.dart';
 import '../../features/provider/experiences/screens/create_experience_screen.dart';
 import '../../features/provider/experiences/screens/experience_calendar_screen.dart';
 import '../../features/provider/experiences/screens/provider_catalog_screen.dart';
+import '../../features/provider/experiences/screens/provider_experience_reviews_screen.dart';
 import '../../features/provider/onboarding/presentation/screens/provider_register_screen.dart';
 import '../../features/provider/onboarding/presentation/screens/provider_verification_pending_screen.dart';
 import '../../features/provider/profile/screens/provider_profile_screen.dart';
 import '../../features/provider/bookings/screens/provider_bookings_screen.dart';
 import '../../features/provider/analytics/screens/provider_analytics_screen.dart';
+
 import 'route_names.dart';
 
 class AppRouter {
@@ -40,6 +45,7 @@ class AppRouter {
     initialLocation: '/',
     refreshListenable: _authController,
     redirect: _redirect,
+    debugLogDiagnostics: true,
     routes: [
       GoRoute(
         path: '/',
@@ -81,15 +87,13 @@ class AppRouter {
           return const ExploreScreen();
         },
       ),
-      
       GoRoute(
         path: '/client/bookings',
-        name: 'clientBookings',
+        name: RouteNames.clientBookings,
         builder: (context, state) {
           return const CustomerBookingsScreen();
         },
       ),
-
       GoRoute(
         path: '/client/bookings/:bookingId/review',
         name: RouteNames.createReview,
@@ -111,10 +115,9 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/client/favorites',
-        name: 'clientFavorites',
+        name: RouteNames.clientFavorites,
         builder: (context, state) {
           return const CustomerFavoritesScreen();
         },
@@ -122,30 +125,27 @@ class AppRouter {
 
       GoRoute(
         path: '/customer/profile',
-        name: 'customerProfile',
+        name: RouteNames.customerProfile,
         builder: (context, state) {
           return CustomerProfileScreen(
             authController: _authController,
           );
         },
       ),
-
       GoRoute(
         path: '/customer/profile/edit',
-        name: 'customerProfileEdit',
+        name: RouteNames.customerProfileEdit,
         builder: (context, state) {
           return const EditCustomerProfileScreen();
         },
       ),
-
       GoRoute(
         path: '/customer/profile/settings',
-        name: 'customerProfileSettings',
+        name: RouteNames.customerProfileSettings,
         builder: (context, state) {
           return const CustomerProfileSettingsScreen();
         },
       ),
-
       GoRoute(
         path: '/customer/dashboard',
         name: RouteNames.customerDashboard,
@@ -172,7 +172,6 @@ class AppRouter {
           );
         },
       ),
-
       GoRoute(
         path: '/experiences/:experienceId/reviews',
         name: RouteNames.experienceReviews,
@@ -327,6 +326,29 @@ class AppRouter {
         },
       ),
       GoRoute(
+        path: '/provider/experiences/:id/reviews',
+        name: RouteNames.providerExperienceReviews,
+        builder: (context, state) {
+          final experienceId = int.tryParse(
+            state.pathParameters['id'] ?? '',
+          );
+
+          final title = state.uri.queryParameters['title'] ?? 'Experiencia';
+
+          if (experienceId == null) {
+            return const _RouteErrorPlaceholder(
+              message: 'ID de experiencia inválido.',
+            );
+          }
+
+          return ProviderExperienceReviewsScreen(
+            authController: _authController,
+            experienceId: experienceId,
+            initialTitle: title,
+          );
+        },
+      ),
+      GoRoute(
         path: '/provider/bookings',
         name: RouteNames.providerBookings,
         builder: (context, state) {
@@ -339,18 +361,6 @@ class AppRouter {
         path: '/provider/analytics',
         name: RouteNames.providerAnalytics,
         builder: (context, state) {
-          /// Pantalla real de análisis estadístico del afiliado.
-          ///
-          /// Esta ruta está protegida por la lógica general del router:
-          /// - Si el usuario no está autenticado, lo manda a /login.
-          /// - Si el usuario es proveedor pero no está aprobado, lo manda a
-          ///   /provider/verification-pending.
-          /// - Si el proveedor está aprobado, puede ver esta pantalla.
-          ///
-          /// Le pasamos el AuthController porque ProviderAnalyticsScreen necesita
-          /// el token guardado para consultar:
-          ///
-          /// GET /api/provider/analytics
           return ProviderAnalyticsScreen(
             authController: _authController,
           );
@@ -565,7 +575,7 @@ class _PublicExperienceDetailLoaderState
   }
 
   Future<void> _loadExperience() async {
-     try {
+    try {
       final experience = await _controller.getExperienceDetail(
         widget.experienceId,
       );

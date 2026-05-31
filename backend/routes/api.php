@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\Provider\ProviderDashboardController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceScheduleController;
 use App\Http\Controllers\Api\Provider\ProviderAnalyticsController;
+use App\Http\Controllers\Api\Provider\ProviderExperienceReviewController;
+
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -90,10 +92,28 @@ Route::prefix('provider')->group(function () {
         Route::get('/experiences/{experience}/schedules/{schedule}/bookings',[ProviderExperienceScheduleController::class, 'bookings']);
 
         Route::get('/analytics', ProviderAnalyticsController::class);
+
+        Route::get(
+            '/experiences/{experience}/reviews/summary',
+            [ProviderExperienceReviewController::class, 'summary']
+        );
+
+        Route::get(
+            '/experiences/{experience}/reviews',
+            [ProviderExperienceReviewController::class, 'index']
+        );
+
+        Route::post(
+            '/experiences/{experience}/reviews/{review}/reply',
+            [ProviderExperienceReviewController::class, 'reply']
+        );
         
+        Route::delete(
+            '/experiences/{experience}/reviews/{review}/reply',
+            [ProviderExperienceReviewController::class, 'deleteReply']
+        );
     });
 });
-
 /*
 |--------------------------------------------------------------------------
 | Rutas de registro cliente
