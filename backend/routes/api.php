@@ -157,5 +157,7 @@ Route::middleware('auth:sanctum')->prefix('client')->group(function () {
     Route::post('/reviews', [ClientReviewController::class, 'store']);
     Route::put('/reviews/{review}', [ClientReviewController::class, 'update']);
     Route::delete('/reviews/{review}', [ClientReviewController::class, 'destroy']);
+    Route::delete('/reviews/{review}/photos/{photo}', [ClientReviewController::class, 'destroyPhoto']);
+
 
     });

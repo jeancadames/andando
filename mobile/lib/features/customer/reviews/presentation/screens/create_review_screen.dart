@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../booking/data/models/customer_booking_model.dart';
+import '../../data/models/review_photo_model.dart';
 import '../controllers/create_review_controller.dart';
 
 class CreateReviewScreen extends StatefulWidget {
@@ -19,14 +21,20 @@ class CreateReviewScreen extends StatefulWidget {
 class _CreateReviewScreenState extends State<CreateReviewScreen> {
   final CreateReviewController _controller = CreateReviewController();
   final TextEditingController _commentController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   int _rating = 0;
+
+  List<ReviewPhotoModel> _existingPhotos = [];
+  List<XFile> _selectedPhotos = [];
+  bool _removeExistingPhotos = false;
 
   @override
   void initState() {
     super.initState();
 
     _rating = widget.booking.reviewRating ?? 0;
+    _existingPhotos = List<ReviewPhotoModel>.from(widget.booking.reviewPhotos);
 
     final initialComment = widget.booking.reviewComment;
     if (initialComment != null && initialComment.trim().isNotEmpty) {
@@ -41,6 +49,89 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
     super.dispose();
   }
 
+  int get _totalPhotos => _existingPhotos.length + _selectedPhotos.length;
+
+  Future<void> _pickPhotos() async {
+    final remainingSlots = 6 - _totalPhotos;
+
+    if (remainingSlots <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Solo puedes agregar hasta 6 fotos.'),
+        ),
+      );
+      return;
+    }
+
+    final photos = await _imagePicker.pickMultiImage(
+      imageQuality: 82,
+      maxWidth: 1600,
+    );
+
+    if (!mounted || photos.isEmpty) return;
+
+    final photosToAdd = photos.take(remainingSlots).toList();
+
+    setState(() {
+      _selectedPhotos = [
+        ..._selectedPhotos,
+        ...photosToAdd,
+      ];
+    });
+
+    if (photos.length > remainingSlots) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Solo se agregaron las fotos permitidas hasta el límite de 6.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _removeExistingPhoto(int index) async {
+    final photo = _existingPhotos[index];
+    final reviewId = widget.booking.reviewId;
+
+    if (reviewId == null) {
+      return;
+    }
+
+    final success = await _controller.deleteReviewPhoto(
+      reviewId: reviewId,
+      photoId: photo.id,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _existingPhotos.removeAt(index);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Foto eliminada correctamente.'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _controller.errorMessage ?? 'No se pudo eliminar la foto.',
+          ),
+        ),
+      );
+    }
+  }
+
+  void _removeSelectedPhoto(int index) {
+    setState(() {
+      _selectedPhotos.removeAt(index);
+    });
+  }
+
   Future<void> _submitReview() async {
     final success = await _controller.submitReview(
       bookingId: widget.booking.id,
@@ -49,6 +140,8 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
       comment: _commentController.text.trim().isEmpty
           ? null
           : _commentController.text.trim(),
+      photos: _selectedPhotos,
+      removeExistingPhotos: false,
     );
 
     if (!mounted) return;
@@ -103,7 +196,13 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
                       const SizedBox(height: 24),
                       _CommentCard(controller: _commentController),
                       const SizedBox(height: 24),
-                      const _PhotosCard(),
+                      _PhotosCard(
+                        existingPhotos: _existingPhotos,
+                        selectedPhotos: _selectedPhotos,
+                        onAddPhotos: _pickPhotos,
+                        onRemoveExistingPhoto: _removeExistingPhoto,
+                        onRemoveSelectedPhoto: _removeSelectedPhoto,
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -409,7 +508,21 @@ class _CommentCardState extends State<_CommentCard> {
 }
 
 class _PhotosCard extends StatelessWidget {
-  const _PhotosCard();
+  const _PhotosCard({
+    required this.existingPhotos,
+    required this.selectedPhotos,
+    required this.onAddPhotos,
+    required this.onRemoveExistingPhoto,
+    required this.onRemoveSelectedPhoto,
+  });
+
+  final List<ReviewPhotoModel> existingPhotos;
+  final List<XFile> selectedPhotos;
+  final VoidCallback onAddPhotos;
+  final ValueChanged<int> onRemoveExistingPhoto;
+  final ValueChanged<int> onRemoveSelectedPhoto;
+
+  int get totalPhotos => existingPhotos.length + selectedPhotos.length;
 
   @override
   Widget build(BuildContext context) {
@@ -433,35 +546,257 @@ class _PhotosCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          Container(
-            height: 90,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFFDADDE2),
-                width: 1.5,
+          InkWell(
+            onTap: totalPhotos >= 6 ? null : onAddPhotos,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              height: totalPhotos == 0 ? 96 : null,
+              width: double.infinity,
+              padding: totalPhotos == 0
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFFDADDE2),
+                  width: 1.5,
+                ),
               ),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.photo_camera_outlined,
-                  color: Color(0xFF6B7280),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Toca para agregar fotos (0/6)',
-                  style: TextStyle(
-                    color: Color(0xFF4B5563),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+              child: totalPhotos == 0
+                  ? const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.photo_camera_outlined,
+                          color: Color(0xFF6B7280),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Toca para agregar fotos (0/6)',
+                          style: TextStyle(
+                            color: Color(0xFF4B5563),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            ...List.generate(
+                              existingPhotos.length,
+                              (index) => _ExistingPhotoTile(
+                                url: existingPhotos[index].url,
+                                onRemove: () => onRemoveExistingPhoto(index),
+                              ),
+                            ),
+                            ...List.generate(
+                              selectedPhotos.length,
+                              (index) => _SelectedPhotoTile(
+                                photo: selectedPhotos[index],
+                                onRemove: () =>
+                                    onRemoveSelectedPhoto(index),
+                              ),
+                            ),
+                            if (totalPhotos < 6)
+                              _AddMorePhotosTile(
+                                onTap: onAddPhotos,
+                                count: totalPhotos,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '$totalPhotos/6 fotos seleccionadas',
+                          style: const TextStyle(
+                            color: Color(0xFF4B5563),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ExistingPhotoTile extends StatelessWidget {
+  const _ExistingPhotoTile({
+    required this.url,
+    required this.onRemove,
+  });
+
+  final String url;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.network(
+            url,
+            width: 82,
+            height: 82,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) {
+              return Container(
+                width: 82,
+                height: 82,
+                color: const Color(0xFFE5E7EB),
+                child: const Icon(
+                  Icons.broken_image_outlined,
+                  color: Color(0xFF6B7280),
+                ),
+              );
+            },
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.72),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.close_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelectedPhotoTile extends StatelessWidget {
+  const _SelectedPhotoTile({
+    required this.photo,
+    required this.onRemove,
+  });
+
+  final XFile photo;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Widget>(
+      future: _buildImage(),
+      builder: (context, snapshot) {
+        return Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: 82,
+                height: 82,
+                color: const Color(0xFFE5E7EB),
+                child: snapshot.data ??
+                    const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.72),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<Widget> _buildImage() async {
+    final bytes = await photo.readAsBytes();
+
+    return Image.memory(
+      bytes,
+      fit: BoxFit.cover,
+      width: 82,
+      height: 82,
+    );
+  }
+}
+
+class _AddMorePhotosTile extends StatelessWidget {
+  const _AddMorePhotosTile({
+    required this.onTap,
+    required this.count,
+  });
+
+  final VoidCallback onTap;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 82,
+        height: 82,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFD1D5DB),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.add_photo_alternate_outlined,
+              color: Color(0xFF003B73),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$count/6',
+              style: const TextStyle(
+                color: Color(0xFF003B73),
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

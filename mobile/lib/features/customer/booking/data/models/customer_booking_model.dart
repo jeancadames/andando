@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import '../../../reviews/data/models/review_photo_model.dart';
 
 class CustomerBookingModel {
   final int id;
@@ -21,6 +22,7 @@ class CustomerBookingModel {
   final int? reviewId;
   final int? reviewRating;
   final String? reviewComment;
+  final List<ReviewPhotoModel> reviewPhotos;
 
   const CustomerBookingModel({
     required this.id,
@@ -43,6 +45,7 @@ class CustomerBookingModel {
     required this.reviewId,
     required this.reviewRating,
     required this.reviewComment,
+    required this.reviewPhotos,
   });
 
   factory CustomerBookingModel.fromJson(Map<String, dynamic> json) {
@@ -69,6 +72,14 @@ class CustomerBookingModel {
           ? null
           : _toInt(json['review_rating']),
       reviewComment: json['review_comment']?.toString(),
+      reviewPhotos: (json['review_photos'] as List? ?? [])
+        .map(
+          (item) => ReviewPhotoModel.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .where((photo) => photo.url.trim().isNotEmpty)
+        .toList(),
     );
   }
 

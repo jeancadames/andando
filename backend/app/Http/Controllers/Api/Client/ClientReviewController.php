@@ -2,21 +2,35 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Models\ProviderReviewPhoto;
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
 use App\Models\ProviderReview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ClientReviewController extends Controller
 {
+    /**
+     * Crea una reseña para una reserva completada.
+     *
+     * Reglas:
+     * - El usuario debe estar autenticado.
+     * - La reserva debe pertenecer al usuario.
+     * - La reserva debe estar completada.
+     * - Solo se permite una reseña por reserva.
+     * - Se permiten hasta 6 fotos.
+     */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
             'booking_id' => ['required', 'integer', 'exists:provider_bookings,id'],
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:500'],
+            'photos' => ['nullable', 'array', 'max:6'],
+            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
         $user = $request->user();
@@ -55,22 +69,33 @@ class ClientReviewController extends Controller
             'is_visible' => true,
         ]);
 
+        $this->storeReviewPhotos($request, $review);
+
+        $review->load('photos');
+
         return response()->json([
             'message' => 'Reseña publicada correctamente.',
-            'data' => [
-                'id' => $review->id,
-                'booking_id' => $review->provider_booking_id,
-                'experience_id' => $review->provider_experience_id,
-                'rating' => $review->rating,
-                'comment' => $review->comment,
-            ],
+            'data' => $this->reviewPayload($review),
         ], 201);
     }
 
-    public function experienceReviews(Request $request, ProviderExperience $experience): JsonResponse
-    {
+    /**
+     * Devuelve las reseñas visibles de una experiencia.
+     *
+     * También devuelve:
+     * - Promedio de rating.
+     * - Total de reseñas.
+     * - Distribución por estrellas.
+     * - Si la reseña pertenece al usuario autenticado.
+     * - Datos de la reserva cuando la reseña pertenece al usuario.
+     * - Fotos de cada reseña.
+     */
+    public function experienceReviews(
+        Request $request,
+        ProviderExperience $experience
+    ): JsonResponse {
         $reviews = ProviderReview::query()
-            ->with(['user', 'booking'])
+            ->with(['user', 'booking', 'photos'])
             ->where('provider_experience_id', $experience->id)
             ->where('is_visible', true)
             ->latest()
@@ -91,52 +116,36 @@ class ClientReviewController extends Controller
                     2 => $reviews->where('rating', 2)->count(),
                     1 => $reviews->where('rating', 1)->count(),
                 ],
-                'reviews' => $reviews->map(function (ProviderReview $review) use ($request, $experience) {
-                    $isOwner = $request->user()
-                        ? (int) $review->user_id === (int) $request->user()->id
-                        : false;
-
-                    return [
-                        'id' => $review->id,
-                        'rating' => $review->rating,
-                        'comment' => $review->comment,
-                        'customer_name' => $review->user?->name ?? 'Viajero',
-                        'created_at' => $review->created_at?->toIso8601String(),
-                        'booking_id' => $review->provider_booking_id,
-                        'is_owner' => $isOwner,
-                        'booking' => $isOwner && $review->booking ? [
-                            'id' => $review->booking->id,
-                            'experience_id' => $review->provider_experience_id,
-                            'booking_code' => $review->booking->booking_code,
-                            'status' => $review->booking->status,
-                            'experience_title' => $experience->title,
-                            'location' => $experience->location,
-                            'province' => $experience->province,
-                            'cover_photo_url' => $experience->coverPhoto?->url,
-                            'booking_date' => $review->booking->booking_date,
-                            'starts_at' => $review->booking->starts_at,
-                            'guests_count' => $review->booking->guests_count,
-                            'unit_price' => $review->booking->unit_price,
-                            'total_amount' => $review->booking->total_amount,
-                            'currency' => $review->booking->currency,
-                            'pickup_point' => $review->booking->pickup_point,
-                            'duration' => $experience->duration,
-                            'has_review' => true,
-                            'review_id' => $review->id,
-                            'review_rating' => $review->rating,
-                            'review_comment' => $review->comment,
-                        ] : null,
-                    ];
-                })->values(),
+                'reviews' => $reviews
+                    ->map(function (ProviderReview $review) use ($request, $experience) {
+                        return $this->experienceReviewPayload(
+                            review: $review,
+                            request: $request,
+                            experience: $experience,
+                        );
+                    })
+                    ->values(),
             ],
         ]);
     }
 
+    /**
+     * Actualiza una reseña existente.
+     *
+     * Reglas:
+     * - Solo el dueño de la reseña puede editarla.
+     * - Puede cambiar rating y comentario.
+     * - Puede agregar nuevas fotos hasta completar 6.
+     * - Puede eliminar todas las fotos existentes si remove_existing_photos = true.
+     */
     public function update(Request $request, ProviderReview $review): JsonResponse
     {
         $data = $request->validate([
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:500'],
+            'photos' => ['nullable', 'array', 'max:6'],
+            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'remove_existing_photos' => ['nullable', 'boolean'],
         ]);
 
         if ((int) $review->user_id !== (int) $request->user()->id) {
@@ -150,18 +159,26 @@ class ClientReviewController extends Controller
             'comment' => $data['comment'] ?? null,
         ]);
 
+        if ($request->boolean('remove_existing_photos')) {
+            $this->deleteReviewPhotos($review);
+        }
+
+        $this->storeReviewPhotos($request, $review);
+
+        $review->load('photos');
+
         return response()->json([
             'message' => 'Reseña actualizada correctamente.',
-            'data' => [
-                'id' => $review->id,
-                'booking_id' => $review->provider_booking_id,
-                'experience_id' => $review->provider_experience_id,
-                'rating' => $review->rating,
-                'comment' => $review->comment,
-            ],
+            'data' => $this->reviewPayload($review),
         ]);
     }
 
+    /**
+     * Elimina una reseña.
+     *
+     * Al eliminar la reseña, también se eliminan sus fotos físicas
+     * del disco public.
+     */
     public function destroy(Request $request, ProviderReview $review): JsonResponse
     {
         if ((int) $review->user_id !== (int) $request->user()->id) {
@@ -170,6 +187,8 @@ class ClientReviewController extends Controller
             ], 403);
         }
 
+        $this->deleteReviewPhotos($review);
+
         $review->delete();
 
         return response()->json([
@@ -177,4 +196,162 @@ class ClientReviewController extends Controller
         ]);
     }
 
+    /**
+     * Guarda fotos nuevas asociadas a una reseña.
+     *
+     * Nunca permite superar 6 fotos por reseña.
+     */
+    private function storeReviewPhotos(Request $request, ProviderReview $review): void
+    {
+        if (! $request->hasFile('photos')) {
+            return;
+        }
+
+        $currentCount = $review->photos()->count();
+
+        foreach ($request->file('photos') as $index => $photo) {
+            if ($currentCount + $index >= 6) {
+                break;
+            }
+
+            $path = $photo->store(
+                'review-photos/review_' . $review->id,
+                'public'
+            );
+
+            $review->photos()->create([
+                'photo_path' => $path,
+                'sort_order' => $currentCount + $index,
+            ]);
+        }
+    }
+
+    /**
+     * Elimina todas las fotos de una reseña:
+     * - archivo físico en storage/app/public
+     * - registro en provider_review_photos
+     */
+    private function deleteReviewPhotos(ProviderReview $review): void
+    {
+        $review->loadMissing('photos');
+
+        foreach ($review->photos as $photo) {
+            Storage::disk('public')->delete($photo->photo_path);
+            $photo->delete();
+        }
+    }
+
+    /**
+     * Respuesta estándar para crear/editar reseñas.
+     */
+    private function reviewPayload(ProviderReview $review): array
+    {
+        return [
+            'id' => $review->id,
+            'booking_id' => $review->provider_booking_id,
+            'experience_id' => $review->provider_experience_id,
+            'rating' => $review->rating,
+            'comment' => $review->comment,
+            'photos' => $this->photosPayload($review),
+        ];
+    }
+
+    /**
+     * Respuesta de una reseña dentro del listado de reseñas
+     * de una experiencia.
+     */
+    private function experienceReviewPayload(
+        ProviderReview $review,
+        Request $request,
+        ProviderExperience $experience
+    ): array {
+        $isOwner = $request->user()
+            ? (int) $review->user_id === (int) $request->user()->id
+            : false;
+
+        return [
+            'id' => $review->id,
+            'rating' => $review->rating,
+            'comment' => $review->comment,
+            'customer_name' => $review->user?->name ?? 'Viajero',
+            'created_at' => $review->created_at?->toIso8601String(),
+            'booking_id' => $review->provider_booking_id,
+            'is_owner' => $isOwner,
+            'photos' => $this->photosPayload($review),
+            'booking' => $isOwner && $review->booking ? [
+                'id' => $review->booking->id,
+                'experience_id' => $review->provider_experience_id,
+                'booking_code' => $review->booking->booking_code,
+                'status' => $review->booking->status,
+                'experience_title' => $experience->title,
+                'location' => $experience->location,
+                'province' => $experience->province,
+                'cover_photo_url' => $experience->coverPhoto?->url,
+                'booking_date' => $review->booking->booking_date,
+                'starts_at' => $review->booking->starts_at,
+                'guests_count' => $review->booking->guests_count,
+                'unit_price' => $review->booking->unit_price,
+                'total_amount' => $review->booking->total_amount,
+                'currency' => $review->booking->currency,
+                'pickup_point' => $review->booking->pickup_point,
+                'duration' => $experience->duration,
+                'has_review' => true,
+                'review_id' => $review->id,
+                'review_rating' => $review->rating,
+                'review_comment' => $review->comment,
+                'review_photos' => $this->photosPayload($review),
+            ] : null,
+        ];
+    }
+
+    /**
+     * Formatea las fotos de una reseña para Flutter.
+     */
+    private function photosPayload(ProviderReview $review): array
+    {
+        $review->loadMissing('photos');
+
+        return $review->photos
+            ->map(fn ($photo) => [
+                'id' => $photo->id,
+                'url' => $photo->photo_url,
+            ])
+            ->values()
+            ->toArray();
+    }
+
+
+    /**
+     * Elimina una foto específica de una reseña.
+     *
+     * Reglas:
+     * - El usuario autenticado debe ser dueño de la reseña.
+     * - La foto debe pertenecer a esa reseña.
+     * - Se elimina el archivo físico del storage.
+     * - Se elimina el registro en base de datos.
+     */
+    public function destroyPhoto(
+        Request $request,
+        ProviderReview $review,
+        ProviderReviewPhoto $photo
+    ): JsonResponse {
+        if ((int) $review->user_id !== (int) $request->user()->id) {
+            return response()->json([
+                'message' => 'No tienes permiso para eliminar esta foto.',
+            ], 403);
+        }
+
+        if ((int) $photo->provider_review_id !== (int) $review->id) {
+            return response()->json([
+                'message' => 'Esta foto no pertenece a la reseña indicada.',
+            ], 422);
+        }
+
+        Storage::disk('public')->delete($photo->photo_path);
+        $photo->delete();
+
+        return response()->json([
+            'message' => 'Foto eliminada correctamente.',
+        ]);
+    }
 }

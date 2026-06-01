@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'review_photo_viewer.dart';
 import '../../data/datasources/experience_reviews_remote_datasource.dart';
 import '../../data/models/experience_review_model.dart';
 import '../../data/models/experience_reviews_response.dart';
@@ -335,6 +336,38 @@ class _ReviewTile extends StatelessWidget {
                 height: 1.4,
                 color: Color(0xFF4B5563),
               ),
+            ),
+          ],
+          if (review.photoUrls.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: List.generate(review.photoUrls.length, (index) {
+                final url = review.photoUrls[index];
+
+                return InkWell(
+                  onTap: () {
+                    showDialog<void>(
+                      context: context,
+                      builder: (_) => ReviewPhotoViewer(
+                        photoUrls: review.photoUrls,
+                        initialIndex: index,
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      url,
+                      width: 82,
+                      height: 82,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                );
+              }),
             ),
           ],
           if (review.isOwner) ...[

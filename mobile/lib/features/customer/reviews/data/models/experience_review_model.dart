@@ -9,6 +9,7 @@ class ExperienceReviewModel {
   final int? bookingId;
   final bool isOwner;
   final CustomerBookingModel? booking;
+  final List<String> photoUrls;
 
   const ExperienceReviewModel({
     required this.id,
@@ -19,6 +20,7 @@ class ExperienceReviewModel {
     required this.bookingId,
     required this.isOwner,
     required this.booking,
+    required this.photoUrls,
   });
 
   factory ExperienceReviewModel.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,13 @@ class ExperienceReviewModel {
           : CustomerBookingModel.fromJson(
               Map<String, dynamic>.from(json['booking']),
             ),
+      photoUrls: (json['photos'] as List? ?? [])
+          .map((item) {
+            final map = Map<String, dynamic>.from(item);
+            return map['url']?.toString() ?? '';
+          })
+          .where((url) => url.trim().isNotEmpty)
+          .toList(),
     );
   }
 
