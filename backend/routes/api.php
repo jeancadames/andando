@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Client\ClientReviewCommentController;
 use App\Http\Controllers\Api\Client\ClientReviewController;
 use App\Http\Controllers\Api\Client\ClientProfileController;
 use App\Http\Controllers\Api\Auth\LoginController;
@@ -133,31 +134,45 @@ Route::prefix('client/explore')->group(function () {
     Route::get('/experiences/categories', [ExploreController::class, 'categories']);
     Route::get('/experiences/{id}', [ExploreController::class, 'show']);
     Route::get('/experiences/{experience}/reviews', [ClientReviewController::class, 'experienceReviews']);
-});
-
-/*
+    
+    });
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Rutas protegidas del cliente
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('auth:sanctum')->prefix('client')->group(function () {
+        Route::get('/profile', [ClientProfileController::class, 'show']);
+        Route::put('/profile', [ClientProfileController::class, 'update']);
+        Route::post('/profile/photo', [ClientProfileController::class, 'updatePhoto']);
+        Route::post('/logout', [ClientProfileController::class, 'logout']);
+        
+        Route::get('/bookings', [ClientBookingController::class, 'index']);
+        Route::post('/bookings', [ClientBookingController::class, 'store']);
+        Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
+        
+        Route::post('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'store']);
+        Route::delete('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'destroy']);
+        
+        Route::get('/experiences/{experience}/reviews', [ClientReviewController::class, 'experienceReviews']);
+        Route::post('/reviews', [ClientReviewController::class, 'store']);
+        Route::put('/reviews/{review}', [ClientReviewController::class, 'update']);
+        Route::delete('/reviews/{review}', [ClientReviewController::class, 'destroy']);
+        Route::delete('/reviews/{review}/photos/{photo}', [ClientReviewController::class, 'destroyPhoto']);
+        
+        Route::post('/reviews/{review}/comments', [ClientReviewCommentController::class, 'store']);
+        Route::put('/review-comments/{comment}', [ClientReviewCommentController::class, 'update']);
+        Route::delete('/review-comments/{comment}', [ClientReviewCommentController::class, 'destroy']);
+        
+        });
+        
+        /*
 |--------------------------------------------------------------------------
-| Rutas protegidas del cliente
+| Comentarios de reseñas (públicos)
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:sanctum')->prefix('client')->group(function () {
-    Route::get('/profile', [ClientProfileController::class, 'show']);
-    Route::put('/profile', [ClientProfileController::class, 'update']);
-    Route::post('/profile/photo', [ClientProfileController::class, 'updatePhoto']);
-    Route::post('/logout', [ClientProfileController::class, 'logout']);
-
-    Route::get('/bookings', [ClientBookingController::class, 'index']);
-    Route::post('/bookings', [ClientBookingController::class, 'store']);
-    Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
-
-    Route::post('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'store']);
-    Route::delete('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'destroy']);
-
-    Route::get('/experiences/{experience}/reviews', [ClientReviewController::class, 'experienceReviews']);
-    Route::post('/reviews', [ClientReviewController::class, 'store']);
-    Route::put('/reviews/{review}', [ClientReviewController::class, 'update']);
-    Route::delete('/reviews/{review}', [ClientReviewController::class, 'destroy']);
-    Route::delete('/reviews/{review}/photos/{photo}', [ClientReviewController::class, 'destroyPhoto']);
-
-
-    });
+    Route::get(
+        '/client/reviews/{review}/comments',
+        [ClientReviewCommentController::class, 'index']
+    );

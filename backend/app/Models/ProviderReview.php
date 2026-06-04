@@ -54,4 +54,19 @@ class ProviderReview extends Model
         return $this->hasMany(ProviderReviewPhoto::class)
             ->orderBy('sort_order');
     }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ProviderReviewComment::class)
+            ->where('is_visible', true)
+            ->latest();
+    }
+
+    public function visibleComments(): HasMany
+    {
+        return $this->hasMany(ProviderReviewComment::class)
+            ->where('is_visible', true)
+            ->latest();
+    }
+
 }

@@ -10,6 +10,7 @@ class ExperienceReviewModel {
   final bool isOwner;
   final CustomerBookingModel? booking;
   final List<String> photoUrls;
+  final int commentsCount;
 
   const ExperienceReviewModel({
     required this.id,
@@ -21,6 +22,7 @@ class ExperienceReviewModel {
     required this.isOwner,
     required this.booking,
     required this.photoUrls,
+    required this.commentsCount,
   });
 
   factory ExperienceReviewModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class ExperienceReviewModel {
           })
           .where((url) => url.trim().isNotEmpty)
           .toList(),
+      commentsCount: _toInt(json['comments_count']),
     );
   }
 

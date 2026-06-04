@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'review_comments_section.dart';
 import 'review_photo_viewer.dart';
 import '../../data/datasources/experience_reviews_remote_datasource.dart';
 import '../../data/models/experience_review_model.dart';
@@ -370,6 +371,11 @@ class _ReviewTile extends StatelessWidget {
               }),
             ),
           ],
+          const SizedBox(height: 8),
+          ReviewCommentsSection(
+            reviewId: review.id,
+            initialCommentsCount: review.commentsCount,
+          ),
           if (review.isOwner) ...[
             const SizedBox(height: 12),
             Row(

@@ -22,7 +22,7 @@ class ClientBookingController extends Controller
                 'experience.coverPhoto',
                 'experience.photos',
                 'schedule',
-                'review',
+                'review.photos',
             ])
             ->where('user_id', $request->user()->id)
             ->latest('booking_date')
@@ -56,6 +56,13 @@ class ClientBookingController extends Controller
                     'review_id' => $booking->review?->id,
                     'review_rating' => $booking->review?->rating,
                     'review_comment' => $booking->review?->comment,
+
+                    'review_photos' => $booking->review
+                        ? $booking->review->photos->map(fn ($photo) => [
+                            'id' => $photo->id,
+                            'url' => $photo->photo_url,
+                        ])->values()
+                        : [],
                 ];
             })
             ->values();

@@ -65,6 +65,38 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     );
   }
 
+  Future<void> _openReviewScreen(CustomerBookingModel booking) async {
+    await _controller.loadBookings();
+
+    if (!mounted) return;
+
+    final freshBooking = _controller.bookings.firstWhere(
+      (item) => item.id == booking.id,
+      orElse: () => booking,
+    );
+
+    final edited = await context.push<bool>(
+      '/client/bookings/${freshBooking.id}/review',
+      extra: freshBooking,
+    );
+
+    if (!mounted) return;
+
+    if (edited == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            freshBooking.hasReview
+                ? 'Reseña actualizada correctamente.'
+                : 'Reseña publicada correctamente.',
+          ),
+        ),
+      );
+
+      await _controller.loadBookings();
+    }
+  }
+
   Future<void> _confirmCancelBooking(CustomerBookingModel booking) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -232,7 +264,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                             booking: booking,
                             isCompletedTab: selectedTab == 1,
                             onDetailsTap: () => _openBookingDetails(booking),
-                            onReviewCreated: _controller.loadBookings,
+                            onReviewTap: () => _openReviewScreen(booking),
                           );
                         },
                       ),
@@ -400,13 +432,13 @@ class _BookingCard extends StatelessWidget {
   final CustomerBookingModel booking;
   final bool isCompletedTab;
   final VoidCallback onDetailsTap;
-  final Future<void> Function() onReviewCreated;
+  final VoidCallback onReviewTap;
 
   const _BookingCard({
     required this.booking,
     required this.isCompletedTab,
     required this.onDetailsTap,
-    required this.onReviewCreated,
+    required this.onReviewTap,
   });
 
   @override
@@ -575,28 +607,8 @@ class _BookingCard extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: isCompletedTab
-                            ? () async {
-
-                                final created = await context.push<bool>(
-                                  '/client/bookings/${booking.id}/review',
-                                  extra: booking,
-                                );
-
-                                if (created == true && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        booking.hasReview
-                                            ? 'Reseña actualizada correctamente.'
-                                            : 'Reseña publicada correctamente.',
-                                      ),
-                                    ),
-                                  );
-
-                                  await onReviewCreated();
-                                }
-                              }
-                            : () {},
+                          ? onReviewTap
+                          : () {},
                         icon: Icon(
                           isCompletedTab
                               ? booking.hasReview

@@ -26,8 +26,8 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
   int _rating = 0;
 
   List<ReviewPhotoModel> _existingPhotos = [];
+  final List<ReviewPhotoModel> _photosToDelete = [];
   List<XFile> _selectedPhotos = [];
-  bool _removeExistingPhotos = false;
 
   @override
   void initState() {
@@ -90,40 +90,11 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
     }
   }
 
-  Future<void> _removeExistingPhoto(int index) async {
-    final photo = _existingPhotos[index];
-    final reviewId = widget.booking.reviewId;
-
-    if (reviewId == null) {
-      return;
-    }
-
-    final success = await _controller.deleteReviewPhoto(
-      reviewId: reviewId,
-      photoId: photo.id,
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-      setState(() {
-        _existingPhotos.removeAt(index);
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Foto eliminada correctamente.'),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _controller.errorMessage ?? 'No se pudo eliminar la foto.',
-          ),
-        ),
-      );
-    }
+  void _removeExistingPhoto(int index) {
+    setState(() {
+      final photo = _existingPhotos.removeAt(index);
+      _photosToDelete.add(photo);
+    });
   }
 
   void _removeSelectedPhoto(int index) {
@@ -132,7 +103,43 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
     });
   }
 
+  Future<bool> _deleteMarkedPhotos() async {
+    final reviewId = widget.booking.reviewId;
+
+    if (reviewId == null || _photosToDelete.isEmpty) {
+      return true;
+    }
+
+    for (final photo in _photosToDelete) {
+      final success = await _controller.deleteReviewPhoto(
+        reviewId: reviewId,
+        photoId: photo.id,
+      );
+
+      if (!success) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   Future<void> _submitReview() async {
+    final deletedPhotos = await _deleteMarkedPhotos();
+
+    if (!mounted) return;
+
+    if (!deletedPhotos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _controller.errorMessage ?? 'No se pudieron eliminar las fotos.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final success = await _controller.submitReview(
       bookingId: widget.booking.id,
       reviewId: widget.booking.reviewId,

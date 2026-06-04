@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../widgets/review_comments_section.dart';
 import '../widgets/review_photo_viewer.dart';
 import '../../data/datasources/experience_reviews_remote_datasource.dart';
 import '../../data/models/experience_review_model.dart';
@@ -32,6 +33,7 @@ class _ExperienceReviewsScreenState extends State<ExperienceReviewsScreen> {
   @override
   void initState() {
     super.initState();
+
     _futureReviews = _dataSource.getExperienceReviews(
       experienceId: widget.experienceId,
       limit: 100,
@@ -259,48 +261,9 @@ class _FullReviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFFE0ECF7),
-                child: Text(
-                  review.customerName.trim().isEmpty
-                      ? 'V'
-                      : review.customerName.trim()[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: Color(0xFF003B73),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 17,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  review.customerName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _ReviewUserHeader(review: review),
           const SizedBox(height: 14),
-          Row(
-            children: List.generate(
-              5,
-              (index) => Icon(
-                index < review.rating
-                    ? Icons.star_rounded
-                    : Icons.star_border_rounded,
-                size: 22,
-                color: const Color(0xFFFACC15),
-              ),
-            ),
-          ),
+          _ReviewStars(rating: review.rating),
           if (review.comment != null &&
               review.comment!.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
@@ -315,38 +278,132 @@ class _FullReviewCard extends StatelessWidget {
           ],
           if (review.photoUrls.isNotEmpty) ...[
             const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: List.generate(review.photoUrls.length, (index) {
-                final url = review.photoUrls[index];
-
-                return InkWell(
-                  onTap: () {
-                    showDialog<void>(
-                      context: context,
-                      builder: (_) => ReviewPhotoViewer(
-                        photoUrls: review.photoUrls,
-                        initialIndex: index,
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.network(
-                      url,
-                      width: 96,
-                      height: 96,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                );
-              }),
-            ),
+            _ReviewPhotosGrid(review: review),
           ],
+          const SizedBox(height: 10),
+          ReviewCommentsSection(
+            reviewId: review.id,
+            initialCommentsCount: review.commentsCount,
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _ReviewUserHeader extends StatelessWidget {
+  const _ReviewUserHeader({
+    required this.review,
+  });
+
+  final ExperienceReviewModel review;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = review.customerName.trim().isEmpty
+        ? 'V'
+        : review.customerName.trim()[0].toUpperCase();
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: const Color(0xFFE0ECF7),
+          child: Text(
+            initial,
+            style: const TextStyle(
+              color: Color(0xFF003B73),
+              fontWeight: FontWeight.w900,
+              fontSize: 17,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            review.customerName,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewStars extends StatelessWidget {
+  const _ReviewStars({
+    required this.rating,
+  });
+
+  final int rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(
+        5,
+        (index) => Icon(
+          index < rating ? Icons.star_rounded : Icons.star_border_rounded,
+          size: 22,
+          color: const Color(0xFFFACC15),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewPhotosGrid extends StatelessWidget {
+  const _ReviewPhotosGrid({
+    required this.review,
+  });
+
+  final ExperienceReviewModel review;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: List.generate(review.photoUrls.length, (index) {
+        final url = review.photoUrls[index];
+
+        return InkWell(
+          onTap: () {
+            showDialog<void>(
+              context: context,
+              builder: (_) => ReviewPhotoViewer(
+                photoUrls: review.photoUrls,
+                initialIndex: index,
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(14),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.network(
+              url,
+              width: 96,
+              height: 96,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) {
+                return Container(
+                  width: 96,
+                  height: 96,
+                  color: const Color(0xFFE5E7EB),
+                  child: const Icon(
+                    Icons.broken_image_outlined,
+                    color: Color(0xFF6B7280),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }),
     );
   }
 }

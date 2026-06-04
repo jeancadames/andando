@@ -22,9 +22,13 @@ class ExperienceReviewsRemoteDataSource {
     required int experienceId,
     int limit = 3,
   }) async {
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/client/experiences/$experienceId/reviews',
-    );
+    final token = await _secureStorage.read(StorageKeys.authToken);
+
+    final endpoint = token != null && token.trim().isNotEmpty
+        ? '${ApiConfig.baseUrl}/client/experiences/$experienceId/reviews'
+        : '${ApiConfig.baseUrl}/client/explore/experiences/$experienceId/reviews';
+
+    final uri = Uri.parse(endpoint);
 
     final response = await _client.get(
       uri,

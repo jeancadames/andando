@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Api\Client;
 
-use App\Models\ProviderReviewPhoto;
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
 use App\Models\ProviderReview;
+use App\Models\ProviderReviewPhoto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -15,13 +15,6 @@ class ClientReviewController extends Controller
 {
     /**
      * Crea una reseña para una reserva completada.
-     *
-     * Reglas:
-     * - El usuario debe estar autenticado.
-     * - La reserva debe pertenecer al usuario.
-     * - La reserva debe estar completada.
-     * - Solo se permite una reseña por reserva.
-     * - Se permiten hasta 6 fotos.
      */
     public function store(Request $request): JsonResponse
     {
@@ -72,6 +65,9 @@ class ClientReviewController extends Controller
         $this->storeReviewPhotos($request, $review);
 
         $review->load('photos');
+        $review->loadCount([
+            'comments as comments_count' => fn ($query) => $query->where('is_visible', true),
+        ]);
 
         return response()->json([
             'message' => 'Reseña publicada correctamente.',
@@ -82,13 +78,7 @@ class ClientReviewController extends Controller
     /**
      * Devuelve las reseñas visibles de una experiencia.
      *
-     * También devuelve:
-     * - Promedio de rating.
-     * - Total de reseñas.
-     * - Distribución por estrellas.
-     * - Si la reseña pertenece al usuario autenticado.
-     * - Datos de la reserva cuando la reseña pertenece al usuario.
-     * - Fotos de cada reseña.
+     * Incluye promedio, total, distribución, fotos y cantidad de comentarios.
      */
     public function experienceReviews(
         Request $request,
@@ -96,6 +86,9 @@ class ClientReviewController extends Controller
     ): JsonResponse {
         $reviews = ProviderReview::query()
             ->with(['user', 'booking', 'photos'])
+            ->withCount([
+                'comments as comments_count' => fn ($query) => $query->where('is_visible', true),
+            ])
             ->where('provider_experience_id', $experience->id)
             ->where('is_visible', true)
             ->latest()
@@ -119,9 +112,9 @@ class ClientReviewController extends Controller
                 'reviews' => $reviews
                     ->map(function (ProviderReview $review) use ($request, $experience) {
                         return $this->experienceReviewPayload(
-                            review: $review,
-                            request: $request,
-                            experience: $experience,
+                            $review,
+                            $request,
+                            $experience,
                         );
                     })
                     ->values(),
@@ -130,13 +123,7 @@ class ClientReviewController extends Controller
     }
 
     /**
-     * Actualiza una reseña existente.
-     *
-     * Reglas:
-     * - Solo el dueño de la reseña puede editarla.
-     * - Puede cambiar rating y comentario.
-     * - Puede agregar nuevas fotos hasta completar 6.
-     * - Puede eliminar todas las fotos existentes si remove_existing_photos = true.
+     * Actualiza una reseña propia.
      */
     public function update(Request $request, ProviderReview $review): JsonResponse
     {
@@ -166,6 +153,9 @@ class ClientReviewController extends Controller
         $this->storeReviewPhotos($request, $review);
 
         $review->load('photos');
+        $review->loadCount([
+            'comments as comments_count' => fn ($query) => $query->where('is_visible', true),
+        ]);
 
         return response()->json([
             'message' => 'Reseña actualizada correctamente.',
@@ -174,10 +164,7 @@ class ClientReviewController extends Controller
     }
 
     /**
-     * Elimina una reseña.
-     *
-     * Al eliminar la reseña, también se eliminan sus fotos físicas
-     * del disco public.
+     * Elimina una reseña propia junto con sus fotos.
      */
     public function destroy(Request $request, ProviderReview $review): JsonResponse
     {
@@ -197,9 +184,36 @@ class ClientReviewController extends Controller
     }
 
     /**
-     * Guarda fotos nuevas asociadas a una reseña.
-     *
-     * Nunca permite superar 6 fotos por reseña.
+     * Elimina una foto individual de una reseña propia.
+     */
+    public function destroyPhoto(
+        Request $request,
+        ProviderReview $review,
+        ProviderReviewPhoto $photo
+    ): JsonResponse {
+        if ((int) $review->user_id !== (int) $request->user()->id) {
+            return response()->json([
+                'message' => 'No tienes permiso para eliminar esta foto.',
+            ], 403);
+        }
+
+        if ((int) $photo->provider_review_id !== (int) $review->id) {
+            return response()->json([
+                'message' => 'Esta foto no pertenece a la reseña indicada.',
+            ], 422);
+        }
+
+        Storage::disk('public')->delete($photo->photo_path);
+
+        $photo->delete();
+
+        return response()->json([
+            'message' => 'Foto eliminada correctamente.',
+        ]);
+    }
+
+    /**
+     * Guarda nuevas fotos de una reseña sin superar el límite de 6.
      */
     private function storeReviewPhotos(Request $request, ProviderReview $review): void
     {
@@ -227,9 +241,7 @@ class ClientReviewController extends Controller
     }
 
     /**
-     * Elimina todas las fotos de una reseña:
-     * - archivo físico en storage/app/public
-     * - registro en provider_review_photos
+     * Elimina todas las fotos físicas y registros de una reseña.
      */
     private function deleteReviewPhotos(ProviderReview $review): void
     {
@@ -242,7 +254,7 @@ class ClientReviewController extends Controller
     }
 
     /**
-     * Respuesta estándar para crear/editar reseñas.
+     * Payload base para crear/editar reseñas.
      */
     private function reviewPayload(ProviderReview $review): array
     {
@@ -252,13 +264,13 @@ class ClientReviewController extends Controller
             'experience_id' => $review->provider_experience_id,
             'rating' => $review->rating,
             'comment' => $review->comment,
+            'comments_count' => (int) ($review->comments_count ?? 0),
             'photos' => $this->photosPayload($review),
         ];
     }
 
     /**
-     * Respuesta de una reseña dentro del listado de reseñas
-     * de una experiencia.
+     * Payload de reseña usado en el detalle de experiencia.
      */
     private function experienceReviewPayload(
         ProviderReview $review,
@@ -273,6 +285,7 @@ class ClientReviewController extends Controller
             'id' => $review->id,
             'rating' => $review->rating,
             'comment' => $review->comment,
+            'comments_count' => (int) ($review->comments_count ?? 0),
             'customer_name' => $review->user?->name ?? 'Viajero',
             'created_at' => $review->created_at?->toIso8601String(),
             'booking_id' => $review->provider_booking_id,
@@ -318,40 +331,5 @@ class ClientReviewController extends Controller
             ])
             ->values()
             ->toArray();
-    }
-
-
-    /**
-     * Elimina una foto específica de una reseña.
-     *
-     * Reglas:
-     * - El usuario autenticado debe ser dueño de la reseña.
-     * - La foto debe pertenecer a esa reseña.
-     * - Se elimina el archivo físico del storage.
-     * - Se elimina el registro en base de datos.
-     */
-    public function destroyPhoto(
-        Request $request,
-        ProviderReview $review,
-        ProviderReviewPhoto $photo
-    ): JsonResponse {
-        if ((int) $review->user_id !== (int) $request->user()->id) {
-            return response()->json([
-                'message' => 'No tienes permiso para eliminar esta foto.',
-            ], 403);
-        }
-
-        if ((int) $photo->provider_review_id !== (int) $review->id) {
-            return response()->json([
-                'message' => 'Esta foto no pertenece a la reseña indicada.',
-            ], 422);
-        }
-
-        Storage::disk('public')->delete($photo->photo_path);
-        $photo->delete();
-
-        return response()->json([
-            'message' => 'Foto eliminada correctamente.',
-        ]);
     }
 }
