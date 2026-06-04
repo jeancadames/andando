@@ -11,6 +11,9 @@ class ExperienceReviewModel {
   final CustomerBookingModel? booking;
   final List<String> photoUrls;
   final int commentsCount;
+  final String? customerPhotoUrl;
+  final DateTime? updatedAt;
+  final bool isEdited;
 
   const ExperienceReviewModel({
     required this.id,
@@ -23,6 +26,9 @@ class ExperienceReviewModel {
     required this.booking,
     required this.photoUrls,
     required this.commentsCount,
+    required this.customerPhotoUrl,
+    required this.updatedAt,
+    required this.isEdited,
   });
 
   factory ExperienceReviewModel.fromJson(Map<String, dynamic> json) {
@@ -49,6 +55,11 @@ class ExperienceReviewModel {
           .where((url) => url.trim().isNotEmpty)
           .toList(),
       commentsCount: _toInt(json['comments_count']),
+      customerPhotoUrl: json['customer_photo_url']?.toString(),
+      updatedAt: json['updated_at'] == null
+          ? null
+          : DateTime.tryParse(json['updated_at'].toString()),
+      isEdited: _toBool(json['is_edited']),
     );
   }
 

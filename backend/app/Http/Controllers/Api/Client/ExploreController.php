@@ -44,6 +44,25 @@ class ExploreController extends Controller
             $query->where('category', $request->query('category'));
         }
 
+        /**
+         * Filtro por fecha seleccionada.
+         *
+         * Devuelve solo experiencias que tengan al menos un horario activo
+         * dentro del día seleccionado.
+         *
+         * Query param esperado:
+         * date=YYYY-MM-DD
+         */
+        if ($request->filled('date')) {
+            $date = $request->date('date');
+
+            $query->whereHas('schedules', function ($scheduleQuery) use ($date) {
+                $scheduleQuery
+                    ->whereDate('starts_at', $date)
+                    ->where('status', ['active', 'available']);
+            });
+        }
+
         if ($request->filled('province')) {
             $query->where('province', $request->query('province'));
         }
@@ -139,6 +158,22 @@ class ExploreController extends Controller
             'is_favorite' => $this->isFavoriteForCurrentUser($experience),
             'available_dates' => $this->formatAvailableDates($experience),
             'available_schedules' => $this->formatAvailableSchedules($experience),
+            /**
+             * Próxima fecha disponible para reservar.
+             *
+             * Se toma el primer schedule activo y futuro.
+             */
+            'next_available_date' => $experience->schedules()
+                ->where('status', 'active')
+                ->where('starts_at', '>=', now())
+                ->orderBy('starts_at')
+                ->first()?->starts_at?->toDateString(),
+
+            'next_available_datetime' => $experience->schedules()
+                ->where('status', 'active')
+                ->where('starts_at', '>=', now())
+                ->orderBy('starts_at')
+                ->first()?->starts_at?->toIso8601String(),
             'provider' => [
                 'id' => $experience->provider?->id,
                 'business_name' => $experience->provider?->business_name,
@@ -168,40 +203,57 @@ class ExploreController extends Controller
         return $data;
     }
 
-    private function formatAvailableDates(ProviderExperience $experience)
-    {
-        return $experience->schedules
+    private function formatAvailableDates(
+        ProviderExperience $experience
+    ) {
+        return $experience->schedules()
             ->where('status', 'active')
             ->where('starts_at', '>=', now())
-            ->sortBy('starts_at')
-            ->map(fn ($schedule) => $schedule->starts_at?->toIso8601String())
-            ->filter()
+            ->orderBy('starts_at')
+            ->pluck('starts_at')
+            ->map(fn ($date) => $date?->toIso8601String())
             ->values();
     }
 
-    private function formatAvailableSchedules(ProviderExperience $experience)
-    {
-        return $experience->schedules
+    private function formatAvailableSchedules(
+        ProviderExperience $experience
+    ) {
+        return $experience->schedules()
             ->where('status', 'active')
             ->where('starts_at', '>=', now())
-            ->sortBy('starts_at')
+            ->orderBy('starts_at')
+            ->get()
             ->map(function ($schedule) use ($experience) {
+
                 $reservedGuests = $schedule->bookings()
-                    ->whereIn('status', ['pending', 'confirmed'])
+                    ->whereIn('status', [
+                        'pending',
+                        'confirmed',
+                    ])
                     ->sum('guests_count');
 
-                $availableSpots = max(0, $schedule->capacity - $reservedGuests);
+                $availableSpots = max(
+                    0,
+                    $schedule->capacity - $reservedGuests,
+                );
 
                 return [
                     'id' => $schedule->id,
                     'starts_at' => $schedule->starts_at?->toIso8601String(),
                     'capacity' => $schedule->capacity,
                     'available_spots' => $availableSpots,
-                    'price' => (float) ($schedule->price ?? $experience->price),
-                    'currency' => $schedule->currency ?? $experience->currency ?? 'DOP',
+                    'price' => (float) (
+                        $schedule->price ?? $experience->price
+                    ),
+                    'currency' => $schedule->currency
+                        ?? $experience->currency
+                        ?? 'DOP',
                 ];
             })
-            ->filter(fn ($schedule) => $schedule['available_spots'] > 0)
+            ->filter(
+                fn ($schedule) =>
+                    $schedule['available_spots'] > 0
+            )
             ->values();
     }
 

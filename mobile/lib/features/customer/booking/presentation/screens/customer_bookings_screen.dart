@@ -57,6 +57,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       context: context,
       builder: (_) => _BookingDetailsDialog(
         booking: booking,
+        onDownloadReceipt: () async {
+          await _downloadReceipt(booking);
+        },
         onCancelBooking: () async {
           Navigator.of(context).pop();
           await _confirmCancelBooking(booking);
@@ -95,6 +98,30 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
 
       await _controller.loadBookings();
     }
+  }
+
+  Future<void> _downloadReceipt(CustomerBookingModel booking) async {
+    final success = await _controller.downloadReceipt(booking.id);
+
+    if (!mounted) return;
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _controller.errorMessage ?? 'No se pudo descargar el comprobante.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Comprobante descargado correctamente.'),
+      ),
+    );
   }
 
   Future<void> _confirmCancelBooking(CustomerBookingModel booking) async {
@@ -265,6 +292,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                             isCompletedTab: selectedTab == 1,
                             onDetailsTap: () => _openBookingDetails(booking),
                             onReviewTap: () => _openReviewScreen(booking),
+                            onDownloadReceiptTap: () => _downloadReceipt(booking),
                           );
                         },
                       ),
@@ -433,12 +461,14 @@ class _BookingCard extends StatelessWidget {
   final bool isCompletedTab;
   final VoidCallback onDetailsTap;
   final VoidCallback onReviewTap;
+  final VoidCallback onDownloadReceiptTap;
 
   const _BookingCard({
     required this.booking,
     required this.isCompletedTab,
     required this.onDetailsTap,
     required this.onReviewTap,
+    required this.onDownloadReceiptTap,
   });
 
   @override
@@ -608,7 +638,7 @@ class _BookingCard extends StatelessWidget {
                       child: ElevatedButton.icon(
                         onPressed: isCompletedTab
                           ? onReviewTap
-                          : () {},
+                          : onDownloadReceiptTap,
                         icon: Icon(
                           isCompletedTab
                               ? booking.hasReview
@@ -622,7 +652,7 @@ class _BookingCard extends StatelessWidget {
                               ? booking.hasReview
                                   ? 'Editar reseña'
                                   : 'Calificar experiencia'
-                              : 'Descargar',
+                              : 'Descargar Comprobante',
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: isCompletedTab && booking.hasReview
@@ -686,11 +716,13 @@ class _BookingCard extends StatelessWidget {
 
 class _BookingDetailsDialog extends StatelessWidget {
   final CustomerBookingModel booking;
+  final Future<void> Function() onDownloadReceipt;
   final Future<void> Function() onCancelBooking;
 
   const _BookingDetailsDialog({
     required this.booking,
     required this.onCancelBooking,
+    required this.onDownloadReceipt,
   });
 
   @override
@@ -867,7 +899,9 @@ class _BookingDetailsDialog extends StatelessWidget {
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton.icon(
-                          onPressed: () {},
+                          onPressed: () async {
+                            await onDownloadReceipt();
+                          },
                           icon: const Icon(Icons.download_rounded),
                           label: const Text('Descargar Comprobante'),
                           style: ElevatedButton.styleFrom(

@@ -150,6 +150,7 @@ Route::prefix('client/explore')->group(function () {
         
         Route::get('/bookings', [ClientBookingController::class, 'index']);
         Route::post('/bookings', [ClientBookingController::class, 'store']);
+        Route::get('/bookings/{booking}/receipt', [ClientBookingController::class, 'receipt']);
         Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
         
         Route::post('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'store']);
@@ -160,7 +161,8 @@ Route::prefix('client/explore')->group(function () {
         Route::put('/reviews/{review}', [ClientReviewController::class, 'update']);
         Route::delete('/reviews/{review}', [ClientReviewController::class, 'destroy']);
         Route::delete('/reviews/{review}/photos/{photo}', [ClientReviewController::class, 'destroyPhoto']);
-        
+        Route::get('/reviews/{review}/comments', [ClientReviewCommentController::class, 'index']);
+
         Route::post('/reviews/{review}/comments', [ClientReviewCommentController::class, 'store']);
         Route::put('/review-comments/{comment}', [ClientReviewCommentController::class, 'update']);
         Route::delete('/review-comments/{comment}', [ClientReviewCommentController::class, 'destroy']);
@@ -168,11 +170,17 @@ Route::prefix('client/explore')->group(function () {
         });
         
         /*
-|--------------------------------------------------------------------------
-| Comentarios de reseñas (públicos)
-|--------------------------------------------------------------------------
-*/
-    Route::get(
-        '/client/reviews/{review}/comments',
-        [ClientReviewCommentController::class, 'index']
-    );
+        |--------------------------------------------------------------------------
+        | Comentarios de reseñas (públicos)
+        |--------------------------------------------------------------------------
+        |
+        | Visitantes pueden consultar comentarios de reseñas.
+        | Usuarios autenticados utilizarán la ruta protegida
+        | dentro del grupo auth:sanctum para recibir is_owner.
+        |
+        */
+        Route::get(
+            '/client/explore/reviews/{review}/comments',
+            [ClientReviewCommentController::class, 'index']
+        );
+        

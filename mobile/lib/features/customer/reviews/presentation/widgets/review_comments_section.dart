@@ -371,6 +371,13 @@ class _CommentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = comment.userPhotoUrl != null &&
+        comment.userPhotoUrl!.trim().isNotEmpty;
+
+    final initial = comment.userName.trim().isEmpty
+        ? 'U'
+        : comment.userName.trim()[0].toUpperCase();
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -383,30 +390,51 @@ class _CommentTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
-                radius: 13,
+                radius: 15,
                 backgroundColor: const Color(0xFFE0ECF7),
-                child: Text(
-                  comment.userName.trim().isEmpty
-                      ? 'U'
-                      : comment.userName.trim()[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: Color(0xFF003B73),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
-                  ),
-                ),
+                backgroundImage: hasPhoto
+                    ? NetworkImage(comment.userPhotoUrl!)
+                    : null,
+                child: hasPhoto
+                    ? null
+                    : Text(
+                        initial,
+                        style: const TextStyle(
+                          color: Color(0xFF003B73),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                        ),
+                      ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  comment.userName,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF111827),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      comment.userName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    _CommentDateText(
+                      label: 'Publicado',
+                      date: comment.createdAt,
+                    ),
+                    if (comment.isEdited && comment.updatedAt != null) ...[
+                      const SizedBox(height: 2),
+                      _CommentDateText(
+                        label: 'Editado',
+                        date: comment.updatedAt,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (comment.isOwner)
@@ -438,6 +466,72 @@ class _CommentTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CommentDateText extends StatelessWidget {
+  const _CommentDateText({
+    required this.label,
+    required this.date,
+  });
+
+  final String label;
+  final DateTime? date;
+
+  @override
+  Widget build(BuildContext context) {
+    if (date == null) return const SizedBox.shrink();
+
+    final local = date!.toLocal();
+
+    const weekdays = [
+      'lun',
+      'mar',
+      'mié',
+      'jue',
+      'vie',
+      'sáb',
+      'dom',
+    ];
+
+    const months = [
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sept',
+      'oct',
+      'nov',
+      'dic',
+    ];
+
+    final weekday = weekdays[local.weekday - 1];
+    final month = months[local.month - 1];
+
+    final hour12 = local.hour == 0
+        ? 12
+        : local.hour > 12
+            ? local.hour - 12
+            : local.hour;
+
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+
+    final formatted =
+        '$weekday, ${local.day} $month ${local.year} · $hour12:$minute $period';
+
+    return Text(
+      '$label: $formatted',
+      style: const TextStyle(
+        fontSize: 11,
+        color: Color(0xFF6B7280),
+        fontWeight: FontWeight.w600,
       ),
     );
   }

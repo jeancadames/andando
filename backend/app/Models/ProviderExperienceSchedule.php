@@ -7,10 +7,21 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Modelo ProviderExperienceSchedule.
+ *
+ * Representa una fecha y horario disponible para realizar una experiencia.
+ *
+ * Una experiencia puede tener varios horarios disponibles.
+ * Cada horario puede tener su propia capacidad, precio, moneda y estado.
+ */
 class ProviderExperienceSchedule extends Model
 {
     use SoftDeletes;
 
+    /**
+     * Campos que pueden ser asignados de forma masiva.
+     */
     protected $fillable = [
         'provider_id',
         'series_id',
@@ -26,6 +37,9 @@ class ProviderExperienceSchedule extends Model
         'cancellation_reason',
     ];
 
+    /**
+     * Conversión automática de tipos.
+     */
     protected $casts = [
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
@@ -33,16 +47,30 @@ class ProviderExperienceSchedule extends Model
         'price' => 'decimal:2',
     ];
 
+    /**
+     * Proveedor dueño del horario.
+     */
     public function provider(): BelongsTo
     {
         return $this->belongsTo(Provider::class);
     }
 
+    /**
+     * Experiencia a la que pertenece este horario.
+     */
     public function experience(): BelongsTo
     {
-        return $this->belongsTo(ProviderExperience::class, 'provider_experience_id');
+        return $this->belongsTo(
+            ProviderExperience::class,
+            'provider_experience_id'
+        );
     }
 
+    /**
+     * Serie de horarios a la que pertenece este horario.
+     *
+     * Se usa cuando los horarios fueron generados de forma recurrente.
+     */
     public function series(): BelongsTo
     {
         return $this->belongsTo(
@@ -51,8 +79,14 @@ class ProviderExperienceSchedule extends Model
         );
     }
 
+    /**
+     * Reservas asociadas a este horario específico.
+     */
     public function bookings(): HasMany
     {
-        return $this->hasMany(ProviderBooking::class, 'provider_experience_schedule_id');
+        return $this->hasMany(
+            ProviderBooking::class,
+            'provider_experience_schedule_id'
+        );
     }
 }

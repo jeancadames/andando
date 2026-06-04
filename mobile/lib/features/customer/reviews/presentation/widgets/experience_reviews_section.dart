@@ -277,6 +277,13 @@ class _ReviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = review.customerPhotoUrl != null &&
+        review.customerPhotoUrl!.trim().isNotEmpty;
+
+    final initial = review.customerName.trim().isEmpty
+        ? 'V'
+        : review.customerName.trim()[0].toUpperCase();
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -289,28 +296,48 @@ class _ReviewTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
                 radius: 18,
                 backgroundColor: const Color(0xFFE0ECF7),
-                child: Text(
-                  review.customerName.trim().isEmpty
-                      ? 'V'
-                      : review.customerName.trim()[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: Color(0xFF003B73),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                backgroundImage:
+                    hasPhoto ? NetworkImage(review.customerPhotoUrl!) : null,
+                child: hasPhoto
+                    ? null
+                    : Text(
+                        initial,
+                        style: const TextStyle(
+                          color: Color(0xFF003B73),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  review.customerName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF111827),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.customerName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    _ReviewDateText(
+                      label: 'Publicado',
+                      date: review.createdAt,
+                    ),
+                    if (review.isEdited && review.updatedAt != null) ...[
+                      const SizedBox(height: 2),
+                      _ReviewDateText(
+                        label: 'Editado',
+                        date: review.updatedAt,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Row(
@@ -365,6 +392,17 @@ class _ReviewTile extends StatelessWidget {
                       width: 82,
                       height: 82,
                       fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) {
+                        return Container(
+                          width: 82,
+                          height: 82,
+                          color: const Color(0xFFE5E7EB),
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: Color(0xFF6B7280),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 );
@@ -409,6 +447,72 @@ class _ReviewTile extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ReviewDateText extends StatelessWidget {
+  const _ReviewDateText({
+    required this.label,
+    required this.date,
+  });
+
+  final String label;
+  final DateTime? date;
+
+  @override
+  Widget build(BuildContext context) {
+    if (date == null) return const SizedBox.shrink();
+
+    final local = date!.toLocal();
+
+    const weekdays = [
+      'lun',
+      'mar',
+      'mié',
+      'jue',
+      'vie',
+      'sáb',
+      'dom',
+    ];
+
+    const months = [
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sept',
+      'oct',
+      'nov',
+      'dic',
+    ];
+
+    final weekday = weekdays[local.weekday - 1];
+    final month = months[local.month - 1];
+
+    final hour12 = local.hour == 0
+        ? 12
+        : local.hour > 12
+            ? local.hour - 12
+            : local.hour;
+
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+
+    final formatted =
+        '$weekday, ${local.day} $month ${local.year} · $hour12:$minute $period';
+
+    return Text(
+      '$label: $formatted',
+      style: const TextStyle(
+        fontSize: 11,
+        color: Color(0xFF6B7280),
+        fontWeight: FontWeight.w600,
       ),
     );
   }

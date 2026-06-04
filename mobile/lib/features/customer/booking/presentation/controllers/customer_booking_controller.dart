@@ -68,5 +68,16 @@ class CustomerBookingController extends ChangeNotifier {
     }
   }
 
+  Future<bool> downloadReceipt(int bookingId) async {
+    try {
+      await _dataSource.downloadReceipt(
+        bookingId: bookingId,
+      );
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
 }

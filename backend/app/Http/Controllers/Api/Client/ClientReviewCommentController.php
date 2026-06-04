@@ -12,18 +12,16 @@ class ClientReviewCommentController extends Controller
 {
     /**
      * Lista los comentarios visibles de una reseña.
-     *
-     * Visitantes pueden ver comentarios.
-     * Usuarios autenticados podrán identificar cuáles comentarios son suyos.
      */
     public function index(Request $request, ProviderReview $review): JsonResponse
     {
         $comments = $review->visibleComments()
             ->with('user')
             ->get()
-            ->map(function (ProviderReviewComment $comment) use ($request) {
-                return $this->commentPayload($comment, $request);
-            })
+            ->map(fn (ProviderReviewComment $comment) => $this->commentPayload(
+                $comment,
+                $request,
+            ))
             ->values();
 
         return response()->json([
@@ -33,12 +31,7 @@ class ClientReviewCommentController extends Controller
     }
 
     /**
-     * Crea un comentario sobre una reseña.
-     *
-     * Reglas:
-     * - El usuario debe estar autenticado.
-     * - La reseña debe estar visible.
-     * - El comentario no puede superar 300 caracteres.
+     * Crea un comentario sobre una reseña visible.
      */
     public function store(Request $request, ProviderReview $review): JsonResponse
     {
@@ -69,8 +62,6 @@ class ClientReviewCommentController extends Controller
 
     /**
      * Actualiza un comentario propio.
-     *
-     * Solo el usuario que creó el comentario puede editarlo.
      */
     public function update(
         Request $request,
@@ -99,9 +90,7 @@ class ClientReviewCommentController extends Controller
     }
 
     /**
-     * Elimina un comentario propio.
-     *
-     * Se usa borrado lógico de visibilidad para no romper conteos futuros.
+     * Oculta un comentario propio.
      */
     public function destroy(
         Request $request,
@@ -123,7 +112,7 @@ class ClientReviewCommentController extends Controller
     }
 
     /**
-     * Formato estándar que consume Flutter.
+     * Payload estándar para Flutter.
      */
     private function commentPayload(
         ProviderReviewComment $comment,
@@ -136,11 +125,50 @@ class ClientReviewCommentController extends Controller
             'review_id' => $comment->provider_review_id,
             'comment' => $comment->comment,
             'user_name' => $comment->user?->name ?? 'Usuario',
+            'user_photo_url' => $this->userPhotoUrl($comment->user),
             'created_at' => $comment->created_at?->toIso8601String(),
             'updated_at' => $comment->updated_at?->toIso8601String(),
+            'is_edited' => $this->isEdited($comment->created_at, $comment->updated_at),
             'is_owner' => $user
                 ? (int) $comment->user_id === (int) $user->id
                 : false,
         ];
+    }
+
+    /**
+     * Resuelve la foto pública del usuario.
+     */
+    private function userPhotoUrl($user): ?string
+    {
+        if (! $user) {
+            return null;
+        }
+
+        $path = $user->photo_path
+            ?? $user->avatar_path
+            ?? $user->profile_photo_path
+            ?? null;
+
+        if (! $path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return url('/api/storage/' . ltrim($path, '/'));
+    }
+
+    /**
+     * Indica si fue editado después de crearse.
+     */
+    private function isEdited($createdAt, $updatedAt): bool
+    {
+        if (! $createdAt || ! $updatedAt) {
+            return false;
+        }
+
+        return $updatedAt->gt($createdAt->copy()->addSeconds(2));
     }
 }

@@ -22,6 +22,11 @@ class ExploreController extends ChangeNotifier {
 
   String searchText = '';
 
+  /// Fecha seleccionada para filtrar experiencias.
+  ///
+  /// Si es null, se muestran todas las fechas.
+  DateTime? selectedDate;
+
   bool isLoading = false;
 
   String? errorMessage;
@@ -77,6 +82,7 @@ class ExploreController extends ChangeNotifier {
       experiences = await _dataSource.getExperiences(
         search: searchText,
         category: selectedCategory,
+        selectedDate: selectedDate,
       );
 
       favoriteExperienceIds = experiences
@@ -133,6 +139,18 @@ class ExploreController extends ChangeNotifier {
     await loadExperiences();
   }
 
+  /// Selecciona una fecha y recarga experiencias filtradas.
+  Future<void> selectDate(DateTime date) async {
+    selectedDate = date;
+    await loadExperiences();
+  }
+
+  /// Limpia la fecha seleccionada.
+  Future<void> clearSelectedDate() async {
+    selectedDate = null;
+    await loadExperiences();
+  }
+
   bool isFavorite(int experienceId) {
     return favoriteExperienceIds.contains(experienceId);
   }
@@ -174,6 +192,7 @@ class ExploreController extends ChangeNotifier {
   Future<void> clearFilters() async {
     searchText = '';
     selectedCategory = 'Todos';
+    selectedDate = null;
 
     await loadExperiences();
   }

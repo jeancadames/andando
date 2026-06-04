@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use Barryvdh\DomPDF\Facade\Pdf;
+
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
@@ -10,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class ClientBookingController extends Controller
 {
@@ -175,6 +178,66 @@ class ClientBookingController extends Controller
                 'status' => $booking->status,
             ],
         ]);
+    }
+
+    /**
+     * Descargar comprobante de reserva en PDF.
+     */
+    public function receipt(
+        Request $request,
+        ProviderBooking $booking,
+    ): Response {
+        if ($booking->user_id !== $request->user()->id) {
+            abort(403, 'No tienes permiso para acceder a esta reserva.');
+        }
+
+        $booking->load([
+            'provider',
+            'experience.coverPhoto',
+            'experience.photos',
+            'schedule',
+        ]);
+
+        $experience = $booking->experience;
+        $schedule = $booking->schedule;
+        $provider = $booking->provider;
+
+        $startsAt = $schedule?->starts_at ?? $booking->booking_date;
+
+        $logoPath = public_path('images/andando_logo.png');
+
+        $coverPath = null;
+
+        $coverPhoto = $experience?->coverPhoto
+            ?? $experience?->photos?->sortBy('sort_order')->first();
+
+        if ($coverPhoto && $coverPhoto->path) {
+            $possiblePath = storage_path('app/public/' . ltrim($coverPhoto->path, '/'));
+
+            if (file_exists($possiblePath)) {
+                $coverPath = $possiblePath;
+            }
+        }
+
+        $includedItems = $experience?->included ?? [];
+
+        $html = view('pdf.booking-receipt', [
+            'booking' => $booking,
+            'experience' => $experience,
+            'schedule' => $schedule,
+            'provider' => $provider,
+            'startsAt' => $startsAt,
+            'logoPath' => file_exists($logoPath) ? $logoPath : null,
+            'coverPath' => $coverPath,
+            'includedItems' => is_array($includedItems) ? $includedItems : [],
+        ])->render();
+
+        $pdf = Pdf::loadHTML($html)
+            ->setPaper('letter', 'portrait');
+
+        return $pdf->download(
+            'comprobante-' . $booking->booking_code . '.pdf'
+        );
     }
 
     private function markCompletedBookingsForUser(int $userId): void

@@ -52,6 +52,9 @@ class CustomerExperienceModel {
   /// - moneda
   final List<CustomerExperienceScheduleModel> availableSchedules;
 
+  /// Próxima fecha disponible para reservar.
+  final DateTime? nextAvailableDate;
+
   /// Elementos incluidos en la experiencia.
   ///
   /// Viene desde la columna `amenities` de Laravel.
@@ -81,6 +84,7 @@ class CustomerExperienceModel {
     required this.isFavorite,
     required this.availableDates,
     required this.availableSchedules,
+    required this.nextAvailableDate,
     required this.amenities,
     required this.itinerary,
   });
@@ -110,6 +114,12 @@ class CustomerExperienceModel {
       ),
       amenities: _parseStringList(json['amenities']),
       itinerary: _parseItinerary(json['itinerary']),
+
+      nextAvailableDate: json['next_available_datetime'] != null
+        ? DateTime.tryParse(
+            json['next_available_datetime'].toString(),
+          )
+        : null,
     );
   }
 
@@ -173,6 +183,21 @@ class CustomerExperienceModel {
     }
 
     return raw;
+  }
+
+  /// Fecha más próxima disponible para reservar.
+  ///
+  /// Ejemplo:
+  /// 15 may 2026
+  String get formattedNextAvailableDate {
+    if (nextAvailableDate == null) {
+      return 'Sin salidas próximas';
+    }
+
+    return 'Próxima salida: ${DateFormat(
+      'dd MMM yyyy',
+      'es',
+    ).format(nextAvailableDate!)}';
   }
 
   /// Lista de elementos incluidos.

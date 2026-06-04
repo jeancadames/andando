@@ -3,8 +3,10 @@ class ReviewCommentModel {
   final int reviewId;
   final String comment;
   final String userName;
+  final String? userPhotoUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final bool isEdited;
   final bool isOwner;
 
   const ReviewCommentModel({
@@ -12,8 +14,10 @@ class ReviewCommentModel {
     required this.reviewId,
     required this.comment,
     required this.userName,
+    required this.userPhotoUrl,
     required this.createdAt,
     required this.updatedAt,
+    required this.isEdited,
     required this.isOwner,
   });
 
@@ -23,12 +27,14 @@ class ReviewCommentModel {
       reviewId: _toInt(json['review_id']),
       comment: json['comment']?.toString() ?? '',
       userName: json['user_name']?.toString() ?? 'Usuario',
+      userPhotoUrl: json['user_photo_url']?.toString(),
       createdAt: json['created_at'] == null
           ? null
           : DateTime.tryParse(json['created_at'].toString()),
       updatedAt: json['updated_at'] == null
           ? null
           : DateTime.tryParse(json['updated_at'].toString()),
+      isEdited: _toBool(json['is_edited']),
       isOwner: _toBool(json['is_owner']),
     );
   }

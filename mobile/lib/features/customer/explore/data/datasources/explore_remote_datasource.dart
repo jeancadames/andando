@@ -14,6 +14,7 @@ class ExploreRemoteDataSource {
     String? search,
     String? category,
     String? province,
+    DateTime? selectedDate,
   }) async {
     final queryParams = <String, String>{};
 
@@ -25,6 +26,10 @@ class ExploreRemoteDataSource {
         category.trim().isNotEmpty &&
         category.trim() != 'Todos') {
       queryParams['category'] = category.trim();
+    }
+
+    if (selectedDate != null) {
+      queryParams['date'] = selectedDate.toIso8601String().split('T').first;
     }
 
     if (province != null && province.trim().isNotEmpty) {

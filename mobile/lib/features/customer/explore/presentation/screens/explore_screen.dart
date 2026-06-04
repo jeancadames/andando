@@ -101,6 +101,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
     }
   }
 
+  String _formatFilterDate(DateTime date) {
+  const months = [
+    '',
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+
+  return '${date.day.toString().padLeft(2, '0')} '
+        '${months[date.month]} '
+        '${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -121,7 +143,71 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     ),
                   ),
                   SliverToBoxAdapter(
-                    child: _CategoryList(controller: _controller),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _CategoryList(
+                          controller: _controller,
+                        ),
+
+                        if (_controller.selectedDate != null)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              20,
+                              4,
+                              20,
+                              12,
+                            ),
+                            child: GestureDetector(
+                              onTap: () {
+                                _controller.clearSelectedDate();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEAF3FF),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: const Color(0xFF003B73),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.calendar_month_rounded,
+                                      size: 16,
+                                      color: Color(0xFF003B73),
+                                    ),
+                                    const SizedBox(width: 6),
+
+                                    Text(
+                                      _formatFilterDate(
+                                        _controller.selectedDate!,
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF003B73),
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 8),
+                                    const Icon(
+                                      Icons.close_rounded,
+                                      size: 16,
+                                      color: Color(0xFF003B73),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                   if (_controller.isLoading)
                     const SliverFillRemaining(
@@ -290,45 +376,155 @@ class _CategoryList extends StatelessWidget {
     required this.controller,
   });
 
+  Future<void> _openDatePicker(BuildContext context) async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: controller.selectedDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(
+        const Duration(days: 365),
+      ),
+    );
+
+    if (selected != null) {
+      await controller.selectDate(selected);
+    }
+  }
+
+  @override
+Widget build(BuildContext context) {
+  return Container(
+    height: 52,
+    color: Colors.white,
+    padding: const EdgeInsets.fromLTRB(
+      20,
+      0,
+      20,
+      12,
+    ),
+    child: Center(
+      child: Row(
+      children: [
+        Expanded(
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: controller.categories.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final category = controller.categories[index];
+              final isSelected =
+                  category == controller.selectedCategory;
+
+              return GestureDetector(
+                onTap: () => controller.selectCategory(category),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                  ),
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFF111827)
+                        : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    category,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFF374151),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        GestureDetector(
+          onTap: () async {
+            final selected = await showDatePicker(
+              context: context,
+              initialDate:
+                  controller.selectedDate ?? DateTime.now(),
+              firstDate: DateTime.now(),
+              lastDate: DateTime.now().add(
+                const Duration(days: 365),
+              ),
+            );
+
+            if (selected != null) {
+              await controller.selectDate(selected);
+            }
+          },
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: controller.selectedDate != null
+                  ? const Color(0xFF003B73)
+                  : const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.calendar_month_rounded,
+              color: controller.selectedDate != null
+                  ? Colors.white
+                  : const Color(0xFF374151),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
+}
+}
+
+class _DateFilterBar extends StatelessWidget {
+  final DateTime? selectedDate;
+  final VoidCallback onSelectDate;
+  final VoidCallback onClearDate;
+
+  const _DateFilterBar({
+    required this.selectedDate,
+    required this.onSelectDate,
+    required this.onClearDate,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 66,
-      color: Colors.white,
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-        scrollDirection: Axis.horizontal,
-        itemCount: controller.categories.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final category = controller.categories[index];
-          final isSelected = category == controller.selectedCategory;
+    final label = selectedDate == null
+        ? 'Filtrar por fecha'
+        : 'Fecha: ${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}';
 
-          return GestureDetector(
-            onTap: () => controller.selectCategory(category),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 10,
-              ),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? const Color(0xFF111827)
-                    : const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                category,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : const Color(0xFF374151),
-                ),
-              ),
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onSelectDate,
+              icon: const Icon(Icons.calendar_month_rounded),
+              label: Text(label),
             ),
-          );
-        },
+          ),
+          if (selectedDate != null) ...[
+            const SizedBox(width: 10),
+            IconButton(
+              onPressed: onClearDate,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -363,7 +559,7 @@ class _ExperienceCarouselSection extends StatelessWidget {
           subtitle: subtitle,
         ),
         SizedBox(
-          height: 330,
+          height: 350,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             scrollDirection: Axis.horizontal,
@@ -566,6 +762,28 @@ class _ExperienceCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             experience.displayLocation,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.event_available_rounded,
+                          size: 16,
+                          color: Color(0xFF6B7280),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            experience.formattedNextAvailableDate,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

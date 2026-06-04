@@ -17,12 +17,26 @@ class ReviewCommentsRemoteDataSource {
   final http.Client _client;
   final SecureStorage _secureStorage;
 
+  /// Obtiene los comentarios de una reseña.
+  ///
+  /// Si existe sesión:
+  /// utiliza endpoint autenticado para que el backend
+  /// pueda determinar correctamente is_owner.
+  ///
+  /// Si es visitante:
+  /// utiliza endpoint público.
   Future<List<ReviewCommentModel>> getComments({
     required int reviewId,
   }) async {
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/client/reviews/$reviewId/comments',
+    final token = await _secureStorage.read(
+      StorageKeys.authToken,
     );
+
+    final endpoint = token != null && token.trim().isNotEmpty
+        ? '${ApiConfig.baseUrl}/client/reviews/$reviewId/comments'
+        : '${ApiConfig.baseUrl}/client/explore/reviews/$reviewId/comments';
+
+    final uri = Uri.parse(endpoint);
 
     final response = await _client.get(
       uri,
@@ -37,11 +51,16 @@ class ReviewCommentsRemoteDataSource {
       );
     }
 
-    final data = List<Map<String, dynamic>>.from(body['data'] ?? []);
+    final data = List<Map<String, dynamic>>.from(
+      body['data'] ?? [],
+    );
 
-    return data.map(ReviewCommentModel.fromJson).toList();
+    return data
+        .map(ReviewCommentModel.fromJson)
+        .toList();
   }
 
+  /// Publica un comentario.
   Future<ReviewCommentModel> createComment({
     required int reviewId,
     required String comment,
@@ -67,10 +86,13 @@ class ReviewCommentsRemoteDataSource {
     }
 
     return ReviewCommentModel.fromJson(
-      Map<String, dynamic>.from(body['data'] ?? {}),
+      Map<String, dynamic>.from(
+        body['data'] ?? {},
+      ),
     );
   }
 
+  /// Actualiza un comentario propio.
   Future<ReviewCommentModel> updateComment({
     required int commentId,
     required String comment,
@@ -96,10 +118,13 @@ class ReviewCommentsRemoteDataSource {
     }
 
     return ReviewCommentModel.fromJson(
-      Map<String, dynamic>.from(body['data'] ?? {}),
+      Map<String, dynamic>.from(
+        body['data'] ?? {},
+      ),
     );
   }
 
+  /// Elimina un comentario propio.
   Future<void> deleteComment({
     required int commentId,
   }) async {
@@ -121,8 +146,11 @@ class ReviewCommentsRemoteDataSource {
     }
   }
 
+  /// Headers estándar.
   Future<Map<String, String>> _headers() async {
-    final token = await _secureStorage.read(StorageKeys.authToken);
+    final token = await _secureStorage.read(
+      StorageKeys.authToken,
+    );
 
     return {
       'Accept': 'application/json',
@@ -132,8 +160,13 @@ class ReviewCommentsRemoteDataSource {
     };
   }
 
-  Map<String, dynamic> _decode(http.Response response) {
-    if (response.body.isEmpty) return {};
+  /// Convierte JSON de respuesta.
+  Map<String, dynamic> _decode(
+    http.Response response,
+  ) {
+    if (response.body.isEmpty) {
+      return {};
+    }
 
     return Map<String, dynamic>.from(
       jsonDecode(response.body),

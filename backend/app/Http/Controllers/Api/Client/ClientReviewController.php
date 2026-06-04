@@ -64,7 +64,7 @@ class ClientReviewController extends Controller
 
         $this->storeReviewPhotos($request, $review);
 
-        $review->load('photos');
+        $review->load(['photos', 'user']);
         $review->loadCount([
             'comments as comments_count' => fn ($query) => $query->where('is_visible', true),
         ]);
@@ -77,8 +77,6 @@ class ClientReviewController extends Controller
 
     /**
      * Devuelve las reseñas visibles de una experiencia.
-     *
-     * Incluye promedio, total, distribución, fotos y cantidad de comentarios.
      */
     public function experienceReviews(
         Request $request,
@@ -110,13 +108,11 @@ class ClientReviewController extends Controller
                     1 => $reviews->where('rating', 1)->count(),
                 ],
                 'reviews' => $reviews
-                    ->map(function (ProviderReview $review) use ($request, $experience) {
-                        return $this->experienceReviewPayload(
-                            $review,
-                            $request,
-                            $experience,
-                        );
-                    })
+                    ->map(fn (ProviderReview $review) => $this->experienceReviewPayload(
+                        $review,
+                        $request,
+                        $experience,
+                    ))
                     ->values(),
             ],
         ]);
@@ -152,7 +148,7 @@ class ClientReviewController extends Controller
 
         $this->storeReviewPhotos($request, $review);
 
-        $review->load('photos');
+        $review->load(['photos', 'user']);
         $review->loadCount([
             'comments as comments_count' => fn ($query) => $query->where('is_visible', true),
         ]);
@@ -175,7 +171,6 @@ class ClientReviewController extends Controller
         }
 
         $this->deleteReviewPhotos($review);
-
         $review->delete();
 
         return response()->json([
@@ -204,7 +199,6 @@ class ClientReviewController extends Controller
         }
 
         Storage::disk('public')->delete($photo->photo_path);
-
         $photo->delete();
 
         return response()->json([
@@ -213,7 +207,7 @@ class ClientReviewController extends Controller
     }
 
     /**
-     * Guarda nuevas fotos de una reseña sin superar el límite de 6.
+     * Guarda nuevas fotos de una reseña sin superar 6.
      */
     private function storeReviewPhotos(Request $request, ProviderReview $review): void
     {
@@ -265,6 +259,11 @@ class ClientReviewController extends Controller
             'rating' => $review->rating,
             'comment' => $review->comment,
             'comments_count' => (int) ($review->comments_count ?? 0),
+            'customer_name' => $review->user?->name ?? 'Viajero',
+            'customer_photo_url' => $this->userPhotoUrl($review->user),
+            'created_at' => $review->created_at?->toIso8601String(),
+            'updated_at' => $review->updated_at?->toIso8601String(),
+            'is_edited' => $this->isEdited($review->created_at, $review->updated_at),
             'photos' => $this->photosPayload($review),
         ];
     }
@@ -287,7 +286,10 @@ class ClientReviewController extends Controller
             'comment' => $review->comment,
             'comments_count' => (int) ($review->comments_count ?? 0),
             'customer_name' => $review->user?->name ?? 'Viajero',
+            'customer_photo_url' => $this->userPhotoUrl($review->user),
             'created_at' => $review->created_at?->toIso8601String(),
+            'updated_at' => $review->updated_at?->toIso8601String(),
+            'is_edited' => $this->isEdited($review->created_at, $review->updated_at),
             'booking_id' => $review->provider_booking_id,
             'is_owner' => $isOwner,
             'photos' => $this->photosPayload($review),
@@ -331,5 +333,42 @@ class ClientReviewController extends Controller
             ])
             ->values()
             ->toArray();
+    }
+
+    /**
+     * Resuelve la foto pública del usuario.
+     */
+    private function userPhotoUrl($user): ?string
+    {
+        if (! $user) {
+            return null;
+        }
+
+        $path = $user->photo_path
+            ?? $user->avatar_path
+            ?? $user->profile_photo_path
+            ?? null;
+
+        if (! $path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return url('/api/storage/' . ltrim($path, '/'));
+    }
+
+    /**
+     * Indica si el registro fue editado después de su creación.
+     */
+    private function isEdited($createdAt, $updatedAt): bool
+    {
+        if (! $createdAt || ! $updatedAt) {
+            return false;
+        }
+
+        return $updatedAt->gt($createdAt->copy()->addSeconds(2));
     }
 }
