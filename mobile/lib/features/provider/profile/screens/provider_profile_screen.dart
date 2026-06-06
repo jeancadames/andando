@@ -7,6 +7,9 @@ import '../../../auth/application/auth_controller.dart';
 import '../../dashboard/models/provider_dashboard_model.dart';
 import '../../dashboard/services/provider_dashboard_service.dart';
 
+import '../../../../shared/widgets/provider_bottom_nav.dart';
+
+
 /// Pantalla principal del perfil del afiliado/proveedor.
 ///
 /// Responsabilidades:
@@ -244,7 +247,8 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           },
         ),
       ),
-      bottomNavigationBar: _ProviderBottomNav(
+        bottomNavigationBar: ProviderBottomNav(
+        authController: widget.authController,
         currentIndex: 3,
         onDashboard: () => context.goNamed(RouteNames.providerDashboard),
         onCatalog: () => context.goNamed(RouteNames.providerCatalog),

@@ -69,79 +69,105 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
     }
   }
 
-  Future<void> _openScheduleBookingsScreen(
-    ProviderExperienceSchedule schedule,
-  ) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProviderScheduleBookingsScreen(
-          authController: widget.authController,
-          experienceId: widget.experienceId,
-          scheduleId: schedule.id,
-        ),
+Future<void> _openScheduleBookingsScreen(
+  ProviderExperienceSchedule schedule,
+) async {
+  await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ProviderScheduleBookingsScreen(
+        authController: widget.authController,
+        experienceId: widget.experienceId,
+        scheduleId: schedule.id,
+      ),
+    ),
+  );
+
+  if (!mounted) return;
+
+  await _loadSchedules();
+}
+
+Future<void> _deleteSchedule(ProviderExperienceSchedule schedule) async {
+  try {
+    await _service.deleteSchedule(
+      experienceId: widget.experienceId,
+      scheduleId: schedule.id,
+      token: widget.authController.token,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Fecha eliminada correctamente.'),
+      ),
+    );
+
+    await _loadSchedules();
+  } catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+      ),
+    );
+  }
+}
+
+Future<void> _openAddScheduleScreen() async {
+  final created = await Navigator.push<bool>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => AddScheduleScreen(
+        authController: widget.authController,
+        experienceId: widget.experienceId,
+        experienceTitle: widget.experienceTitle,
+      ),
+    ),
+  );
+
+  if (!mounted) return;
+
+  if (created == true) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Fecha programada correctamente.'),
       ),
     );
 
     await _loadSchedules();
   }
+}
 
-  Future<void> _deleteSchedule(ProviderExperienceSchedule schedule) async {
-    try {
-      await _service.deleteSchedule(
+Future<void> _openEditScheduleScreen(
+  ProviderExperienceSchedule schedule,
+) async {
+  final updated = await Navigator.push<bool>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => AddScheduleScreen(
+        authController: widget.authController,
         experienceId: widget.experienceId,
-        scheduleId: schedule.id,
-        token: widget.authController.token,
-      );
+        experienceTitle: widget.experienceTitle,
+        scheduleToEdit: schedule,
+      ),
+    ),
+  );
 
-      await _loadSchedules();
-    } catch (error) {
-      if (!mounted) return;
+  if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
-    }
-  }
-
-  Future<void> _openAddScheduleScreen() async {
-    final created = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddScheduleScreen(
-          authController: widget.authController,
-          experienceId: widget.experienceId,
-          experienceTitle: widget.experienceTitle,
-        ),
+  if (updated == true) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Fecha actualizada correctamente.'),
       ),
     );
 
-    if (created == true) {
-      await _loadSchedules();
-    }
+    await _loadSchedules();
   }
-
-  Future<void> _openEditScheduleScreen(
-    ProviderExperienceSchedule schedule,
-  ) async {
-    final updated = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddScheduleScreen(
-          authController: widget.authController,
-          experienceId: widget.experienceId,
-          experienceTitle: widget.experienceTitle,
-          scheduleToEdit: schedule,
-        ),
-      ),
-    );
-
-    if (updated == true) {
-      await _loadSchedules();
-    }
-  }
+}
 
   @override
   Widget build(BuildContext context) {

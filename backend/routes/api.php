@@ -1,20 +1,24 @@
 <?php
 
+use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Client\ClientReviewCommentController;
 use App\Http\Controllers\Api\Client\ClientReviewController;
 use App\Http\Controllers\Api\Client\ClientProfileController;
-use App\Http\Controllers\Api\Auth\LoginController;
+use App\Http\Controllers\Api\Client\ClientConversationController;
+use App\Http\Controllers\Api\Customer\CustomerAuthController;
 use App\Http\Controllers\Api\Client\ClientBookingController;
 use App\Http\Controllers\Api\Client\ClientFavoriteExperienceController;
 use App\Http\Controllers\Api\Client\ExploreController;
-use App\Http\Controllers\Api\Customer\CustomerAuthController;
 use App\Http\Controllers\Api\Provider\ProviderAuthController;
 use App\Http\Controllers\Api\Provider\ProviderDashboardController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceScheduleController;
 use App\Http\Controllers\Api\Provider\ProviderAnalyticsController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceReviewController;
+use App\Http\Controllers\Api\Provider\ProviderConversationController;
+use App\Http\Controllers\Api\Provider\ProviderPricingSettingsController;
 
+use App\Http\Controllers\Api\DeviceTokenController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -29,31 +33,92 @@ use Illuminate\Support\Facades\Storage;
 
 /*
 |--------------------------------------------------------------------------
-| Archivos públicos con CORS para Flutter Web
+| Archivos públicos para Flutter Web
 |--------------------------------------------------------------------------
 |
-| php artisan serve no usa .htaccess.
-| Por eso servimos las imágenes desde /api/storage/{path}.
+| Esta ruta sirve archivos desde:
+| - storage/app/public/{path}
+| - public/storage/{path}
 |
-| Ejemplo:
-| /api/storage/provider-experiences/provider_2/experience_1/foto.png
+| Funciona para:
+| - provider-experiences/...
+| - review-photos/...
+| - chat/conversations/...
+|
+| URL:
+| /api/storage/{path}
 |
 */
-Route::get('/storage/{path}', function (string $path) {
-    if (! Storage::disk('public')->exists($path)) {
+Route::options('/public-files/{path}', function () {
+    return response('', 204, [
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization, X-Requested-With',
+        'Access-Control-Expose-Headers' => 'Content-Type, Content-Length, Content-Disposition',
+        'Cross-Origin-Resource-Policy' => 'cross-origin',
+        'Cross-Origin-Embedder-Policy' => 'unsafe-none',
+    ]);
+})->where('path', '.*');
+
+Route::get('/public-files/{path}', function (string $path) {
+    $path = trim(str_replace('\\', '/', rawurldecode($path)), '/');
+
+    if ($path === '' || str_contains($path, '..')) {
         abort(404);
     }
 
-    return response()->file(
-        Storage::disk('public')->path($path),
-        [
-            'Access-Control-Allow-Origin' => '*',
-            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization',
-        ]
-    );
-})->where('path', '.*');
+    $candidatePaths = [
+        storage_path('app/public/' . $path),
+        public_path('storage/' . $path),
+    ];
 
+    $fullPath = null;
+
+    foreach ($candidatePaths as $candidatePath) {
+        if (is_file($candidatePath)) {
+            $fullPath = $candidatePath;
+            break;
+        }
+    }
+
+    if ($fullPath === null) {
+        abort(404);
+    }
+
+    $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+    $fileName = basename($fullPath);
+    $fileSize = filesize($fullPath);
+
+    $headers = [
+        'Content-Type' => $mimeType,
+        'Content-Length' => $fileSize,
+        'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization, X-Requested-With',
+        'Access-Control-Expose-Headers' => 'Content-Type, Content-Length, Content-Disposition',
+        'Cross-Origin-Resource-Policy' => 'cross-origin',
+        'Cross-Origin-Embedder-Policy' => 'unsafe-none',
+        'Cache-Control' => 'public, max-age=86400',
+    ];
+
+    return response()->stream(function () use ($fullPath) {
+        /*
+         * Limpia cualquier espacio, BOM, echo accidental o salida previa
+         * antes de enviar los bytes reales de la imagen.
+         */
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+
+        $handle = fopen($fullPath, 'rb');
+
+        if ($handle !== false) {
+            fpassthru($handle);
+            fclose($handle);
+        }
+    }, 200, $headers);
+})->where('path', '.*');
 /*
 |--------------------------------------------------------------------------
 | Autenticación general
@@ -73,6 +138,8 @@ Route::prefix('provider')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [ProviderAuthController::class, 'me']);
         Route::post('/logout', [ProviderAuthController::class, 'logout']);
+
+        Route::get('/pricing-settings', [ProviderPricingSettingsController::class, 'index']);
 
         Route::get('/dashboard', ProviderDashboardController::class);
         Route::get('/bookings/upcoming', [ProviderDashboardController::class, 'upcomingBookings']);
@@ -113,6 +180,15 @@ Route::prefix('provider')->group(function () {
             '/experiences/{experience}/reviews/{review}/reply',
             [ProviderExperienceReviewController::class, 'deleteReply']
         );
+
+        Route::get('/conversations', [ProviderConversationController::class, 'index']);
+        Route::get('/conversations/unread-count', [ProviderConversationController::class, 'unreadCount']);
+        Route::get('/conversations/{conversation}', [ProviderConversationController::class, 'show']);
+        Route::get('/conversations/{conversation}/messages', [ProviderConversationController::class, 'messages']);
+        Route::post('/conversations/{conversation}/messages', [ProviderConversationController::class, 'sendMessage']);
+        Route::post('/conversations/{conversation}/read', [ProviderConversationController::class, 'markAsRead']);
+        Route::post('/conversations/{conversation}/close', [ProviderConversationController::class, 'close']);
+        Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
     });
 });
 /*
@@ -166,6 +242,16 @@ Route::prefix('client/explore')->group(function () {
         Route::post('/reviews/{review}/comments', [ClientReviewCommentController::class, 'store']);
         Route::put('/review-comments/{comment}', [ClientReviewCommentController::class, 'update']);
         Route::delete('/review-comments/{comment}', [ClientReviewCommentController::class, 'destroy']);
+
+        Route::get('/conversations', [ClientConversationController::class, 'index']);
+        Route::post('/conversations', [ClientConversationController::class, 'store']);
+        Route::get('/conversations/unread-count', [ClientConversationController::class, 'unreadCount']);
+        Route::get('/conversations/{conversation}', [ClientConversationController::class, 'show']);
+        Route::get('/conversations/{conversation}/messages', [ClientConversationController::class, 'messages']);
+        Route::post('/conversations/{conversation}/messages', [ClientConversationController::class, 'sendMessage']);
+        Route::post('/conversations/{conversation}/read', [ClientConversationController::class, 'markAsRead']);
+
+        Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
         
         });
         

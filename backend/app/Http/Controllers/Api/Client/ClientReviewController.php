@@ -357,7 +357,7 @@ class ClientReviewController extends Controller
             return $path;
         }
 
-        return url('/api/storage/' . ltrim($path, '/'));
+        return url('/api/public-files/' . ltrim($path, '/'));
     }
 
     /**

@@ -7,6 +7,8 @@ import '../models/provider_dashboard_model.dart';
 import '../services/provider_dashboard_service.dart';
 import '../../../../core/router/route_names.dart';
 
+import '../../../../shared/widgets/provider_bottom_nav.dart';
+
 /// Pantalla principal del dashboard del afiliado.
 ///
 /// No usa data quemada.
@@ -143,7 +145,9 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
           },
         ),
       ),
-      bottomNavigationBar: _ProviderBottomNav(
+      bottomNavigationBar: ProviderBottomNav(
+        currentIndex: 0,
+        authController: widget.authController,
         onDashboard: () {},
         onCatalog: () => _goToNamed(RouteNames.providerCatalog),
         onMessages: () => _goToNamed(RouteNames.providerMessages),

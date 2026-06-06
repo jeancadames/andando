@@ -7,6 +7,8 @@ import '../../../explore/presentation/screens/experience_detail_screen.dart';
 import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../widgets/favorite_experience_card.dart';
 
+import '../../../../auth/application/auth_controller.dart';
+
 /// Pantalla de favoritos del cliente.
 ///
 /// Esta pantalla muestra las experiencias que el usuario ha marcado como
@@ -19,7 +21,12 @@ import '../widgets/favorite_experience_card.dart';
 ///   Primero consulta el endpoint de detalle para traer la información completa:
 ///   amenities, itinerary, schedules, cupos, etc.
 class CustomerFavoritesScreen extends StatefulWidget {
-  const CustomerFavoritesScreen({super.key});
+  const CustomerFavoritesScreen({
+    super.key,
+    required this.authController,
+  });
+
+  final AuthController authController;
 
   @override
   State<CustomerFavoritesScreen> createState() =>
@@ -108,11 +115,11 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
         MaterialPageRoute(
           builder: (_) => ExperienceDetailScreen(
             experience: detailExperience,
+            authController: widget.authController,
             initialIsFavorite: currentFavoriteState,
             onFavoriteChanged: (isFavorite) {
               final currentState = _controller.isFavorite(experience.id);
 
-              /// Evita hacer doble toggle si el estado ya coincide.
               if (currentState != isFavorite) {
                 _controller.toggleFavorite(experience.id);
               }
@@ -222,8 +229,9 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
               ),
             ),
           ),
-          bottomNavigationBar: const CustomerBottomNavigation(
-            currentItem: CustomerBottomNavItem.favorites,
+          bottomNavigationBar: CustomerBottomNavigation(
+            currentItem: CustomerBottomNavItem.bookings,
+            authController: widget.authController,
           ),
         );
       },

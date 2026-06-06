@@ -9,6 +9,8 @@ import 'create_experience_screen.dart';
 import 'experience_calendar_screen.dart';
 import '../widgets/provider_experience_reviews_button.dart';
 
+import '../../../../shared/widgets/provider_bottom_nav.dart';
+
 class ProviderCatalogScreen extends StatefulWidget {
   const ProviderCatalogScreen({
     super.key,
@@ -265,8 +267,9 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: _ProviderBottomNav(
-        currentIndex: 1,
+        bottomNavigationBar: ProviderBottomNav(
+        currentIndex: 0,
+        authController: widget.authController,
         onDashboard: () => context.go('/provider/dashboard'),
         onCatalog: () {},
         onMessages: () => context.go('/provider/messages'),

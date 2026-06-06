@@ -8,35 +8,36 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CorsForStorage
 {
-    /**
-     * Agrega headers CORS a las respuestas de archivos servidos desde /storage.
-     *
-     * Esto permite que Flutter Web cargue imágenes desde Laravel localmente:
-     * http://localhost:xxxxx -> http://127.0.0.1:8000/storage/...
-     */
     public function handle(Request $request, Closure $next): Response
     {
-        /**
-         * Respuesta para preflight requests.
-         */
+        $isPublicFileRequest =
+            $request->is('storage/*') ||
+            $request->is('api/storage/*') ||
+            $request->is('public-files/*') ||
+            $request->is('api/public-files/*');
+
+        if (! $isPublicFileRequest) {
+            return $next($request);
+        }
+
+        $headers = [
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization, X-Requested-With',
+            'Access-Control-Expose-Headers' => 'Content-Type, Content-Length, Content-Disposition',
+            'Cross-Origin-Resource-Policy' => 'cross-origin',
+            'Cross-Origin-Embedder-Policy' => 'unsafe-none',
+        ];
+
         if ($request->isMethod('OPTIONS')) {
-            return response('', 204)
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-                ->header(
-                    'Access-Control-Allow-Headers',
-                    'Origin, Content-Type, Accept, Authorization'
-                );
+            return response('', 204, $headers);
         }
 
         $response = $next($request);
 
-        $response->headers->set('Access-Control-Allow-Origin', '*');
-        $response->headers->set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        $response->headers->set(
-            'Access-Control-Allow-Headers',
-            'Origin, Content-Type, Accept, Authorization'
-        );
+        foreach ($headers as $key => $value) {
+            $response->headers->set($key, $value);
+        }
 
         return $response;
     }

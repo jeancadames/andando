@@ -65,6 +65,11 @@ class Provider extends Model
         return $this->hasMany(ProviderReview::class);
     }
 
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class);
+    }
+
     public function experienceSchedules()
     {
         return $this->hasMany(ProviderExperienceSchedule::class);

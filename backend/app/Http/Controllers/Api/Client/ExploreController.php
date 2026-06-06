@@ -13,7 +13,15 @@ class ExploreController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = ProviderExperience::query()
-            ->with(['coverPhoto', 'photos', 'provider', 'schedules'])
+            ->with([
+                'coverPhoto',
+                'photos',
+                'provider',
+                'schedules' => function ($scheduleQuery) {
+                    $this->availableScheduleQuery($scheduleQuery);
+                    $scheduleQuery->orderBy('starts_at');
+                },
+            ])
             ->withAvg([
                 'reviews as rating' => function ($query) {
                     $query->where('is_visible', true);
@@ -27,6 +35,9 @@ class ExploreController extends Controller
             ->where('status', 'published')
             ->where('is_active', true)
             ->whereNotNull('published_at')
+            ->whereHas('schedules', function ($scheduleQuery) {
+                $this->availableScheduleQuery($scheduleQuery);
+            })
             ->latest('published_at');
 
         if ($request->filled('search')) {
@@ -47,8 +58,8 @@ class ExploreController extends Controller
         /**
          * Filtro por fecha seleccionada.
          *
-         * Devuelve solo experiencias que tengan al menos un horario activo
-         * dentro del día seleccionado.
+         * Devuelve solo experiencias que tengan al menos un horario activo,
+         * futuro/vigente, dentro del día seleccionado.
          *
          * Query param esperado:
          * date=YYYY-MM-DD
@@ -57,9 +68,8 @@ class ExploreController extends Controller
             $date = $request->date('date');
 
             $query->whereHas('schedules', function ($scheduleQuery) use ($date) {
-                $scheduleQuery
-                    ->whereDate('starts_at', $date)
-                    ->where('status', ['active', 'available']);
+                $this->availableScheduleQuery($scheduleQuery);
+                $scheduleQuery->whereDate('starts_at', $date);
             });
         }
 
@@ -80,7 +90,15 @@ class ExploreController extends Controller
     public function show(int $id): JsonResponse
     {
         $experience = ProviderExperience::query()
-            ->with(['photos', 'coverPhoto', 'provider', 'schedules'])
+            ->with([
+                'photos',
+                'coverPhoto',
+                'provider',
+                'schedules' => function ($scheduleQuery) {
+                    $this->availableScheduleQuery($scheduleQuery);
+                    $scheduleQuery->orderBy('starts_at');
+                },
+            ])
             ->withAvg([
                 'reviews as rating' => function ($query) {
                     $query->where('is_visible', true);
@@ -94,6 +112,9 @@ class ExploreController extends Controller
             ->where('status', 'published')
             ->where('is_active', true)
             ->whereNotNull('published_at')
+            ->whereHas('schedules', function ($scheduleQuery) {
+                $this->availableScheduleQuery($scheduleQuery);
+            })
             ->findOrFail($id);
 
         return response()->json([
@@ -109,6 +130,9 @@ class ExploreController extends Controller
             ->where('is_active', true)
             ->whereNotNull('published_at')
             ->whereNotNull('category')
+            ->whereHas('schedules', function ($scheduleQuery) {
+                $this->availableScheduleQuery($scheduleQuery);
+            })
             ->distinct()
             ->orderBy('category')
             ->pluck('category')
@@ -158,11 +182,6 @@ class ExploreController extends Controller
             'is_favorite' => $this->isFavoriteForCurrentUser($experience),
             'available_dates' => $this->formatAvailableDates($experience),
             'available_schedules' => $this->formatAvailableSchedules($experience),
-            /**
-             * Próxima fecha disponible para reservar.
-             *
-             * Se toma el primer schedule activo y futuro.
-             */
             'next_available_date' => $experience->schedules()
                 ->where('status', 'active')
                 ->where('starts_at', '>=', now())
@@ -257,6 +276,13 @@ class ExploreController extends Controller
             ->values();
     }
 
+    private function availableScheduleQuery($scheduleQuery): void
+    {
+        $scheduleQuery
+            ->where('status', 'active')
+            ->where('starts_at', '>=', now());
+    }
+
     private function isFavoriteForCurrentUser(ProviderExperience $experience): bool
     {
         $user = auth('sanctum')->user();
@@ -277,6 +303,6 @@ class ExploreController extends Controller
             return null;
         }
 
-        return url('/api/storage/' . ltrim($path, '/'));
+        return url('/api/public-files/' . ltrim($path, '/'));
     }
 }

@@ -66,10 +66,18 @@ class ProviderBooking extends Model
     }
 
     public function review(): HasOne
-{
-    return $this->hasOne(
-        ProviderReview::class,
-        'provider_booking_id'
-    );
-}
+    {
+        return $this->hasOne(
+            ProviderReview::class,
+            'provider_booking_id'
+        );
+    }
+
+    public function conversation(): HasOne
+    {
+        return $this->hasOne(
+            Conversation::class,
+            'provider_booking_id'
+        );
+    }
 }

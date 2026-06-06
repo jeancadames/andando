@@ -37,8 +37,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(HandleCors::class);
 
         /**
-         * Alias para aplicar CORS específicamente a archivos públicos
-         * servidos desde /storage.
+         * CORS específico para imágenes públicas servidas desde /storage.
+         *
+         * Se registra global porque /storage/{path} lo está sirviendo
+         * Laravel internamente como storage.local, no nuestra ruta manual.
+         */
+        $middleware->append(CorsForStorage::class);
+
+        /**
+         * Alias opcional para aplicar CORS manualmente si alguna ruta lo necesita.
          */
         $middleware->alias([
             'storage.cors' => CorsForStorage::class,

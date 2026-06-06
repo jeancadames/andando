@@ -3,69 +3,69 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Aquí se registran las rutas web de Laravel.
-| Estas rutas utilizan el middleware "web".
-|
-*/
-
-/**
- * Ruta principal temporal de Laravel.
- *
- * Puede eliminarse más adelante cuando Flutter sea
- * el único frontend de la aplicación.
- */
 Route::get('/', function () {
     return view('welcome');
 });
 
-/**
- * Servidor manual de archivos públicos con soporte CORS.
- *
- * Flutter Web corre normalmente desde:
- * http://localhost:xxxxx
- *
- * Mientras Laravel corre desde:
- * http://127.0.0.1:8000
- *
- * El navegador considera eso como distintos origins,
- * por lo que bloquea las imágenes sin headers CORS.
- *
- * Esta ruta:
- * 1. Busca el archivo dentro del disk "public"
- * 2. Lo devuelve como response file
- * 3. Aplica el middleware storage.cors
- *
- * Ejemplo de URL:
- * /storage/provider-experiences/provider_2/experience_1/photo.png
- */
-Route::get('/storage/{path}', function (string $path) {
+// /*
+// |--------------------------------------------------------------------------
+// | Archivos públicos para Flutter Web
+// |--------------------------------------------------------------------------
+// |
+// | Esta ruta sirve archivos desde:
+// | - storage/app/public/{path}
+// | - public/storage/{path}
+// |
+// | Funciona para:
+// | - provider-experiences/...
+// | - review-photos/...
+// | - chat/conversations/...
+// |
+// | URL:
+// | /storage/{path}
+// |
+// */
+// Route::options('/storage/{path}', function () {
+//     return response('', 204, [
+//         'Access-Control-Allow-Origin' => '*',
+//         'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+//         'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization, X-Requested-With',
+//         'Access-Control-Expose-Headers' => 'Content-Type, Content-Length',
+//         'Cross-Origin-Resource-Policy' => 'cross-origin',
+//         'Cross-Origin-Embedder-Policy' => 'unsafe-none',
+//     ]);
+// })->where('path', '.*');
 
-    /**
-     * Verifica que el archivo exista.
-     */
-    if (! Storage::disk('public')->exists($path)) {
-        abort(404);
-    }
+// Route::get('/storage/{path}', function (string $path) {
+//     $path = trim(str_replace('\\', '/', rawurldecode($path)), '/');
 
-    /**
-     * Devuelve el archivo físico.
-     */
-    return response()->file(
-        Storage::disk('public')->path($path)
-    );
+//     if ($path === '' || str_contains($path, '..')) {
+//         abort(404);
+//     }
 
-})
-    /**
-     * Permite rutas anidadas completas.
-     */
-    ->where('path', '.*')
+//     $disk = Storage::disk('public');
 
-    /**
-     * Middleware que agrega headers CORS.
-     */
-    ->middleware('storage.cors');
+//     $storagePath = $disk->path($path);
+//     $publicStoragePath = public_path('storage/' . $path);
+
+//     if (is_file($storagePath)) {
+//         $fullPath = $storagePath;
+//     } elseif (is_file($publicStoragePath)) {
+//         $fullPath = $publicStoragePath;
+//     } else {
+//         abort(404);
+//     }
+
+//     $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+
+//     return response()->file($fullPath, [
+//         'Content-Type' => $mimeType,
+//         'Access-Control-Allow-Origin' => '*',
+//         'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+//         'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization, X-Requested-With',
+//         'Access-Control-Expose-Headers' => 'Content-Type, Content-Length',
+//         'Cross-Origin-Resource-Policy' => 'cross-origin',
+//         'Cross-Origin-Embedder-Policy' => 'unsafe-none',
+//         'Cache-Control' => 'public, max-age=86400',
+//     ]);
+// })->where('path', '.*');

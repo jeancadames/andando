@@ -299,7 +299,7 @@ class _SelectOption {
 ///
 /// entonces no intentamos mostrar un value inexistente.
 /// En su lugar, mostramos el placeholder "Seleccionar...".
-class _StepSelectField extends StatelessWidget {
+class _StepSelectField extends StatefulWidget {
   const _StepSelectField({
     required this.label,
     required this.value,
@@ -315,24 +315,204 @@ class _StepSelectField extends StatelessWidget {
   final ValueChanged<String?> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    /// Verificamos si el value actual realmente existe en la lista.
-    ///
-    /// Esto evita este error típico de Flutter:
-    ///
-    /// There should be exactly one item with DropdownButton's value.
-    final optionExists = options.any((option) => option.value == value);
+  State<_StepSelectField> createState() => _StepSelectFieldState();
+}
 
-    /// Si value está vacío o no existe en la lista, usamos null.
-    ///
-    /// null hace que el Dropdown muestre el placeholder.
-    final selectedValue = value.isEmpty || !optionExists ? null : value;
+class _StepSelectFieldState extends State<_StepSelectField> {
+  final LayerLink _layerLink = LayerLink();
+  final GlobalKey _fieldKey = GlobalKey();
+
+  OverlayEntry? _overlayEntry;
+  bool _isOpen = false;
+
+  static const double _fieldHeight = 52;
+  static const double _itemHeight = 44;
+  static const double _gap = 6;
+  static const double _maxMenuHeight = 320;
+  static const double _minUsableMenuHeight = 120;
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _toggleDropdown() {
+    if (_isOpen) {
+      _removeOverlay();
+    } else {
+      _showOverlay();
+    }
+  }
+
+  void _showOverlay() {
+    final renderBox =
+        _fieldKey.currentContext?.findRenderObject() as RenderBox?;
+
+    if (renderBox == null) return;
+
+    final fieldSize = renderBox.size;
+    final fieldOffset = renderBox.localToGlobal(Offset.zero);
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+
+    final safeTop = mediaQuery.padding.top;
+    final safeBottom = mediaQuery.padding.bottom;
+
+    final availableAbove = fieldOffset.dy - safeTop - _gap;
+    final availableBelow = screenHeight -
+        fieldOffset.dy -
+        fieldSize.height -
+        safeBottom -
+        _gap;
+
+    final desiredHeight = (widget.options.length * _itemHeight).clamp(
+      _minUsableMenuHeight,
+      _maxMenuHeight,
+    );
+
+    final shouldOpenBelow =
+        availableBelow >= desiredHeight || availableBelow >= availableAbove;
+
+    final availableSpace = shouldOpenBelow ? availableBelow : availableAbove;
+
+    final menuHeight = desiredHeight.clamp(
+      _minUsableMenuHeight,
+      availableSpace <= 0 ? _minUsableMenuHeight : availableSpace,
+    );
+
+    final verticalOffset = shouldOpenBelow
+        ? fieldSize.height + _gap
+        : -menuHeight - _gap;
+
+    setState(() {
+      _isOpen = true;
+    });
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _removeOverlay,
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, verticalOffset),
+              child: Material(
+                color: Colors.transparent,
+                child: SizedBox(
+                  width: fieldSize.width,
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxHeight: menuHeight.toDouble(),
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFFE5E7EB),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.10),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        shrinkWrap: true,
+                        itemCount: widget.options.length,
+                        itemBuilder: (context, index) {
+                          final option = widget.options[index];
+                          final isSelected = option.value == widget.value;
+
+                          return InkWell(
+                            onTap: () {
+                              widget.onChanged(option.value);
+                              _removeOverlay();
+                            },
+                            child: Container(
+                              height: _itemHeight,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              alignment: Alignment.centerLeft,
+                              color: isSelected
+                                  ? AppColors.primaryBlue.withOpacity(0.08)
+                                  : Colors.transparent,
+                              child: Text(
+                                option.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? AppColors.primaryBlue
+                                      : AppColors.textDark,
+                                  fontSize: 16,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+
+    if (mounted) {
+      setState(() {
+        _isOpen = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final optionExists = widget.options.any(
+      (option) => option.value == widget.value,
+    );
+
+    final selectedValue =
+        widget.value.isEmpty || !optionExists ? null : widget.value;
+
+    final selectedOption = selectedValue == null
+        ? null
+        : widget.options.firstWhere(
+            (option) => option.value == selectedValue,
+          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          widget.label,
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
@@ -342,92 +522,55 @@ class _StepSelectField extends StatelessWidget {
 
         const SizedBox(height: 8),
 
-        DropdownButtonFormField<String>(
-          value: selectedValue,
-          isExpanded: true,
-          menuMaxHeight: 320,
-
-          /// Fuerza texto oscuro.
-          ///
-          /// Esto evita que el dropdown herede texto blanco del theme global.
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-          ),
-
-          dropdownColor: AppColors.white,
-          iconEnabledColor: AppColors.mutedForeground,
-
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: const Color(0xFFF8F9FA),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 18,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE5E7EB),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE5E7EB),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.primaryBlue,
-                width: 1.4,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.primaryRed,
-              ),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.primaryRed,
-                width: 1.4,
-              ),
-            ),
-          ),
-
-          hint: Text(
-            placeholder,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF8A94A6),
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-
-          items: options.map((option) {
-            return DropdownMenuItem<String>(
-              value: option.value,
-              child: Text(
-                option.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
+        CompositedTransformTarget(
+          link: _layerLink,
+          child: GestureDetector(
+            key: _fieldKey,
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggleDropdown,
+            child: Container(
+              height: _fieldHeight,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _isOpen
+                      ? AppColors.primaryBlue
+                      : const Color(0xFFE5E7EB),
+                  width: _isOpen ? 1.4 : 1,
                 ),
               ),
-            );
-          }).toList(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      selectedOption?.label ?? widget.placeholder,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selectedOption == null
+                            ? const Color(0xFF8A94A6)
+                            : AppColors.textDark,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
 
-          onChanged: onChanged,
+                  AnimatedRotation(
+                    turns: _isOpen ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
     );

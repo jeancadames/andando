@@ -10,6 +10,47 @@ import 'package:flutter/foundation.dart';
 
 import '../models/provider_schedule_bookings_response.dart';
 
+class ProviderPricingSettings {
+  final double commissionRate;
+  final double commissionPercentage;
+  final String currency;
+
+  const ProviderPricingSettings({
+    required this.commissionRate,
+    required this.commissionPercentage,
+    required this.currency,
+  });
+
+  factory ProviderPricingSettings.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] is Map
+        ? Map<String, dynamic>.from(json['data'] as Map)
+        : json;
+
+    final commissionRate = _readDouble(data['commission_rate'], 0.15);
+
+    return ProviderPricingSettings(
+      commissionRate: commissionRate.clamp(0, 1).toDouble(),
+      commissionPercentage: _readDouble(
+        data['commission_percentage'],
+        commissionRate * 100,
+      ),
+      currency: data['currency']?.toString() ?? 'DOP',
+    );
+  }
+
+  static double _readDouble(dynamic value, double fallback) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    if (value is String) {
+      return double.tryParse(value) ?? fallback;
+    }
+
+    return fallback;
+  }
+}
+
 class ProviderExperienceForm {
   String title = '';
   String category = '';
@@ -89,8 +130,33 @@ class ProviderExperienceService {
   /// http://10.0.2.2:8000/api
   static const String baseUrl = 'http://127.0.0.1:8000/api';
 
+  bool _isSuccessStatus(int statusCode) {
+    return statusCode >= 200 && statusCode < 300;
+  }
+
   String _cleanToken(String? token) {
     return token?.trim() ?? '';
+  }
+
+  Future<ProviderPricingSettings> getPricingSettings({
+    required String? token,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/provider/pricing-settings'),
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (!_isSuccessStatus(response.statusCode)) {
+      throw Exception(
+        body['message'] ?? 'No se pudo cargar la configuración de precios.',
+      );
+    }
+
+    return ProviderPricingSettings.fromJson(body);
   }
 
   Future<void> updateSchedule({
@@ -366,7 +432,7 @@ class ProviderExperienceService {
 
     final body = _decode(response);
 
-    if (response.statusCode != 201) {
+    if (!_isSuccessStatus(response.statusCode)) {
       throw Exception(
         body['message'] ?? 'No se pudo crear la fecha.',
       );
@@ -439,7 +505,7 @@ class ProviderExperienceService {
 
     final body = _decode(response);
 
-    if (response.statusCode != 201) {
+    if (!_isSuccessStatus(response.statusCode)) {
       throw Exception(
         body['message'] ?? 'No se pudo crear la fecha.',
       );
@@ -473,7 +539,7 @@ class ProviderExperienceService {
 
     final body = _decode(response);
 
-    if (response.statusCode != 201) {
+    if (!_isSuccessStatus(response.statusCode)) {
       throw Exception(
         body['message'] ?? 'No se pudieron crear las fechas.',
       );

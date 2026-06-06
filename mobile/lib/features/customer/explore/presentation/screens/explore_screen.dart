@@ -5,12 +5,20 @@ import '../../../shared/widgets/customer_bottom_navigation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../core/router/route_names.dart';
 import '../controllers/explore_controller.dart';
 import '../../data/models/customer_experience_model.dart';
 import 'experience_detail_screen.dart';
 
+import '../../../../auth/application/auth_controller.dart';
+
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({super.key});
+  const ExploreScreen({
+    super.key,
+    required this.authController,
+  });
+
+  final AuthController authController;
 
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
@@ -36,12 +44,82 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.dispose();
   }
 
+  bool get _isLoggedAsCustomer {
+    final isAuthenticated = widget.authController.isAuthenticated;
+    final userType = widget.authController.userType?.trim().toLowerCase() ?? '';
+    final token = widget.authController.token?.trim() ?? '';
+
+    return isAuthenticated &&
+        token.isNotEmpty &&
+        (userType == 'customer' || userType == 'client' || userType == 'user');
+  }
+
   void _onSearchChanged(String value) {
     _debounce?.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 450), () {
       _controller.search(value);
     });
+  }
+
+  Future<void> _showFavoriteLoginDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: const Text(
+            'Guarda tus experiencias favoritas',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+            ),
+          ),
+          content: const Text(
+            'Para guardar esta experiencia en favoritos necesitas crear una cuenta o iniciar sesión como cliente.',
+            style: TextStyle(
+              height: 1.4,
+              color: Color(0xFF475569),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                context.goNamed(RouteNames.login);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF003B73),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('Crear cuenta'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _handleFavoriteTap(CustomerExperienceModel experience) async {
+    if (!_isLoggedAsCustomer) {
+      await _showFavoriteLoginDialog();
+      return;
+    }
+
+    _controller.toggleFavorite(experience.id);
   }
 
   Future<void> _openExperienceDetail(
@@ -59,8 +137,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         },
       );
 
-      final detailExperience = await _controller.dataSource
-          .getExperienceDetail(
+      final detailExperience = await _controller.dataSource.getExperienceDetail(
         experienceId: experience.id,
       );
 
@@ -74,10 +151,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
         MaterialPageRoute(
           builder: (_) => ExperienceDetailScreen(
             experience: detailExperience,
+            authController: widget.authController,
             initialIsFavorite: currentFavoriteState,
             onFavoriteChanged: (isFavorite) {
-              final currentState =
-                  _controller.isFavorite(experience.id);
+              final currentState = _controller.isFavorite(experience.id);
 
               if (currentState != isFavorite) {
                 _controller.toggleFavorite(experience.id);
@@ -102,23 +179,23 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   String _formatFilterDate(DateTime date) {
-  const months = [
-    '',
-    'ene',
-    'feb',
-    'mar',
-    'abr',
-    'may',
-    'jun',
-    'jul',
-    'ago',
-    'sep',
-    'oct',
-    'nov',
-    'dic',
-  ];
+    const months = [
+      '',
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sep',
+      'oct',
+      'nov',
+      'dic',
+    ];
 
-  return '${date.day.toString().padLeft(2, '0')} '
+    return '${date.day.toString().padLeft(2, '0')} '
         '${months[date.month]} '
         '${date.year}';
   }
@@ -149,7 +226,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         _CategoryList(
                           controller: _controller,
                         ),
-
                         if (_controller.selectedDate != null)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(
@@ -183,7 +259,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                       color: Color(0xFF003B73),
                                     ),
                                     const SizedBox(width: 6),
-
                                     Text(
                                       _formatFilterDate(
                                         _controller.selectedDate!,
@@ -194,7 +269,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                         color: Color(0xFF003B73),
                                       ),
                                     ),
-
                                     const SizedBox(width: 8),
                                     const Icon(
                                       Icons.close_rounded,
@@ -238,6 +312,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         onOpenExperience: (experience) {
                           _openExperienceDetail(context, experience);
                         },
+                        onFavoriteTap: _handleFavoriteTap,
                       ),
                     ),
                     SliverToBoxAdapter(
@@ -249,6 +324,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         onOpenExperience: (experience) {
                           _openExperienceDetail(context, experience);
                         },
+                        onFavoriteTap: _handleFavoriteTap,
                       ),
                     ),
                     SliverToBoxAdapter(
@@ -260,6 +336,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         onOpenExperience: (experience) {
                           _openExperienceDetail(context, experience);
                         },
+                        onFavoriteTap: _handleFavoriteTap,
                       ),
                     ),
                     const SliverToBoxAdapter(
@@ -270,8 +347,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
               ),
             ),
           ),
-          bottomNavigationBar: const CustomerBottomNavigation(
-            currentItem: CustomerBottomNavItem.explore,
+          bottomNavigationBar: CustomerBottomNavigation(
+            currentItem: CustomerBottomNavItem.bookings,
+            authController: widget.authController,
           ),
         );
       },
@@ -392,100 +470,96 @@ class _CategoryList extends StatelessWidget {
   }
 
   @override
-Widget build(BuildContext context) {
-  return Container(
-    height: 52,
-    color: Colors.white,
-    padding: const EdgeInsets.fromLTRB(
-      20,
-      0,
-      20,
-      12,
-    ),
-    child: Center(
-      child: Row(
-      children: [
-        Expanded(
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: controller.categories.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              final category = controller.categories[index];
-              final isSelected =
-                  category == controller.selectedCategory;
+  Widget build(BuildContext context) {
+    return Container(
+      height: 52,
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        12,
+      ),
+      child: Center(
+        child: Row(
+          children: [
+            Expanded(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: controller.categories.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final category = controller.categories[index];
+                  final isSelected = category == controller.selectedCategory;
 
-              return GestureDetector(
-                onTap: () => controller.selectCategory(category),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                  ),
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF111827)
-                        : const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    category,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? Colors.white
-                          : const Color(0xFF374151),
+                  return GestureDetector(
+                    onTap: () => controller.selectCategory(category),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                      ),
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF111827)
+                            : const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        category,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF374151),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
-        GestureDetector(
-          onTap: () async {
-            final selected = await showDatePicker(
-              context: context,
-              initialDate:
-                  controller.selectedDate ?? DateTime.now(),
-              firstDate: DateTime.now(),
-              lastDate: DateTime.now().add(
-                const Duration(days: 365),
+                  );
+                },
               ),
-            );
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () async {
+                final selected = await showDatePicker(
+                  context: context,
+                  initialDate: controller.selectedDate ?? DateTime.now(),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(
+                    const Duration(days: 365),
+                  ),
+                );
 
-            if (selected != null) {
-              await controller.selectDate(selected);
-            }
-          },
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: controller.selectedDate != null
-                  ? const Color(0xFF003B73)
-                  : const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(14),
+                if (selected != null) {
+                  await controller.selectDate(selected);
+                }
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: controller.selectedDate != null
+                      ? const Color(0xFF003B73)
+                      : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  color: controller.selectedDate != null
+                      ? Colors.white
+                      : const Color(0xFF374151),
+                ),
+              ),
             ),
-            child: Icon(
-              Icons.calendar_month_rounded,
-              color: controller.selectedDate != null
-                  ? Colors.white
-                  : const Color(0xFF374151),
-            ),
-          ),
+          ],
         ),
-      ],
-    ),
-  ),
-);
-}
+      ),
+    );
+  }
 }
 
 class _DateFilterBar extends StatelessWidget {
@@ -536,6 +610,7 @@ class _ExperienceCarouselSection extends StatelessWidget {
   final List<CustomerExperienceModel> experiences;
   final ExploreController controller;
   final ValueChanged<CustomerExperienceModel> onOpenExperience;
+  final ValueChanged<CustomerExperienceModel> onFavoriteTap;
 
   const _ExperienceCarouselSection({
     required this.title,
@@ -543,6 +618,7 @@ class _ExperienceCarouselSection extends StatelessWidget {
     required this.experiences,
     required this.controller,
     required this.onOpenExperience,
+    required this.onFavoriteTap,
   });
 
   @override
@@ -573,9 +649,7 @@ class _ExperienceCarouselSection extends StatelessWidget {
                 child: _ExperienceCard(
                   experience: experience,
                   isFavorite: controller.isFavorite(experience.id),
-                  onFavoriteTap: () {
-                    controller.toggleFavorite(experience.id);
-                  },
+                  onFavoriteTap: () => onFavoriteTap(experience),
                   onTap: () => onOpenExperience(experience),
                 ),
               );
@@ -643,9 +717,9 @@ class _ExperienceCard extends StatelessWidget {
     final hasImage = experience.coverPhotoUrl != null &&
         experience.coverPhotoUrl!.trim().isNotEmpty;
 
-        debugPrint('EXPERIENCIA: ${experience.title}');
-        debugPrint('COVER PHOTO URL: ${experience.coverPhotoUrl}');
-        debugPrint('HAS IMAGE: $hasImage');
+    debugPrint('EXPERIENCIA: ${experience.title}');
+    debugPrint('COVER PHOTO URL: ${experience.coverPhotoUrl}');
+    debugPrint('HAS IMAGE: $hasImage');
 
     return GestureDetector(
       onTap: onTap,
@@ -676,7 +750,9 @@ class _ExperienceCard extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               debugPrint('ERROR IMAGEN EXPLORE: $error');
-                              debugPrint('URL IMAGEN EXPLORE: ${experience.coverPhotoUrl}');
+                              debugPrint(
+                                'URL IMAGEN EXPLORE: ${experience.coverPhotoUrl}',
+                              );
 
                               return const _ImagePlaceholder();
                             },

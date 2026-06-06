@@ -202,74 +202,58 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
     });
   }
 
-  Future<void> _save() async {
-    if (!_canSave) return;
+Future<void> _save() async {
+  if (!_canSave || _isSaving) return;
+
+  setState(() {
+    _isSaving = true;
+  });
+
+  try {
+    if (widget.isEditing) {
+      await _service.updateSchedule(
+        experienceId: widget.experienceId,
+        scheduleId: widget.scheduleToEdit!.id,
+        token: widget.authController.token,
+        date: _formatDateForApi(_singleDate!),
+        time: _formatTimeForApi(_departureTime),
+      );
+    } else if (_scheduleType == 'single') {
+      await _service.createSingleSchedule(
+        experienceId: widget.experienceId,
+        token: widget.authController.token,
+        date: _formatDateForApi(_singleDate!),
+        time: _formatTimeForApi(_departureTime),
+      );
+    } else {
+      await _service.createMultipleSchedules(
+        experienceId: widget.experienceId,
+        token: widget.authController.token,
+        startDate: _formatDateForApi(_startDate!),
+        endDate: _formatDateForApi(_endDate!),
+        time: _formatTimeForApi(_departureTime),
+        frequency: _frequency,
+        daysOfWeek: _selectedDays,
+      );
+    }
+
+    if (!mounted) return;
+
+    Navigator.of(context).pop(true);
+  } catch (error) {
+    if (!mounted) return;
 
     setState(() {
-      _isSaving = true;
+      _isSaving = false;
     });
 
-    try {
-      if (widget.isEditing) {
-        await _service.updateSchedule(
-          experienceId: widget.experienceId,
-          scheduleId: widget.scheduleToEdit!.id,
-          token: widget.authController.token,
-          date: _formatDateForApi(_singleDate!),
-          time: _formatTimeForApi(_departureTime),
-        );
-      } else if (_scheduleType == 'single') {
-        await _service.createSingleSchedule(
-          experienceId: widget.experienceId,
-          token: widget.authController.token,
-          date: _formatDateForApi(_singleDate!),
-          time: _formatTimeForApi(_departureTime),
-        );
-      } else {
-        await _service.createMultipleSchedules(
-          experienceId: widget.experienceId,
-          token: widget.authController.token,
-          startDate: _formatDateForApi(_startDate!),
-          endDate: _formatDateForApi(_endDate!),
-          time: _formatTimeForApi(_departureTime),
-          frequency: _frequency,
-          daysOfWeek: _selectedDays,
-        );
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.isEditing
-                ? 'Fecha actualizada correctamente.'
-                : _scheduleType == 'single'
-                    ? 'Fecha programada correctamente.'
-                    : 'Fechas programadas correctamente.',
-          ),
-        ),
-      );
-
-      Navigator.pop(context, true);
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
-    } finally {
-      if (!mounted) return;
-
-      setState(() {
-        _isSaving = false;
-      });
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+      ),
+    );
   }
-
-  String _formatDateForApi(DateTime date) {
+}  String _formatDateForApi(DateTime date) {
     return DateFormat('yyyy-MM-dd').format(date);
   }
 

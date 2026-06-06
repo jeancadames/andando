@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
 use App\Models\ProviderExperienceSchedule;
+use App\Models\Conversation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -115,7 +116,7 @@ class ClientBookingController extends Controller
             $unitPrice = $schedule->price ?? $schedule->experience->price;
             $totalAmount = $unitPrice * $data['guests_count'];
 
-            return ProviderBooking::create([
+            $booking = ProviderBooking::create([
                 'provider_id' => $schedule->provider_id,
                 'provider_experience_id' => $schedule->provider_experience_id,
                 'provider_experience_schedule_id' => $schedule->id,
@@ -131,6 +132,17 @@ class ClientBookingController extends Controller
                 'provider_earning' => $totalAmount,
                 'status' => 'pending',
             ]);
+
+            Conversation::query()
+                ->where('customer_user_id', $user->id)
+                ->where('provider_id', $booking->provider_id)
+                ->where('provider_experience_id', $booking->provider_experience_id)
+                ->whereNull('provider_booking_id')
+                ->update([
+                    'provider_booking_id' => $booking->id,
+                ]);
+
+            return $booking;
         });
 
         return response()->json([
@@ -334,6 +346,6 @@ class ClientBookingController extends Controller
             return $path;
         }
 
-        return url('/api/storage/' . ltrim($path, '/'));
+        return url('/api/public-files/' . ltrim($path, '/'));
     }
 }

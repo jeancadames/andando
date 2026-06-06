@@ -9,6 +9,10 @@ import '../../features/customer/profile/presentation/screens/edit_customer_profi
 import '../../features/customer/profile/presentation/screens/customer_profile_settings_screen.dart';
 import '../../features/customer/booking/presentation/screens/customer_bookings_screen.dart';
 import '../../features/customer/favorites/presentation/screens/customer_favorites_screen.dart';
+import '../../features/customer/chat/presentation/screens/customer_chat_list_screen.dart';
+import '../../features/customer/chat/presentation/screens/customer_chat_screen.dart';
+
+import '../../features/chat/data/models/chat_conversation_model.dart';
 
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
@@ -31,6 +35,8 @@ import '../../features/provider/onboarding/presentation/screens/provider_verific
 import '../../features/provider/profile/screens/provider_profile_screen.dart';
 import '../../features/provider/bookings/screens/provider_bookings_screen.dart';
 import '../../features/provider/analytics/screens/provider_analytics_screen.dart';
+import '../../features/provider/chat/presentation/screens/provider_chat_list_screen.dart';
+import '../../features/provider/chat/presentation/screens/provider_chat_screen.dart';
 
 import 'route_names.dart';
 
@@ -84,14 +90,18 @@ class AppRouter {
         path: '/client/explore',
         name: RouteNames.clientExplore,
         builder: (context, state) {
-          return const ExploreScreen();
+          return ExploreScreen(
+            authController: _authController,
+          );
         },
       ),
       GoRoute(
         path: '/client/bookings',
         name: RouteNames.clientBookings,
         builder: (context, state) {
-          return const CustomerBookingsScreen();
+          return CustomerBookingsScreen(
+            authController: _authController,
+          );
         },
       ),
       GoRoute(
@@ -119,7 +129,9 @@ class AppRouter {
         path: '/client/favorites',
         name: RouteNames.clientFavorites,
         builder: (context, state) {
-          return const CustomerFavoritesScreen();
+          return CustomerFavoritesScreen(
+            authController: _authController,
+          );
         },
       ),
 
@@ -150,12 +162,48 @@ class AppRouter {
         path: '/customer/dashboard',
         name: RouteNames.customerDashboard,
         builder: (context, state) {
-          return const ExploreScreen();
+          return ExploreScreen(
+            authController: _authController,
+          );
         },
       ),
+      GoRoute(
+        path: '/client/messages',
+        name: RouteNames.clientMessages,
+        builder: (context, state) {
+          return CustomerChatListScreen(
+            authController: _authController,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/client/messages/:conversationId',
+        name: RouteNames.clientChatDetail,
+        builder: (context, state) {
+          final conversationId = int.tryParse(
+            state.pathParameters['conversationId'] ?? '',
+          );
 
+          final initialConversation = state.extra is ChatConversationModel
+              ? state.extra as ChatConversationModel
+              : null;
+
+          if (conversationId == null) {
+            return const _RouteErrorPlaceholder(
+              message: 'No pudimos abrir esta conversación.',
+            );
+          }
+
+          return CustomerChatScreen(
+            authController: _authController,
+            conversationId: conversationId,
+            initialConversation: initialConversation,
+          );
+        },
+      ),
       GoRoute(
         path: '/experiences/:id',
+        name: RouteNames.experienceDetail,
         builder: (context, state) {
           final experienceId = int.tryParse(
             state.pathParameters['id'] ?? '',
@@ -167,8 +215,23 @@ class AppRouter {
             );
           }
 
+          final openBookingReview =
+              state.uri.queryParameters['openBookingReview'] == '1';
+
+          final initialScheduleId = int.tryParse(
+            state.uri.queryParameters['scheduleId'] ?? '',
+          );
+
+          final initialTravelers = int.tryParse(
+            state.uri.queryParameters['travelers'] ?? '',
+          );
+
           return _PublicExperienceDetailLoader(
             experienceId: experienceId,
+            authController: _authController,
+            openBookingReview: openBookingReview,
+            initialScheduleId: initialScheduleId,
+            initialTravelers: initialTravelers,
           );
         },
       ),
@@ -370,9 +433,33 @@ class AppRouter {
         path: '/provider/messages',
         name: RouteNames.providerMessages,
         builder: (context, state) {
-          return const _SimpleProviderPlaceholder(
-            title: 'Mensajes',
-            message: 'Pantalla de mensajes pendiente.',
+          return ProviderChatListScreen(
+            authController: _authController,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/provider/messages/:conversationId',
+        name: RouteNames.providerChatDetail,
+        builder: (context, state) {
+          final conversationId = int.tryParse(
+            state.pathParameters['conversationId'] ?? '',
+          );
+
+          final initialConversation = state.extra is ChatConversationModel
+              ? state.extra as ChatConversationModel
+              : null;
+
+          if (conversationId == null) {
+            return const _RouteErrorPlaceholder(
+              message: 'No pudimos abrir esta conversación.',
+            );
+          }
+
+          return ProviderChatScreen(
+            authController: _authController,
+            conversationId: conversationId,
+            initialConversation: initialConversation,
           );
         },
       ),
@@ -484,6 +571,12 @@ class AppRouter {
 
     if (isCustomer) {
       if (isAuthRoute) {
+        final redirect = _safeRedirectPath(state);
+
+        if (redirect != null) {
+          return redirect;
+        }
+
         return '/client/explore';
       }
 
@@ -496,6 +589,12 @@ class AppRouter {
     }
 
     if (isAuthRoute) {
+      final redirect = _safeRedirectPath(state);
+
+      if (redirect != null) {
+        return redirect;
+      }
+
       return '/client/explore';
     }
 
@@ -505,6 +604,20 @@ class AppRouter {
     }
 
     return null;
+  }
+
+  String? _safeRedirectPath(GoRouterState state) {
+    final redirect = state.uri.queryParameters['redirect'];
+
+    if (redirect == null || redirect.trim().isEmpty) {
+      return null;
+    }
+
+    if (!redirect.startsWith('/') || redirect.startsWith('//')) {
+      return null;
+    }
+
+    return redirect;
   }
 
   String _normalizeUserTypeForRouter(String? userType) {
@@ -542,91 +655,103 @@ class AppRouter {
   }
 }
 
-class _PublicExperienceDetailLoader extends StatefulWidget {
-  final int experienceId;
+  class _PublicExperienceDetailLoader extends StatefulWidget {
+    final int experienceId;
+    final AuthController authController;
+    final bool openBookingReview;
+    final int? initialScheduleId;
+    final int? initialTravelers;
 
-  const _PublicExperienceDetailLoader({
-    required this.experienceId,
-  });
+    const _PublicExperienceDetailLoader({
+      required this.experienceId,
+      required this.authController,
+      required this.openBookingReview,
+      required this.initialScheduleId,
+      required this.initialTravelers,
+    });
 
-  @override
-  State<_PublicExperienceDetailLoader> createState() =>
-      _PublicExperienceDetailLoaderState();
-}
-
-class _PublicExperienceDetailLoaderState
-    extends State<_PublicExperienceDetailLoader> {
-  final ExploreController _controller = ExploreController();
-
-  bool _isLoading = true;
-  String? _errorMessage;
-  CustomerExperienceModel? _experience;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadExperience();
+    @override
+    State<_PublicExperienceDetailLoader> createState() =>
+        _PublicExperienceDetailLoaderState();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  class _PublicExperienceDetailLoaderState
+      extends State<_PublicExperienceDetailLoader> {
+    final ExploreController _controller = ExploreController();
 
-  Future<void> _loadExperience() async {
-    try {
-      final experience = await _controller.getExperienceDetail(
-        widget.experienceId,
-      );
+    bool _isLoading = true;
+    String? _errorMessage;
+    CustomerExperienceModel? _experience;
 
-      if (!mounted) return;
-
-      setState(() {
-        _experience = experience;
-        _isLoading = false;
-        _errorMessage = null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'No pudimos cargar esta experiencia.';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFF8F8F8),
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+    @override
+    void initState() {
+      super.initState();
+      _loadExperience();
     }
 
-    if (_errorMessage != null || _experience == null) {
-      return _RouteErrorPlaceholder(
-        message: _errorMessage ?? 'Experiencia no encontrada.',
-      );
+    @override
+    void dispose() {
+      _controller.dispose();
+      super.dispose();
     }
 
-    final experience = _experience!;
+    Future<void> _loadExperience() async {
+      try {
+        final experience = await _controller.getExperienceDetail(
+          widget.experienceId,
+        );
 
-    return ExperienceDetailScreen(
-      experience: experience,
-      initialIsFavorite: _controller.isFavorite(experience.id),
-      onFavoriteChanged: (isFavorite) {
-        if (_controller.isFavorite(experience.id) != isFavorite) {
-          _controller.toggleFavorite(experience.id);
-        }
-      },
-    );
+        if (!mounted) return;
+
+        setState(() {
+          _experience = experience;
+          _isLoading = false;
+          _errorMessage = null;
+        });
+      } catch (_) {
+        if (!mounted) return;
+
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'No pudimos cargar esta experiencia.';
+        });
+      }
+    }
+
+    @override
+    Widget build(BuildContext context) {
+      if (_isLoading) {
+        return const Scaffold(
+          backgroundColor: Color(0xFFF8F8F8),
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      if (_errorMessage != null || _experience == null) {
+        return _RouteErrorPlaceholder(
+          message: _errorMessage ?? 'Experiencia no encontrada.',
+        );
+      }
+
+      final experience = _experience!;
+
+      return ExperienceDetailScreen(
+        experience: experience,
+        authController: widget.authController,
+        initialIsFavorite: _controller.isFavorite(experience.id),
+        initialScheduleId: widget.initialScheduleId,
+        initialTravelers: widget.initialTravelers,
+        openBookingReview: widget.openBookingReview,
+        onFavoriteChanged: (isFavorite) {
+          if (_controller.isFavorite(experience.id) != isFavorite) {
+            _controller.toggleFavorite(experience.id);
+          }
+        },
+      );
+    }
   }
-}
 
 class _RouteErrorPlaceholder extends StatelessWidget {
   const _RouteErrorPlaceholder({

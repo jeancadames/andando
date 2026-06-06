@@ -42,9 +42,18 @@ class RouteNames {
 
   /// Crear reseña de una reserva completada.
   static const String createReview = 'createReview';
+  
+  /// Detalle público de experiencia.
+  static const String experienceDetail = 'experienceDetail';
 
   /// Reviews públicas de una experiencia.
   static const String experienceReviews = 'experienceReviews';
+
+  /// Chats del cliente
+  static const String clientMessages = 'clientMessages';
+
+  /// Chat individual del cliente
+  static const String clientChatDetail = 'clientChatDetail';
 
   /// Login legacy proveedor.
   static const String providerLogin = 'providerLogin';
@@ -85,6 +94,9 @@ class RouteNames {
 
   /// Mensajes proveedor.
   static const String providerMessages = 'providerMessages';
+
+  /// Chat de proveedor.
+  static const String providerChatDetail = 'providerChatDetail';
 
   /// Perfil proveedor.
   static const String providerProfile = 'providerProfile';

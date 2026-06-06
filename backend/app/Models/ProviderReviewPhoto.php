@@ -32,6 +32,6 @@ class ProviderReviewPhoto extends Model
             return null;
         }
 
-        return url('/api/storage/' . $this->photo_path);
+        return url('/api/public-files/' . $this->photo_path);
     }
 }

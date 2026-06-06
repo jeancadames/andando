@@ -145,4 +145,12 @@ class ProviderExperience extends Model
             'provider_experience_id'
         );
     }
+
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(
+            Conversation::class,
+            'provider_experience_id'
+        );
+    }
 }

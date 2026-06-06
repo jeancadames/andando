@@ -5,9 +5,15 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../../data/models/customer_booking_model.dart';
 import '../controllers/customer_booking_controller.dart';
+import '../../../../auth/application/auth_controller.dart';
 
 class CustomerBookingsScreen extends StatefulWidget {
-  const CustomerBookingsScreen({super.key});
+  const CustomerBookingsScreen({
+    super.key,
+    required this.authController,
+  });
+
+  final AuthController authController;
 
   @override
   State<CustomerBookingsScreen> createState() => _CustomerBookingsScreenState();
@@ -21,13 +27,25 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
 
   int selectedTab = 0;
 
+  bool get _isLoggedAsCustomer {
+    final isAuthenticated = widget.authController.isAuthenticated;
+    final userType = widget.authController.userType?.trim().toLowerCase() ?? '';
+    final token = widget.authController.token?.trim() ?? '';
+
+    return isAuthenticated &&
+        token.isNotEmpty &&
+        (userType == 'customer' || userType == 'client' || userType == 'user');
+  }
+
   @override
   void initState() {
     super.initState();
 
-    _controller.initialize().then((_) {
-      _openBookingFromQueryIfNeeded();
-    });
+    if (_isLoggedAsCustomer) {
+      _controller.initialize().then((_) {
+        _openBookingFromQueryIfNeeded();
+      });
+    }
   }
 
   @override
@@ -189,6 +207,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   }
 
   Future<void> _openBookingFromQueryIfNeeded() async {
+    if (!_isLoggedAsCustomer) return;
+
     if (!mounted || _isOpeningBookingFromQuery) return;
 
     final bookingCode =
@@ -237,6 +257,12 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     });
   }
 
+  Future<void> _refreshBookings() async {
+    if (!_isLoggedAsCustomer) return;
+
+    await _controller.loadBookings();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -246,7 +272,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
           backgroundColor: const Color(0xFFF8F8F8),
           body: SafeArea(
             child: RefreshIndicator(
-              onRefresh: _controller.loadBookings,
+              onRefresh: _refreshBookings,
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -261,7 +287,12 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                       },
                     ),
                   ),
-                  if (_controller.isLoading)
+                  if (!_isLoggedAsCustomer)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _BookingGuestState(),
+                    )
+                  else if (_controller.isLoading)
                     const SliverFillRemaining(
                       child: Center(child: CircularProgressIndicator()),
                     )
@@ -292,7 +323,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                             isCompletedTab: selectedTab == 1,
                             onDetailsTap: () => _openBookingDetails(booking),
                             onReviewTap: () => _openReviewScreen(booking),
-                            onDownloadReceiptTap: () => _downloadReceipt(booking),
+                            onDownloadReceiptTap: () =>
+                                _downloadReceipt(booking),
                           );
                         },
                       ),
@@ -301,8 +333,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
               ),
             ),
           ),
-          bottomNavigationBar: const CustomerBottomNavigation(
+          bottomNavigationBar: CustomerBottomNavigation(
             currentItem: CustomerBottomNavItem.bookings,
+            authController: widget.authController,
           ),
         );
       },
@@ -637,8 +670,8 @@ class _BookingCard extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: isCompletedTab
-                          ? onReviewTap
-                          : onDownloadReceiptTap,
+                            ? onReviewTap
+                            : onDownloadReceiptTap,
                         icon: Icon(
                           isCompletedTab
                               ? booking.hasReview
@@ -819,8 +852,14 @@ class _BookingDetailsDialog extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            _DetailRow(label: 'Fecha', value: booking.formattedDate),
-                            _DetailRow(label: 'Hora de inicio', value: booking.formattedTime),
+                            _DetailRow(
+                              label: 'Fecha',
+                              value: booking.formattedDate,
+                            ),
+                            _DetailRow(
+                              label: 'Hora de inicio',
+                              value: booking.formattedTime,
+                            ),
                             _DetailRow(
                               label: 'Duración',
                               value: booking.displayDuration,
@@ -833,7 +872,8 @@ class _BookingDetailsDialog extends StatelessWidget {
                             ),
                             _DetailRow(
                               label: 'Punto de recogida',
-                              value: booking.pickupPoint?.trim().isNotEmpty == true
+                              value: booking.pickupPoint?.trim().isNotEmpty ==
+                                      true
                                   ? booking.pickupPoint!
                                   : 'No especificado',
                               isLast: true,
@@ -918,7 +958,8 @@ class _BookingDetailsDialog extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (!booking.isCompleted && booking.status.toLowerCase() != 'cancelled') ...[
+                      if (!booking.isCompleted &&
+                          booking.status.toLowerCase() != 'cancelled') ...[
                         const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
@@ -1230,6 +1271,81 @@ class _BookingImagePlaceholder extends StatelessWidget {
   }
 }
 
+class _BookingGuestState extends StatelessWidget {
+  const _BookingGuestState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 86,
+              height: 86,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF6FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.lock_outline_rounded,
+                size: 44,
+                color: Color(0xFF003B73),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Necesitas una cuenta de cliente',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 21,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Para ver tus reservas, crea una cuenta o inicia sesión como cliente. Cuando reserves una experiencia, aparecerá aquí.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () {
+                  context.goNamed(RouteNames.login);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF003B73),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                child: const Text(
+                  'Crear cuenta o iniciar sesión',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BookingEmptyState extends StatelessWidget {
   final bool isUpcomingTab;
 
@@ -1334,4 +1450,3 @@ class _BookingErrorState extends StatelessWidget {
     );
   }
 }
-

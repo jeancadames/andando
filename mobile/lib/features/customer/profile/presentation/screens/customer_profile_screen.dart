@@ -160,8 +160,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
           body: SafeArea(
             child: _buildBody(),
           ),
-          bottomNavigationBar: const CustomerBottomNavigation(
-            currentItem: CustomerBottomNavItem.profile,
+          bottomNavigationBar: CustomerBottomNavigation(
+            currentItem: CustomerBottomNavItem.bookings,
+            authController: widget.authController,
           ),
         );
       },

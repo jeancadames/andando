@@ -52,8 +52,34 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
         !_loading;
   }
 
+  String? _safeRedirectFromQuery() {
+    final redirect = GoRouterState.of(context).uri.queryParameters['redirect'];
+
+    if (redirect == null || redirect.trim().isEmpty) {
+      return null;
+    }
+
+    if (!redirect.startsWith('/') || redirect.startsWith('//')) {
+      return null;
+    }
+
+    return redirect;
+  }
+
   void _goBackToLogin() {
-    context.goNamed(RouteNames.login);
+    final redirect = _safeRedirectFromQuery();
+
+    if (redirect == null) {
+      context.goNamed(RouteNames.login);
+      return;
+    }
+
+    context.goNamed(
+      RouteNames.login,
+      queryParameters: {
+        'redirect': redirect,
+      },
+    );
   }
 
   Future<void> _submit() async {
@@ -78,6 +104,14 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
       );
 
       if (!mounted) return;
+
+      final redirect = _safeRedirectFromQuery();
+
+      if (redirect != null) {
+        context.go(redirect);
+        return;
+      }
+
       context.goNamed(RouteNames.clientExplore);
     } catch (e) {
       if (!mounted) return;
@@ -446,7 +480,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
                         children: [
                           const Text('¿Ya tienes cuenta? '),
                           GestureDetector(
-                            onTap: () => context.goNamed(RouteNames.login),
+                            onTap: _goBackToLogin,
                             child: const Text(
                               'Inicia sesión',
                               style: TextStyle(

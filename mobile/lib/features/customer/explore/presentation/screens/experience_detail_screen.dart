@@ -7,17 +7,28 @@ import 'package:go_router/go_router.dart';
 import '../../../reviews/presentation/widgets/experience_reviews_section.dart';
 import '../../data/models/customer_experience_model.dart';
 import '../../../reservations/data/datasources/customer_booking_remote_datasource.dart';
+import '../../../../../core/router/route_names.dart';
+import '../../../../auth/application/auth_controller.dart';
+import '../../../chat/data/services/customer_chat_service.dart';
 
 class ExperienceDetailScreen extends StatefulWidget {
   final CustomerExperienceModel experience;
+  final AuthController authController;
   final bool initialIsFavorite;
+  final int? initialScheduleId;
+  final int? initialTravelers;
+  final bool openBookingReview;
   final ValueChanged<bool> onFavoriteChanged;
 
   const ExperienceDetailScreen({
     super.key,
     required this.experience,
+    required this.authController,
     required this.initialIsFavorite,
     required this.onFavoriteChanged,
+    this.initialScheduleId,
+    this.initialTravelers,
+    this.openBookingReview = false,
   });
 
   @override
@@ -37,6 +48,10 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
   late final TextEditingController _travelersController;
   late final CustomerBookingRemoteDataSource _bookingDataSource;
+
+  final CustomerChatService _chatService = CustomerChatService();
+
+  bool isOpeningChat = false;
 
   List<CustomerExperienceScheduleModel> get availableSchedules {
     return _availableSchedules;
@@ -82,6 +97,135 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     return '$unitCurrency $formatted';
   }
 
+  Future<void> _showCustomerRequiredForChatDialog() async {
+    final isProvider = _isLoggedAsProvider;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: const Text(
+            'Necesitas una cuenta de cliente',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+            ),
+          ),
+          content: Text(
+            isProvider
+                ? 'Estás conectado como afiliado. Para contactar a otro afiliado necesitas entrar con una cuenta de cliente.'
+                : 'Para comunicarte con el afiliado necesitas crear una cuenta o iniciar sesión como cliente.',
+            style: const TextStyle(
+              height: 1.4,
+              color: Color(0xFF475569),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+
+                final redirectPath = '/experiences/${widget.experience.id}';
+
+                if (isProvider) {
+                  await widget.authController.logout();
+
+                  if (!mounted) return;
+                }
+
+                context.goNamed(
+                  RouteNames.login,
+                  queryParameters: {
+                    'redirect': redirectPath,
+                  },
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF003B73),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                isProvider ? 'Cambiar a cliente' : 'Iniciar sesión',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _contactProvider() async {
+    if (isOpeningChat) return;
+
+    if (!_isLoggedAsCustomer) {
+      await _showCustomerRequiredForChatDialog();
+      return;
+    }
+
+    setState(() {
+      isOpeningChat = true;
+    });
+
+    try {
+      final conversation = await _chatService.createOrGetConversation(
+        token: widget.authController.token,
+        providerExperienceId: widget.experience.id,
+      );
+
+      if (!mounted) return;
+
+      context.push(
+        '/client/messages/${conversation.id}',
+        extra: conversation,
+      );
+    } on CustomerChatException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo abrir el chat con el afiliado.'),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        isOpeningChat = false;
+      });
+    }
+  }
+
+  void _goBackFromDetail() {
+    final navigator = Navigator.of(context);
+
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+
+    context.goNamed(RouteNames.clientExplore);
+  }
+
   String get formattedTotal {
     final formatter = NumberFormat('#,###', 'en_US');
     final formatted = formatter.format(totalPrice);
@@ -123,12 +267,149 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
     _travelersController = TextEditingController(text: travelers.toString());
     _bookingDataSource = CustomerBookingRemoteDataSource();
+
+    _restorePendingBookingSelection();
+
+    if (widget.openBookingReview) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _reserveExperience();
+      });
+    }
   }
 
   @override
   void dispose() {
     _travelersController.dispose();
     super.dispose();
+  }
+
+  bool get _isLoggedAsCustomer {
+    final isAuthenticated = widget.authController.isAuthenticated;
+    final userType = widget.authController.userType?.trim().toLowerCase() ?? '';
+    final token = widget.authController.token?.trim() ?? '';
+
+    return isAuthenticated &&
+        token.isNotEmpty &&
+        (userType == 'customer' || userType == 'client' || userType == 'user');
+  }
+
+  bool get _isLoggedAsProvider {
+    final isAuthenticated = widget.authController.isAuthenticated;
+    final userType = widget.authController.userType?.trim().toLowerCase() ?? '';
+
+    return isAuthenticated &&
+        (userType == 'provider' ||
+            userType == 'affiliate' ||
+            userType == 'afiliado');
+  }
+
+  void _restorePendingBookingSelection() {
+    final initialScheduleId = widget.initialScheduleId;
+
+    if (initialScheduleId != null) {
+      for (final schedule in _availableSchedules) {
+        if (schedule.id == initialScheduleId) {
+          selectedSchedule = schedule;
+          break;
+        }
+      }
+    }
+
+    final requestedTravelers = widget.initialTravelers;
+
+    if (requestedTravelers != null && requestedTravelers > 0) {
+      travelers = requestedTravelers.clamp(1, maxTravelers).toInt();
+      _travelersController.text = travelers.toString();
+      _travelersController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _travelersController.text.length),
+      );
+    }
+  }
+
+  Future<void> _goToAuthKeepingBookingIntent() async {
+    final schedule = selectedSchedule;
+
+    if (schedule == null) return;
+
+    final redirectPath = Uri(
+      path: '/experiences/${widget.experience.id}',
+      queryParameters: {
+        'openBookingReview': '1',
+        'scheduleId': schedule.id.toString(),
+        'travelers': travelers.toString(),
+      },
+    ).toString();
+
+    if (_isLoggedAsProvider) {
+      await widget.authController.logout();
+
+      if (!mounted) return;
+    }
+
+    context.goNamed(
+      RouteNames.login,
+      queryParameters: {
+        'redirect': redirectPath,
+      },
+    );
+  }
+
+  Future<void> _showCustomerRequiredDialog() async {
+    final isProvider = _isLoggedAsProvider;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: const Text(
+            'Necesitas una cuenta de cliente',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+            ),
+          ),
+          content: Text(
+            isProvider
+                ? 'Estás conectado como afiliado. Para reservar una experiencia necesitas entrar o crear una cuenta de cliente.'
+                : 'Para reservar esta experiencia necesitas crear una cuenta o iniciar sesión como cliente. Mantendremos la fecha y la cantidad de viajeros que seleccionaste.',
+            style: const TextStyle(
+              height: 1.4,
+              color: Color(0xFF475569),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _goToAuthKeepingBookingIntent();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF003B73),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                _isLoggedAsProvider ? 'Cambiar a cliente' : 'Crear cuenta',
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _toggleFavorite() {
@@ -213,12 +494,18 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 }
 
 Future<void> _reserveExperience() async {
+
   if (!canReserve || selectedSchedule == null) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Selecciona una fecha y cantidad válida de viajeros.'),
       ),
     );
+    return;
+  }
+
+  if (!_isLoggedAsCustomer) {
+    await _showCustomerRequiredDialog();
     return;
   }
 
@@ -337,7 +624,7 @@ Future<void> _reserveExperience() async {
                     left: 18,
                     child: _CircleButton(
                       icon: Icons.arrow_back_rounded,
-                      onTap: () => Navigator.of(context).maybePop(),
+                      onTap: _goBackFromDetail,
                     ),
                   ),
                   Positioned(
@@ -372,6 +659,8 @@ Future<void> _reserveExperience() async {
                 experience: experience,
                 rating: _currentRating,
                 reviewsCount: _currentReviewsCount,
+                isOpeningChat: isOpeningChat,
+                onContactProvider: _contactProvider,
               ),
             ),
           ),
@@ -542,11 +831,15 @@ class _MainInfoCard extends StatelessWidget {
   final CustomerExperienceModel experience;
   final double rating;
   final int reviewsCount;
+  final bool isOpeningChat;
+  final VoidCallback onContactProvider;
 
   const _MainInfoCard({
     required this.experience,
     required this.rating,
     required this.reviewsCount,
+    required this.isOpeningChat,
+    required this.onContactProvider,
   });
 
   @override
@@ -698,6 +991,86 @@ class _MainInfoCard extends StatelessWidget {
                 height: 1.45,
                 color: Color(0xFF4B5563),
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFBFDBFE),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: Color(0xFF003B73),
+                      size: 22,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '¿Tienes dudas antes de reservar?',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Comunícate con el afiliado para consultar disponibilidad, punto de encuentro, transporte o cualquier detalle de la experiencia.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: Color(0xFF475569),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: isOpeningChat ? null : onContactProvider,
+                    icon: isOpeningChat
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                            ),
+                          )
+                        : const Icon(Icons.chat_bubble_outline_rounded),
+                    label: Text(
+                      isOpeningChat ? 'Abriendo chat...' : 'Contactar afiliado',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF003B73),
+                      side: const BorderSide(
+                        color: Color(0xFF003B73),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 22),

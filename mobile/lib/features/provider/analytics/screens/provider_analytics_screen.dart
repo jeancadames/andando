@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../shared/widgets/provider_bottom_nav.dart';
+import '../../../../shared/widgets/inputs/app_select_field.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../models/provider_analytics_model.dart';
 import '../services/provider_analytics_service.dart';
@@ -302,6 +303,7 @@ class _ProviderAnalyticsScreenState extends State<ProviderAnalyticsScreen> {
       /// Por eso usamos currentIndex: -1 para no marcar ninguna opción activa.
       bottomNavigationBar: ProviderBottomNav(
         currentIndex: -1,
+        authController: widget.authController,
         onDashboard: () => _goToNamed(RouteNames.providerDashboard),
         onCatalog: () => _goToNamed(RouteNames.providerCatalog),
         onMessages: () => _goToNamed(RouteNames.providerMessages),
@@ -636,119 +638,47 @@ class _ExperienceSelector extends StatelessWidget {
   final int? selectedExperienceId;
   final ValueChanged<int?> onChanged;
 
+  static const String _allExperiencesValue = '__all_experiences__';
+
   @override
   Widget build(BuildContext context) {
-    final selectedExperience = _selectedExperience();
-    final label = selectedExperience?.title ?? 'Todas las experiencias';
+    final selectedValue = selectedExperienceId == null
+        ? _allExperiencesValue
+        : selectedExperienceId.toString();
 
-    return PopupMenuButton<int?>(
-      color: Colors.white,
-      elevation: 10,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+    final options = <AppSelectOption>[
+      const AppSelectOption(
+        value: _allExperiencesValue,
+        label: 'Todas las experiencias',
       ),
-      onSelected: onChanged,
-      itemBuilder: (context) {
-        return [
-          const PopupMenuItem<int?>(
-            value: null,
-            child: Text(
-              'Todas las experiencias',
-              style: TextStyle(
-                color: _AnalyticsColors.text,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          ...experiences.map(
-            (experience) => PopupMenuItem<int?>(
-              value: experience.id,
-              child: Text(
-                experience.title,
-                style: const TextStyle(
-                  color: _AnalyticsColors.text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ];
+      ...experiences.map(
+        (experience) => AppSelectOption(
+          value: experience.id.toString(),
+          label: experience.title,
+        ),
+      ),
+    ];
+
+    return AppSelectField(
+      label: 'Experiencia',
+      value: selectedValue,
+      showLabel: false,
+      placeholder: 'Todas las experiencias',
+      options: options,
+      prefixIcon: Icons.explore_outlined,
+      height: 46,
+      maxMenuHeight: 280,
+      onChanged: (value) {
+        if (value == null || value == _allExperiencesValue) {
+          onChanged(null);
+          return;
+        }
+
+        onChanged(int.tryParse(value));
       },
-      child: Container(
-        width: double.infinity,
-
-        /// Container no tiene propiedad minHeight.
-        ///
-        /// Para definir una altura mínima usamos BoxConstraints.
-        /// Esto significa:
-        /// - el filtro medirá al menos 42 px de alto
-        /// - pero puede crecer si el contenido lo necesita
-        constraints: const BoxConstraints(
-          minHeight: 42,
-        ),
-
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 11,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.24),
-          ),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.explore_outlined,
-              color: Colors.white,
-              size: 18,
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
     );
   }
-
-  /// Busca la experiencia seleccionada para mostrar su nombre en el filtro.
-  ///
-  /// Si selectedExperienceId es null, significa que el filtro está mostrando
-  /// todas las experiencias.
-  AnalyticsAvailableExperience? _selectedExperience() {
-    if (selectedExperienceId == null) {
-      return null;
-    }
-
-    for (final experience in experiences) {
-      if (experience.id == selectedExperienceId) {
-        return experience;
-      }
-    }
-
-    return null;
-  }
-}
-/// Aviso cuando hay pocos datos.
+}/// Aviso cuando hay pocos datos.
 ///
 /// Esto evita que el afiliado interprete como definitivo un análisis basado
 /// en pocas reservas.

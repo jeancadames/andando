@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../shared/widgets/inputs/app_select_field.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../services/provider_experience_service.dart';
 
@@ -17,6 +18,41 @@ String _durationNumberForInput(String value) {
 bool _isPositiveIntegerText(String value) {
   final number = int.tryParse(value.trim());
   return number != null && number > 0;
+}
+
+String _normalizeCancellationPolicyForInput(String value) {
+  switch (value.trim()) {
+    case 'flexible':
+      return 'free_24h';
+    case 'moderate':
+      return 'free_48h';
+    case 'strict':
+      return 'free_72h';
+    default:
+      return value.trim();
+  }
+}
+
+String _formatCurrencyAmount(double value, String currency) {
+  final prefix = currency.toUpperCase() == 'USD' ? 'US\$' : 'RD\$';
+  final rounded = value.round().toString();
+
+  final formatted = rounded.replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => ',',
+  );
+
+  return '$prefix$formatted';
+}
+
+String _formatCommissionPercentage(double rate) {
+  final percentage = rate * 100;
+
+  if (percentage == percentage.roundToDouble()) {
+    return '${percentage.round()}%';
+  }
+
+  return '${percentage.toStringAsFixed(2)}%';
 }
 
 class CreateExperienceScreen extends StatefulWidget {
@@ -44,7 +80,10 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
   int _currentStep = 1;
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _pricingSettingsLoaded = false;
   String? _error;
+
+  double _commissionRate = 0.15;
 
   final List<String> _categories = const [
     'Aventura',
@@ -109,8 +148,34 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
   void initState() {
     super.initState();
 
+    _loadPricingSettings();
+
     if (widget.isEditing) {
       _loadExperience();
+    }
+  }
+
+  Future<void> _loadPricingSettings() async {
+    try {
+      final settings = await _service.getPricingSettings(
+        token: widget.authController.token,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _commissionRate = settings.commissionRate;
+        _pricingSettingsLoaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        // Fallback seguro para que el flujo no se rompa si el endpoint falla.
+        // La fuente real sigue siendo Laravel cuando el endpoint está disponible.
+        _commissionRate = 0.15;
+        _pricingSettingsLoaded = true;
+      });
     }
   }
 
@@ -148,7 +213,9 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.included = loadedForm.included;
         _form.notIncluded = loadedForm.notIncluded;
         _form.requirements = loadedForm.requirements;
-        _form.cancellationPolicy = loadedForm.cancellationPolicy;
+        _form.cancellationPolicy = _normalizeCancellationPolicyForInput(
+          loadedForm.cancellationPolicy,
+        );
       });
     } catch (error) {
       if (!mounted) return;
@@ -213,6 +280,40 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
     setState(() {
       _form.photos.addAll(selected);
     });
+  }
+
+  Future<void> _confirmPublish() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(28),
+        ),
+      ),
+      builder: (context) {
+        return _PublishPriceConfirmationSheet(
+          price: _form.price,
+          currency: _form.currency,
+          commissionRate: _commissionRate,
+          pricingSettingsLoaded: _pricingSettingsLoaded,
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (action == 'edit_price') {
+      setState(() {
+        _currentStep = 3;
+      });
+      return;
+    }
+
+    if (action == 'publish') {
+      await _save(publish: true);
+    }
   }
 
   Future<void> _save({required bool publish}) async {
@@ -361,7 +462,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
                 ? null
                 : () {
                     if (_currentStep == 5) {
-                      _save(publish: true);
+                      _confirmPublish();
                     } else {
                       _next();
                     }
@@ -406,6 +507,8 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         return _PriceLocationStep(
           form: _form,
           provinces: _provinces,
+          commissionRate: _commissionRate,
+          pricingSettingsLoaded: _pricingSettingsLoaded,
           onChanged: () => setState(() {}),
         );
 
@@ -729,11 +832,15 @@ class _SelectedPhotoPreview extends StatelessWidget {
 class _PriceLocationStep extends StatelessWidget {
   final ProviderExperienceForm form;
   final List<String> provinces;
+  final double commissionRate;
+  final bool pricingSettingsLoaded;
   final VoidCallback onChanged;
 
   const _PriceLocationStep({
     required this.form,
     required this.provinces,
+    required this.commissionRate,
+    required this.pricingSettingsLoaded,
     required this.onChanged,
   });
 
@@ -756,6 +863,12 @@ class _PriceLocationStep extends StatelessWidget {
             form.price = double.tryParse(value) ?? 0;
             onChanged();
           },
+        ),
+        _PriceBreakdownCard(
+          price: form.price,
+          currency: form.currency,
+          commissionRate: commissionRate,
+          pricingSettingsLoaded: pricingSettingsLoaded,
         ),
         _Input(
           label: 'Punto de partida *',
@@ -784,6 +897,249 @@ class _PriceLocationStep extends StatelessWidget {
           onChanged: onChanged,
         ),
       ],
+    );
+  }
+}
+
+class _PriceBreakdownCard extends StatelessWidget {
+  final double price;
+  final String currency;
+  final double commissionRate;
+  final bool pricingSettingsLoaded;
+
+  const _PriceBreakdownCard({
+    required this.price,
+    required this.currency,
+    required this.commissionRate,
+    required this.pricingSettingsLoaded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final platformFee = price * commissionRate;
+    final providerAmount = price - platformFee;
+    final percentageLabel = _formatCommissionPercentage(commissionRate);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: primary.withOpacity(0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                color: primary,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Desglose transparente',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            pricingSettingsLoaded
+                ? 'La comisión de AndanDO es de $percentageLabel por reserva confirmada.'
+                : 'Cargando configuración de comisión...',
+            style: const TextStyle(
+              color: Colors.black54,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (price <= 0)
+            const Text(
+              'Ingresa un precio para ver cuánto recibes por persona.',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            )
+          else ...[
+            _BreakdownRow(
+              label: 'Cliente paga',
+              value: _formatCurrencyAmount(price, currency),
+              isStrong: true,
+            ),
+            const SizedBox(height: 8),
+            _BreakdownRow(
+              label: 'AndanDO recibe',
+              value: _formatCurrencyAmount(platformFee, currency),
+            ),
+            const SizedBox(height: 8),
+            _BreakdownRow(
+              label: 'Tú recibes',
+              value: _formatCurrencyAmount(providerAmount, currency),
+              isStrong: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BreakdownRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isStrong;
+
+  const _BreakdownRow({
+    required this.label,
+    required this.value,
+    this.isStrong = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: isStrong ? FontWeight.w800 : FontWeight.w500,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: isStrong ? FontWeight.w900 : FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PublishPriceConfirmationSheet extends StatelessWidget {
+  final double price;
+  final String currency;
+  final double commissionRate;
+  final bool pricingSettingsLoaded;
+
+  const _PublishPriceConfirmationSheet({
+    required this.price,
+    required this.currency,
+    required this.commissionRate,
+    required this.pricingSettingsLoaded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          18,
+          20,
+          20 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 42,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: primary.withOpacity(0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.price_check_outlined,
+                    color: primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Antes de publicar',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Confirma que este será el desglose por persona para esta experiencia.',
+              style: TextStyle(
+                color: Colors.black54,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _PriceBreakdownCard(
+              price: price,
+              currency: currency,
+              commissionRate: commissionRate,
+              pricingSettingsLoaded: pricingSettingsLoaded,
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop('edit_price');
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 13),
+                      child: Text('Modificar precio'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () {
+                      Navigator.of(context).pop('publish');
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 13),
+                      child: Text('Publicar'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1023,15 +1379,17 @@ class _RulesStep extends StatelessWidget {
           value:
               form.cancellationPolicy.isEmpty ? null : form.cancellationPolicy,
           items: const [
-            'flexible',
-            'moderate',
-            'strict',
+            'free_24h',
+            'free_48h',
+            'free_72h',
+            'free_5d',
             'no-refund',
           ],
           labels: const {
-            'flexible': 'Flexible',
-            'moderate': 'Moderada',
-            'strict': 'Estricta',
+            'free_24h': 'Cancelación gratis hasta 24 horas antes',
+            'free_48h': 'Cancelación gratis hasta 48 horas antes',
+            'free_72h': 'Cancelación gratis hasta 72 horas antes',
+            'free_5d': 'Cancelación gratis hasta 5 días antes',
             'no-refund': 'Sin reembolso',
           },
           onChanged: (value) {
@@ -1148,33 +1506,21 @@ class _DropdownInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final optionExists = value != null && items.contains(value);
-    final selectedValue = optionExists ? value : null;
+    final selectedValue = optionExists ? value! : '';
 
-    return DropdownButtonFormField<String>(
+    return AppSelectField(
+      label: label,
       value: selectedValue,
-      isExpanded: true,
-      menuMaxHeight: 320,
-      items: items
-          .map(
-            (item) => DropdownMenuItem<String>(
-              value: item,
-              child: Text(
-                labels?[item] ?? item,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          )
-          .toList(),
+      placeholder: 'Seleccionar...',
+      options: items.map((item) {
+        return AppSelectOption(
+          value: item,
+          label: labels?[item] ?? item,
+        );
+      }).toList(),
       onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
-      ),
+      height: 56,
+      maxMenuHeight: 320,
     );
   }
 }

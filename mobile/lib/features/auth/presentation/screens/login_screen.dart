@@ -175,6 +175,20 @@ class _LoginScreenState extends State<LoginScreen> {
     return userType == 'provider';
   }
 
+  String? _safeRedirectFromQuery() {
+    final redirect = GoRouterState.of(context).uri.queryParameters['redirect'];
+
+    if (redirect == null || redirect.trim().isEmpty) {
+      return null;
+    }
+
+    if (!redirect.startsWith('/') || redirect.startsWith('//')) {
+      return null;
+    }
+
+    return redirect;
+  }
+
   /// Redirige al usuario según su tipo y estado.
   ///
   /// Reglas:
@@ -192,6 +206,13 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       context.goNamed(RouteNames.providerVerificationPending);
+      return;
+    }
+
+    final redirect = _safeRedirectFromQuery();
+
+    if (redirect != null) {
+      context.go(redirect);
       return;
     }
 
@@ -261,7 +282,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Navega al registro de cliente.
   void _goToCustomerRegister() {
-    context.goNamed(RouteNames.register);
+    final redirect = _safeRedirectFromQuery();
+
+    if (redirect == null) {
+      context.goNamed(RouteNames.register);
+      return;
+    }
+
+    context.goNamed(
+      RouteNames.register,
+      queryParameters: {
+        'redirect': redirect,
+      },
+    );
   }
 
   /// Navega al registro de afiliado.

@@ -179,7 +179,7 @@ class ClientProfileController extends Controller
             'type' => $user->type,
             'avatar_path' => $user->avatar_path,
             'avatar_url' => $user->avatar_path
-                ? url('/api/storage/' . $user->avatar_path)
+                ? url('/api/public-files/' . $user->avatar_path)
                 : null,
             'birth_date' => $user->birth_date
                 ? $user->birth_date->format('Y-m-d')
