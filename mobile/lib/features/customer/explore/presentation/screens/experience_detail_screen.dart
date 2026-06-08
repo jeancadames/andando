@@ -589,8 +589,7 @@ Future<void> _reserveExperience() async {
   @override
   Widget build(BuildContext context) {
     final experience = widget.experience;
-    final hasImage = experience.coverPhotoUrl != null &&
-        experience.coverPhotoUrl!.trim().isNotEmpty;
+    final galleryPhotos = experience.galleryPhotoUrls;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
@@ -605,19 +604,14 @@ Future<void> _reserveExperience() async {
         slivers: [
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 300,
+              height: 320,
               width: double.infinity,
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: hasImage
-                        ? Image.network(
-                            experience.coverPhotoUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const _DetailImagePlaceholder(),
-                          )
-                        : const _DetailImagePlaceholder(),
+                    child: _ExperiencePhotoGallery(
+                      photos: galleryPhotos,
+                    ),
                   ),
                   Positioned(
                     top: MediaQuery.of(context).padding.top + 14,
@@ -1740,6 +1734,144 @@ class _ItineraryItem extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ExperiencePhotoGallery extends StatefulWidget {
+  final List<String> photos;
+
+  const _ExperiencePhotoGallery({
+    required this.photos,
+  });
+
+  @override
+  State<_ExperiencePhotoGallery> createState() => _ExperiencePhotoGalleryState();
+}
+
+class _ExperiencePhotoGalleryState extends State<_ExperiencePhotoGallery> {
+  final PageController _controller = PageController();
+  int _currentIndex = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _openPhotoViewer(int initialIndex) {
+    showDialog<void>(
+      context: context,
+      builder: (_) {
+        return Dialog(
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: PageController(initialPage: initialIndex),
+                itemCount: widget.photos.length,
+                itemBuilder: (_, index) {
+                  return InteractiveViewer(
+                    child: Center(
+                      child: Image.network(
+                        widget.photos[index],
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) =>
+                            const _DetailImagePlaceholder(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 12,
+                right: 16,
+                child: _CircleButton(
+                  icon: Icons.close_rounded,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.photos.isEmpty) {
+      return const _DetailImagePlaceholder();
+    }
+
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _controller,
+          itemCount: widget.photos.length,
+          onPageChanged: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          itemBuilder: (_, index) {
+            return GestureDetector(
+              onTap: () => _openPhotoViewer(index),
+              child: Image.network(
+                widget.photos[index],
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const _DetailImagePlaceholder(),
+              ),
+            );
+          },
+        ),
+
+        if (widget.photos.length > 1)
+          Positioned(
+            right: 18,
+            bottom: 18,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.55),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${_currentIndex + 1}/${widget.photos.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+
+        if (widget.photos.length > 1)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 18,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.photos.length, (index) {
+                final isActive = index == _currentIndex;
+
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: isActive ? 18 : 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(isActive ? 0.95 : 0.55),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
     );
   }
 }

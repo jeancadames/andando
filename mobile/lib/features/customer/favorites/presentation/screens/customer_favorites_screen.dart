@@ -230,7 +230,7 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
             ),
           ),
           bottomNavigationBar: CustomerBottomNavigation(
-            currentItem: CustomerBottomNavItem.bookings,
+            currentItem: CustomerBottomNavItem.favorites,
             authController: widget.authController,
           ),
         );

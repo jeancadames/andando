@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../chat/data/services/customer_chat_service.dart';
+
 import '../../../../../core/router/route_names.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/customer_bottom_navigation.dart';
@@ -26,6 +28,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   bool _isOpeningBookingFromQuery = false;
 
   int selectedTab = 0;
+
+  final CustomerChatService _chatService = CustomerChatService();
+  bool _isOpeningChat = false;
 
   bool get _isLoggedAsCustomer {
     final isAuthenticated = widget.authController.isAuthenticated;
@@ -140,6 +145,57 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
         content: Text('Comprobante descargado correctamente.'),
       ),
     );
+  }
+
+  Future<void> _contactProvider(CustomerBookingModel booking) async {
+    if (_isOpeningChat) return;
+
+    if (!_isLoggedAsCustomer) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes iniciar sesión como cliente para contactar al afiliado.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isOpeningChat = true;
+    });
+
+    try {
+      final conversation = await _chatService.createOrGetConversation(
+        token: widget.authController.token,
+        providerExperienceId: booking.experienceId,
+      );
+
+      if (!mounted) return;
+
+      context.push(
+        '/client/messages/${conversation.id}',
+        extra: conversation,
+      );
+    } on CustomerChatException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo abrir el chat con el afiliado.'),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _isOpeningChat = false;
+      });
+    }
   }
 
   Future<void> _confirmCancelBooking(CustomerBookingModel booking) async {
@@ -323,8 +379,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                             isCompletedTab: selectedTab == 1,
                             onDetailsTap: () => _openBookingDetails(booking),
                             onReviewTap: () => _openReviewScreen(booking),
-                            onDownloadReceiptTap: () =>
-                                _downloadReceipt(booking),
+                            onDownloadReceiptTap: () => _downloadReceipt(booking),
+                            onContactProviderTap: () => _contactProvider(booking),
                           );
                         },
                       ),
@@ -495,6 +551,7 @@ class _BookingCard extends StatelessWidget {
   final VoidCallback onDetailsTap;
   final VoidCallback onReviewTap;
   final VoidCallback onDownloadReceiptTap;
+  final VoidCallback onContactProviderTap;
 
   const _BookingCard({
     required this.booking,
@@ -502,6 +559,7 @@ class _BookingCard extends StatelessWidget {
     required this.onDetailsTap,
     required this.onReviewTap,
     required this.onDownloadReceiptTap,
+    required this.onContactProviderTap,
   });
 
   @override
@@ -711,7 +769,10 @@ class _BookingCard extends StatelessWidget {
                         onPressed: () {
                           if (isCompletedTab) {
                             context.push('/experiences/${booking.experienceId}');
+                            return;
                           }
+
+                          onContactProviderTap();
                         },
                         icon: Icon(
                           isCompletedTab

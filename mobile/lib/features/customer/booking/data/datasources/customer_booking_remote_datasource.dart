@@ -1,14 +1,13 @@
 import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-
 
 import '../../../../../core/config/api_config.dart';
 import '../../../../../core/constants/storage_keys.dart';
 import '../../../../../core/storage/secure_storage.dart';
 import '../models/customer_booking_model.dart';
+import 'receipt_downloader.dart';
 
 class CustomerBookingRemoteDataSource {
   CustomerBookingRemoteDataSource({
@@ -105,24 +104,10 @@ class CustomerBookingRemoteDataSource {
       throw Exception('No se pudo descargar el comprobante.');
     }
 
-    final bytes = Uint8List.fromList(response.bodyBytes);
-
-    final blob = html.Blob(
-      [bytes],
-      'application/pdf',
+    await saveReceiptPdf(
+      bytes: Uint8List.fromList(response.bodyBytes),
+      fileName: 'comprobante-reserva-$bookingId.pdf',
     );
-
-    final url = html.Url.createObjectUrlFromBlob(blob);
-
-    final anchor = html.AnchorElement(href: url)
-      ..download = 'comprobante-reserva-$bookingId.pdf'
-      ..style.display = 'none';
-
-    html.document.body?.children.add(anchor);
-    anchor.click();
-    anchor.remove();
-
-    html.Url.revokeObjectUrl(url);
-}
+  }
 
 }

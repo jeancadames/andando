@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Middleware\CorsForStorage;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\HandleCors;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -38,9 +40,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         /**
          * CORS específico para imágenes públicas servidas desde /storage.
-         *
-         * Se registra global porque /storage/{path} lo está sirviendo
-         * Laravel internamente como storage.local, no nuestra ruta manual.
          */
         $middleware->append(CorsForStorage::class);
 
@@ -52,6 +51,43 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        /**
+         * Fuerza respuestas JSON para cualquier ruta API.
+         *
+         * Esto evita errores como:
+         * Route [login] not defined
+         *
+         * cuando una ruta protegida con auth:sanctum recibe una petición
+         * sin token válido.
+         */
+        $exceptions->shouldRenderJsonWhen(function ($request, \Throwable $e) {
+            return $request->is('api/*') || $request->expectsJson();
+        });
+
+        /**
+         * Respuesta clara cuando una ruta API protegida no tiene token válido.
+         */
+        $exceptions->render(function (AuthenticationException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => 'No autenticado.',
+                ], 401);
+            }
+
+            return null;
+        });
+
+        /**
+         * Respuesta clara para rutas API no encontradas.
+         */
+        $exceptions->render(function (NotFoundHttpException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Ruta no encontrada.',
+                ], 404);
+            }
+
+            return null;
+        });
     })
     ->create();

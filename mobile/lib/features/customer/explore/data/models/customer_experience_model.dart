@@ -24,6 +24,7 @@ class CustomerExperienceModel {
   final int capacity;
   final String? cancellationPolicy;
   final bool instantConfirmation;
+  
 
   /// URL principal que se muestra en cards y detalle.
   ///
@@ -31,6 +32,7 @@ class CustomerExperienceModel {
   /// Si backend no manda portada, intentamos obtener la primera foto del array
   /// `photos`.
   final String? coverPhotoUrl;
+  final List<CustomerExperiencePhotoModel> photos;
 
   final double rating;
   final int reviewsCount;
@@ -79,6 +81,7 @@ class CustomerExperienceModel {
     required this.cancellationPolicy,
     required this.instantConfirmation,
     required this.coverPhotoUrl,
+    required this.photos,
     required this.rating,
     required this.reviewsCount,
     required this.isFavorite,
@@ -105,6 +108,7 @@ class CustomerExperienceModel {
       cancellationPolicy: json['cancellation_policy']?.toString(),
       instantConfirmation: _toBool(json['instant_confirmation']),
       coverPhotoUrl: _resolveCoverPhotoUrl(json),
+      photos: _parsePhotos(json['photos']),
       rating: _toDouble(json['rating']),
       reviewsCount: _toInt(json['reviews_count']),
       isFavorite: _toBool(json['is_favorite']),
@@ -259,6 +263,22 @@ class CustomerExperienceModel {
   /// 1. `cover_photo_url`
   /// 2. Primera foto marcada como `is_cover` dentro de `photos`
   /// 3. Primera foto disponible dentro de `photos`
+  /// 
+  List<String> get galleryPhotoUrls {
+    final urls = photos
+        .map((photo) => photo.url)
+        .where((url) => url.trim().isNotEmpty)
+        .toList();
+
+    if (urls.isEmpty &&
+        coverPhotoUrl != null &&
+        coverPhotoUrl!.trim().isNotEmpty) {
+      return [coverPhotoUrl!];
+    }
+
+    return urls;
+  }
+
   static String? _resolveCoverPhotoUrl(Map<String, dynamic> json) {
     final directCover = json['cover_photo_url']?.toString().trim();
 
@@ -441,6 +461,47 @@ class CustomerExperienceModel {
         )
         .where((item) => item.time.isNotEmpty || item.activity.isNotEmpty)
         .toList();
+  }
+
+  static List<CustomerExperiencePhotoModel> _parsePhotos(dynamic value) {
+    final decoded = _decodeIfJsonString(value);
+
+    if (decoded is! List) {
+      return [];
+    }
+
+    return decoded
+        .whereType<Map>()
+        .map(
+          (item) => CustomerExperiencePhotoModel.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .where((photo) => photo.url.trim().isNotEmpty)
+        .toList();
+  }
+}
+
+class CustomerExperiencePhotoModel {
+  final int id;
+  final String url;
+  final bool isCover;
+  final int sortOrder;
+
+  const CustomerExperiencePhotoModel({
+    required this.id,
+    required this.url,
+    required this.isCover,
+    required this.sortOrder,
+  });
+
+  factory CustomerExperiencePhotoModel.fromJson(Map<String, dynamic> json) {
+    return CustomerExperiencePhotoModel(
+      id: CustomerExperienceModel._toInt(json['id']),
+      url: json['url']?.toString() ?? '',
+      isCover: CustomerExperienceModel._toBool(json['is_cover']),
+      sortOrder: CustomerExperienceModel._toInt(json['sort_order']),
+    );
   }
 }
 

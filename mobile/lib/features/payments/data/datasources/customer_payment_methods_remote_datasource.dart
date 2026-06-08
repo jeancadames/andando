@@ -1,0 +1,209 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../../../../core/config/api_config.dart';
+import '../../../../core/constants/storage_keys.dart';
+import '../../../../core/storage/secure_storage.dart';
+import '../models/customer_payment_method_model.dart';
+import '../models/customer_payment_transaction_model.dart';
+
+/// Datasource remoto para métodos de pago del cliente.
+///
+/// Consume:
+/// - GET    /api/client/payment-methods
+/// - POST   /api/client/payment-methods
+/// - PATCH  /api/client/payment-methods/{id}/default
+/// - DELETE /api/client/payment-methods/{id}
+///
+/// IMPORTANTE:
+/// Para tokenización con Azul:
+/// - Flutter envía la tarjeta temporalmente a Laravel.
+/// - Laravel la envía a Azul Datavault.
+/// - Laravel solo guarda token + datos seguros.
+/// - AndanDO no guarda número completo ni CVV.
+class CustomerPaymentMethodsRemoteDataSource {
+  CustomerPaymentMethodsRemoteDataSource({
+    SecureStorage? secureStorage,
+    http.Client? client,
+  })  : _secureStorage = secureStorage ?? SecureStorage(),
+        _client = client ?? http.Client();
+
+  final SecureStorage _secureStorage;
+  final http.Client _client;
+
+  /// Lista las tarjetas guardadas del cliente.
+  Future<List<CustomerPaymentMethodModel>> getPaymentMethods() async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/payment-methods');
+
+    final response = await _client.get(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudieron cargar los métodos de pago.',
+      );
+    }
+
+    final data = Map<String, dynamic>.from(body['data'] ?? {});
+    final list = List<Map<String, dynamic>>.from(
+      data['payment_methods'] ?? [],
+    );
+
+    return list.map(CustomerPaymentMethodModel.fromJson).toList();
+  }
+
+  /// Lista las transacciones recientes del cliente.
+  ///
+  /// Consume:
+  /// GET /api/client/payment-transactions
+  Future<List<CustomerPaymentTransactionModel>> getPaymentTransactions() async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/payment-transactions');
+
+    final response = await _client.get(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudieron cargar las transacciones.',
+      );
+    }
+
+    final data = Map<String, dynamic>.from(body['data'] ?? {});
+    final list = List<Map<String, dynamic>>.from(
+      data['transactions'] ?? [],
+    );
+
+    return list.map(CustomerPaymentTransactionModel.fromJson).toList();
+  }
+
+  /// Tokeniza y guarda una tarjeta.
+  ///
+  /// Este método envía temporalmente:
+  /// - card_number
+  /// - cvv
+  ///
+  /// Laravel NO los guarda.
+  /// Laravel los usa únicamente para solicitar el token a Azul.
+  Future<CustomerPaymentMethodModel> createPaymentMethod({
+    required String type,
+    required String cardNumber,
+    required String holderName,
+    required int expiryMonth,
+    required int expiryYear,
+    required String cvv,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/payment-methods');
+
+    final response = await _client.post(
+      uri,
+      headers: await _headers(),
+      body: jsonEncode({
+        'type': type,
+        'card_number': cardNumber.replaceAll(RegExp(r'\D'), ''),
+        'holder_name': holderName,
+        'expiry_month': expiryMonth,
+        'expiry_year': expiryYear,
+        'cvv': cvv.replaceAll(RegExp(r'\D'), ''),
+      }),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 201) {
+      throw Exception(
+        body['message'] ?? 'No se pudo guardar la tarjeta.',
+      );
+    }
+
+    final data = Map<String, dynamic>.from(body['data'] ?? {});
+
+    return CustomerPaymentMethodModel.fromJson(
+      Map<String, dynamic>.from(data['payment_method'] ?? {}),
+    );
+  }
+
+  /// Establece una tarjeta como principal.
+  Future<CustomerPaymentMethodModel> setDefaultPaymentMethod({
+    required int paymentMethodId,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/client/payment-methods/$paymentMethodId/default',
+    );
+
+    final response = await _client.patch(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo establecer la tarjeta principal.',
+      );
+    }
+
+    final data = Map<String, dynamic>.from(body['data'] ?? {});
+
+    return CustomerPaymentMethodModel.fromJson(
+      Map<String, dynamic>.from(data['payment_method'] ?? {}),
+    );
+  }
+
+  /// Elimina una tarjeta guardada.
+  ///
+  /// Laravel intentará eliminar/desactivar el token en Azul
+  /// y luego hará soft delete local.
+  Future<void> deletePaymentMethod({
+    required int paymentMethodId,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/client/payment-methods/$paymentMethodId',
+    );
+
+    final response = await _client.delete(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo eliminar la tarjeta.',
+      );
+    }
+  }
+
+  /// Headers autenticados.
+  Future<Map<String, String>> _headers() async {
+    final token = await _secureStorage.read(StorageKeys.authToken);
+
+    return {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      if (token != null && token.trim().isNotEmpty)
+        'Authorization': 'Bearer $token',
+    };
+  }
+
+  /// Decodifica JSON de forma segura.
+  Map<String, dynamic> _decodeResponse(http.Response response) {
+    if (response.body.isEmpty) {
+      return {};
+    }
+
+    return Map<String, dynamic>.from(
+      jsonDecode(response.body),
+    );
+  }
+}

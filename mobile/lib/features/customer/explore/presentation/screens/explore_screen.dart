@@ -348,7 +348,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
           ),
           bottomNavigationBar: CustomerBottomNavigation(
-            currentItem: CustomerBottomNavItem.bookings,
+            currentItem: CustomerBottomNavItem.explore,
             authController: widget.authController,
           ),
         );

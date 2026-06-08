@@ -38,6 +38,8 @@ import '../../features/provider/analytics/screens/provider_analytics_screen.dart
 import '../../features/provider/chat/presentation/screens/provider_chat_list_screen.dart';
 import '../../features/provider/chat/presentation/screens/provider_chat_screen.dart';
 
+import '../../features/payments/presentation/screens/customer_payment_methods_screen.dart';
+
 import 'route_names.dart';
 
 class AppRouter {
@@ -155,7 +157,16 @@ class AppRouter {
         path: '/customer/profile/settings',
         name: RouteNames.customerProfileSettings,
         builder: (context, state) {
-          return const CustomerProfileSettingsScreen();
+          return CustomerProfileSettingsScreen(
+            authController: _authController,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/customer/profile/payment-methods',
+        name: 'customerPaymentMethods',
+        builder: (context, state) {
+          return const CustomerPaymentMethodsScreen();
         },
       ),
       GoRoute(

@@ -16,7 +16,9 @@ use App\Http\Controllers\Api\Provider\ProviderExperienceScheduleController;
 use App\Http\Controllers\Api\Provider\ProviderAnalyticsController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceReviewController;
 use App\Http\Controllers\Api\Provider\ProviderConversationController;
-use App\Http\Controllers\Api\Provider\ProviderPricingSettingsController;
+use App\Http\Controllers\Api\Provider\ProviderPricingSettingController;
+use App\Http\Controllers\Api\Client\ClientPaymentMethodController;
+use App\Http\Controllers\Api\Client\ClientPaymentTransactionController;
 
 use App\Http\Controllers\Api\DeviceTokenController;
 use Illuminate\Support\Facades\Route;
@@ -139,7 +141,7 @@ Route::prefix('provider')->group(function () {
         Route::get('/me', [ProviderAuthController::class, 'me']);
         Route::post('/logout', [ProviderAuthController::class, 'logout']);
 
-        Route::get('/pricing-settings', [ProviderPricingSettingsController::class, 'index']);
+        Route::get('/pricing-settings', [ProviderPricingSettingController::class, 'index']);
 
         Route::get('/dashboard', ProviderDashboardController::class);
         Route::get('/bookings/upcoming', [ProviderDashboardController::class, 'upcomingBookings']);
@@ -253,6 +255,13 @@ Route::prefix('client/explore')->group(function () {
 
         Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
         
+        Route::get('/payment-methods', [ClientPaymentMethodController::class, 'index']);
+        Route::post('/payment-methods', [ClientPaymentMethodController::class, 'store']);
+        Route::patch('/payment-methods/{paymentMethod}/default', [ClientPaymentMethodController::class, 'setDefault']);
+        Route::delete('/payment-methods/{paymentMethod}', [ClientPaymentMethodController::class, 'destroy']);
+
+        Route::get('/payment-transactions', [ClientPaymentTransactionController::class, 'index']);
+
         });
         
         /*

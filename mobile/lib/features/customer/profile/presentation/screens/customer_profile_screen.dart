@@ -161,7 +161,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
             child: _buildBody(),
           ),
           bottomNavigationBar: CustomerBottomNavigation(
-            currentItem: CustomerBottomNavItem.bookings,
+            currentItem: CustomerBottomNavItem.profile,
             authController: widget.authController,
           ),
         );
