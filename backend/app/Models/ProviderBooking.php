@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\BookingClaim;
 
 class ProviderBooking extends Model
 {
@@ -77,6 +78,14 @@ class ProviderBooking extends Model
     {
         return $this->hasOne(
             Conversation::class,
+            'provider_booking_id'
+        );
+    }
+
+    public function claim(): HasOne
+    {
+        return $this->hasOne(
+            BookingClaim::class,
             'provider_booking_id'
         );
     }

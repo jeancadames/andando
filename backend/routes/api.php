@@ -19,6 +19,8 @@ use App\Http\Controllers\Api\Provider\ProviderConversationController;
 use App\Http\Controllers\Api\Provider\ProviderPricingSettingController;
 use App\Http\Controllers\Api\Client\ClientPaymentMethodController;
 use App\Http\Controllers\Api\Client\ClientPaymentTransactionController;
+use App\Http\Controllers\Api\Client\ClientClaimController;
+use App\Http\Controllers\Api\Provider\ProviderClaimController;
 
 use App\Http\Controllers\Api\DeviceTokenController;
 use Illuminate\Support\Facades\Route;
@@ -191,6 +193,15 @@ Route::prefix('provider')->group(function () {
         Route::post('/conversations/{conversation}/read', [ProviderConversationController::class, 'markAsRead']);
         Route::post('/conversations/{conversation}/close', [ProviderConversationController::class, 'close']);
         Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
+
+        Route::get('/claims', [ProviderClaimController::class, 'index']);
+
+        Route::get('/claims/{claim}', [ProviderClaimController::class, 'show']);
+
+        Route::post(
+            '/claims/{claim}/reply',
+            [ProviderClaimController::class, 'reply']
+        );
     });
 });
 /*
@@ -231,6 +242,10 @@ Route::prefix('client/explore')->group(function () {
         Route::get('/bookings/{booking}/receipt', [ClientBookingController::class, 'receipt']);
         Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
         
+        Route::get('/claims', [ClientClaimController::class, 'index']);
+        Route::post('/claims', [ClientClaimController::class, 'store']);
+        Route::get('/claims/{claim}', [ClientClaimController::class, 'show']);
+
         Route::post('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'store']);
         Route::delete('/experiences/{experience}/favorite', [ClientFavoriteExperienceController::class, 'destroy']);
         

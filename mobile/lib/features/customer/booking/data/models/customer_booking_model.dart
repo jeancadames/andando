@@ -23,6 +23,9 @@ class CustomerBookingModel {
   final int? reviewRating;
   final String? reviewComment;
   final List<ReviewPhotoModel> reviewPhotos;
+  final bool hasClaim;
+  final int? claimId;
+  final String? claimStatus;
 
   const CustomerBookingModel({
     required this.id,
@@ -46,6 +49,9 @@ class CustomerBookingModel {
     required this.reviewRating,
     required this.reviewComment,
     required this.reviewPhotos,
+    required this.hasClaim,
+    required this.claimId,
+    required this.claimStatus,
   });
 
   factory CustomerBookingModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +78,9 @@ class CustomerBookingModel {
           ? null
           : _toInt(json['review_rating']),
       reviewComment: json['review_comment']?.toString(),
+      hasClaim: _toBool(json['has_claim']),
+      claimId: json['claim_id'] == null ? null : _toInt(json['claim_id']),
+      claimStatus: json['claim_status']?.toString(),
       reviewPhotos: (json['review_photos'] as List? ?? [])
         .map(
           (item) => ReviewPhotoModel.fromJson(

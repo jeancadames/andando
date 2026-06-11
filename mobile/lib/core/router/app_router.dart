@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/customer/claims/presentation/screens/create_claim_screen.dart';
 import '../../features/customer/reviews/presentation/screens/experience_reviews_screen.dart';
 import '../../features/customer/booking/data/models/customer_booking_model.dart';
 import '../../features/customer/reviews/presentation/screens/create_review_screen.dart';
@@ -127,6 +128,29 @@ class AppRouter {
           );
         },
       ),
+
+      GoRoute(
+        path: '/client/bookings/:bookingId/claim',
+        name: 'createClaim',
+        builder: (context, state) {
+          final bookingId = int.tryParse(
+            state.pathParameters['bookingId'] ?? '',
+          );
+
+          final booking = state.extra as CustomerBookingModel?;
+
+          if (bookingId == null || booking == null) {
+            return const _RouteErrorPlaceholder(
+              message: 'No pudimos abrir la pantalla de reclamo.',
+            );
+          }
+
+          return CreateClaimScreen(
+            booking: booking,
+          );
+        },
+      ),
+
       GoRoute(
         path: '/client/favorites',
         name: RouteNames.clientFavorites,

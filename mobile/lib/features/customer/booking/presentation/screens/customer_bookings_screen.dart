@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../claims/data/datasources/customer_claim_remote_datasource.dart';
+import '../../../claims/presentation/controllers/create_claim_controller.dart';
 import '../../../chat/data/services/customer_chat_service.dart';
 
 import '../../../../../core/router/route_names.dart';
@@ -122,6 +124,41 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       await _controller.loadBookings();
     }
   }
+
+  Future<void> _openClaimModal(CustomerBookingModel booking) async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return _CreateClaimBottomSheet(booking: booking);
+      },
+    );
+
+    if (!mounted) return;
+
+    if (created == true) {
+      await _controller.loadBookings();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reclamo enviado correctamente.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openClaimDetailModal(int claimId) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return _ClaimDetailBottomSheet(claimId: claimId);
+      },
+    );
+  }
+
 
   Future<void> _downloadReceipt(CustomerBookingModel booking) async {
     final success = await _controller.downloadReceipt(booking.id);
@@ -381,6 +418,14 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                             onReviewTap: () => _openReviewScreen(booking),
                             onDownloadReceiptTap: () => _downloadReceipt(booking),
                             onContactProviderTap: () => _contactProvider(booking),
+                            onClaimTap: () {
+                              if (booking.hasClaim && booking.claimId != null) {
+                                _openClaimDetailModal(booking.claimId!);
+                                return;
+                              }
+
+                              _openClaimModal(booking);
+                            },
                           );
                         },
                       ),
@@ -552,6 +597,7 @@ class _BookingCard extends StatelessWidget {
   final VoidCallback onReviewTap;
   final VoidCallback onDownloadReceiptTap;
   final VoidCallback onContactProviderTap;
+  final VoidCallback onClaimTap;
 
   const _BookingCard({
     required this.booking,
@@ -560,12 +606,19 @@ class _BookingCard extends StatelessWidget {
     required this.onReviewTap,
     required this.onDownloadReceiptTap,
     required this.onContactProviderTap,
+    required this.onClaimTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final hasImage =
         booking.coverPhotoUrl != null && booking.coverPhotoUrl!.trim().isNotEmpty;
+
+    final normalizedStatus = booking.status.toLowerCase();
+
+    final canClaim = normalizedStatus != 'cancelled';
+
+    final claimButtonLabel = booking.hasClaim ? 'Ver reclamo' : 'Reclamo';
 
     return Container(
       decoration: BoxDecoration(
@@ -723,82 +776,114 @@ class _BookingCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: isCompletedTab
-                            ? onReviewTap
-                            : onDownloadReceiptTap,
-                        icon: Icon(
-                          isCompletedTab
-                              ? booking.hasReview
-                                  ? Icons.check_circle_outline_rounded
-                                  : Icons.star_border_rounded
-                              : Icons.download_rounded,
-                          size: 18,
-                        ),
-                        label: Text(
-                          isCompletedTab
-                              ? booking.hasReview
-                                  ? 'Editar reseña'
-                                  : 'Calificar experiencia'
-                              : 'Descargar Comprobante',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isCompletedTab && booking.hasReview
-                              ? const Color(0xFFE5E7EB)
-                              : const Color(0xFF003B73),
-                          foregroundColor: isCompletedTab && booking.hasReview
-                              ? const Color(0xFF374151)
-                              : Colors.white,
-                          minimumSize: const Size(0, 48),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: isCompletedTab
+                              ? onReviewTap
+                              : onDownloadReceiptTap,
+                          icon: Icon(
+                            isCompletedTab
+                                ? booking.hasReview
+                                    ? Icons.check_circle_outline_rounded
+                                    : Icons.star_border_rounded
+                                : Icons.download_rounded,
+                            size: 18,
                           ),
-                          textStyle: const TextStyle(
-                            fontWeight: FontWeight.w900,
+                          label: Text(
+                            isCompletedTab
+                                ? booking.hasReview
+                                    ? 'Editar reseña'
+                                    : 'Calificar'
+                                : 'Comprobante',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isCompletedTab && booking.hasReview
+                                ? const Color(0xFFE5E7EB)
+                                : const Color(0xFF003B73),
+                            foregroundColor: isCompletedTab && booking.hasReview
+                                ? const Color(0xFF374151)
+                                : Colors.white,
+                            minimumSize: const Size(0, 48),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          if (isCompletedTab) {
-                            context.push('/experiences/${booking.experienceId}');
-                            return;
-                          }
 
-                          onContactProviderTap();
-                        },
-                        icon: Icon(
-                          isCompletedTab
-                              ? Icons.refresh_rounded
-                              : Icons.chat_bubble_outline_rounded,
-                          size: 17,
-                        ),
-                        label: Text(
-                          isCompletedTab ? 'Reservar otra vez' : 'Contactar',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF111827),
-                          side: BorderSide.none,
-                          backgroundColor: const Color(0xFFF3F4F6),
-                          minimumSize: const Size(0, 48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
+                      const SizedBox(width: 8),
+
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            if (isCompletedTab) {
+                              context.push(
+                                '/experiences/${booking.experienceId}',
+                              );
+                              return;
+                            }
+
+                            onContactProviderTap();
+                          },
+                          icon: Icon(
+                            isCompletedTab
+                                ? Icons.refresh_rounded
+                                : Icons.chat_bubble_outline_rounded,
+                            size: 17,
                           ),
-                          textStyle: const TextStyle(
-                            fontWeight: FontWeight.w900,
+                          label: Text(
+                            isCompletedTab
+                                ? 'Reservar'
+                                : 'Contactar',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF111827),
+                            side: BorderSide.none,
+                            backgroundColor: const Color(0xFFF3F4F6),
+                            minimumSize: const Size(0, 48),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+
+                      if (canClaim) ...[
+                        const SizedBox(width: 8),
+
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: onClaimTap,
+                            icon: Icon(
+                              booking.hasClaim
+                                  ? Icons.visibility_outlined
+                                  : Icons.report_problem_outlined,
+                              size: 17,
+                            ),
+                            label: Text(
+                              booking.hasClaim
+                                  ? 'Ver reclamo'
+                                  : 'Reclamo',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFDC2626),
+                              side: const BorderSide(
+                                color: Color(0xFFFCA5A5),
+                              ),
+                              backgroundColor: const Color(0xFFFFF1F2),
+                              minimumSize: const Size(0, 48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  )
               ],
             ),
           ),
@@ -1326,6 +1411,560 @@ class _BookingImagePlaceholder extends StatelessWidget {
           Icons.calendar_month_outlined,
           size: 54,
           color: Color(0xFF9CA3AF),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateClaimBottomSheet extends StatefulWidget {
+  const _CreateClaimBottomSheet({
+    required this.booking,
+  });
+
+  final CustomerBookingModel booking;
+
+  @override
+  State<_CreateClaimBottomSheet> createState() =>
+      _CreateClaimBottomSheetState();
+}
+
+class _CreateClaimBottomSheetState extends State<_CreateClaimBottomSheet> {
+  final CreateClaimController _controller = CreateClaimController();
+  final TextEditingController _descriptionController = TextEditingController();
+
+  final List<String> _reasons = const [
+    'El tour no fue como se describió',
+    'El guía no se presentó',
+    'Problemas de seguridad durante la experiencia',
+    'Servicio de mala calidad',
+    'Cobro incorrecto o no autorizado',
+    'Experiencia cancelada sin previo aviso',
+    'Otro motivo',
+  ];
+
+  String? _selectedReason;
+
+  bool get _canSubmit {
+    return _selectedReason != null && !_controller.isSubmitting;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitClaim() async {
+    if (!_canSubmit) return;
+
+    final success = await _controller.createClaim(
+      bookingId: widget.booking.id,
+      reason: _selectedReason!,
+      description: _descriptionController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _controller.errorMessage ?? 'No se pudo enviar el reclamo.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE5E7EB),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFF1F2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.report_problem_outlined,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Reportar problema',
+                            style: TextStyle(
+                              fontSize: 23,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF111827),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      widget.booking.experienceTitle,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Reserva ${widget.booking.bookingCode}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    const Text(
+                      'Selecciona el motivo del reclamo',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ..._reasons.map(
+                      (reason) {
+                        final selected = _selectedReason == reason;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedReason = reason;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? const Color(0xFFFFF1F2)
+                                    : const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: selected
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFFE5E7EB),
+                                  width: selected ? 1.4 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      reason,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: selected
+                                            ? FontWeight.w900
+                                            : FontWeight.w700,
+                                        color: const Color(0xFF111827),
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    selected
+                                        ? Icons.radio_button_checked_rounded
+                                        : Icons.radio_button_unchecked_rounded,
+                                    color: selected
+                                        ? const Color(0xFFDC2626)
+                                        : const Color(0xFF9CA3AF),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Detalles adicionales',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _descriptionController,
+                      maxLength: 500,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: InputDecoration(
+                        hintText: 'Opcional: describe qué ocurrió.',
+                        filled: true,
+                        fillColor: const Color(0xFFF9FAFB),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFDC2626),
+                            width: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: _canSubmit ? _submitClaim : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFFE5E7EB),
+                          disabledForegroundColor: const Color(0xFF9CA3AF),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                        child: Text(
+                          _controller.isSubmitting
+                              ? 'Enviando...'
+                              : 'Enviar reclamo',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ClaimDetailBottomSheet extends StatefulWidget {
+  const _ClaimDetailBottomSheet({
+    required this.claimId,
+  });
+
+  final int claimId;
+
+  @override
+  State<_ClaimDetailBottomSheet> createState() =>
+      _ClaimDetailBottomSheetState();
+}
+
+class _ClaimDetailBottomSheetState extends State<_ClaimDetailBottomSheet> {
+  final CustomerClaimRemoteDataSource _dataSource =
+      CustomerClaimRemoteDataSource();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+  dynamic _claim;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClaim();
+  }
+
+  Future<void> _loadClaim() async {
+    try {
+      final claim = await _dataSource.getClaim(claimId: widget.claimId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _claim = claim;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 650),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(28),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: _isLoading
+              ? const SizedBox(
+                  height: 240,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : _errorMessage != null
+                  ? SizedBox(
+                      height: 240,
+                      child: Center(
+                        child: Text(_errorMessage!),
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 44,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE5E7EB),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              Container(
+                                width: 46,
+                                height: 46,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFFF1F2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.report_problem_outlined,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Detalle del reclamo',
+                                  style: TextStyle(
+                                    fontSize: 23,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _ClaimInfoCard(
+                            title: 'Experiencia',
+                            value: _claim.experienceTitle,
+                          ),
+                          const SizedBox(height: 10),
+                          _ClaimInfoCard(
+                            title: 'Código de reserva',
+                            value: _claim.bookingCode ?? 'No disponible',
+                          ),
+                          const SizedBox(height: 10),
+                          _ClaimInfoCard(
+                            title: 'Estado',
+                            value: _claim.statusLabel,
+                          ),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Motivo',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _ClaimTextBox(text: _claim.reason),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Descripción',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _ClaimTextBox(
+                            text: _claim.description.trim().isEmpty
+                                ? 'Sin descripción adicional.'
+                                : _claim.description,
+                          ),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Respuesta del afiliado',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _ClaimTextBox(
+                            text: (_claim.providerResponse ?? '')
+                                    .trim()
+                                    .isEmpty
+                                ? 'El afiliado aún no ha respondido este reclamo.'
+                                : _claim.providerResponse!,
+                          ),
+                        ],
+                      ),
+                    ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClaimInfoCard extends StatelessWidget {
+  const _ClaimInfoCard({
+    required this.title,
+    required this.value,
+  });
+
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF6B7280),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              color: Color(0xFF111827),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClaimTextBox extends StatelessWidget {
+  const _ClaimTextBox({
+    required this.text,
+  });
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFFDE68A),
+        ),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.4,
+          color: Color(0xFF374151),
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
