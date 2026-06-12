@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -171,8 +172,6 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
       if (!mounted) return;
 
       setState(() {
-        // Fallback seguro para que el flujo no se rompa si el endpoint falla.
-        // La fuente real sigue siendo Laravel cuando el endpoint está disponible.
         _commissionRate = 0.15;
         _pricingSettingsLoaded = true;
       });
@@ -208,6 +207,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.startLocation = loadedForm.startLocation;
         _form.province = loadedForm.province;
         _form.pickupPoints = loadedForm.pickupPoints;
+        _form.mapPickupPoints = loadedForm.mapPickupPoints;
         _form.itinerary = loadedForm.itinerary;
         _form.amenities = loadedForm.amenities;
         _form.included = loadedForm.included;
@@ -250,7 +250,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         return _form.price > 0 &&
             _form.startLocation.trim().isNotEmpty &&
             _form.province.trim().isNotEmpty &&
-            _form.pickupPoints.any((item) => item.trim().isNotEmpty);
+            _form.mapPickupPoints.any((point) => point.hasValidCoordinates);
 
       case 4:
         return _form.itinerary.length >= 2 &&
@@ -316,6 +316,23 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
     }
   }
 
+  void _syncLegacyPickupPointsFromMapPoints() {
+    if (_form.mapPickupPoints.isEmpty) return;
+
+    _form.pickupPoints = _form.mapPickupPoints
+        .map((point) {
+          final name = point.name.trim();
+          final address = point.address.trim();
+
+          if (name.isNotEmpty) return name;
+          if (address.isNotEmpty) return address;
+
+          return 'Punto de recogida';
+        })
+        .where((item) => item.trim().isNotEmpty)
+        .toList();
+  }
+
   Future<void> _save({required bool publish}) async {
     setState(() {
       _isSaving = true;
@@ -323,6 +340,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
 
     try {
       _form.duration = _durationNumberForInput(_form.duration);
+      _syncLegacyPickupPointsFromMapPoints();
 
       await _service.saveExperience(
         form: _form,
@@ -509,6 +527,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
           provinces: _provinces,
           commissionRate: _commissionRate,
           pricingSettingsLoaded: _pricingSettingsLoaded,
+          token: widget.authController.token,
           onChanged: () => setState(() {}),
         );
 
@@ -834,10 +853,12 @@ class _PriceLocationStep extends StatelessWidget {
   final List<String> provinces;
   final double commissionRate;
   final bool pricingSettingsLoaded;
+  final String? token;
   final VoidCallback onChanged;
 
   const _PriceLocationStep({
     required this.form,
+    required this.token,
     required this.provinces,
     required this.commissionRate,
     required this.pricingSettingsLoaded,
@@ -848,7 +869,7 @@ class _PriceLocationStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return _StepContainer(
       title: 'Precios y ubicación',
-      subtitle: 'Define dónde inicia y cuánto cuesta.',
+      subtitle: 'Define dónde inicia y los puntos de recogida.',
       children: [
         _Input(
           label: 'Precio por persona *',
@@ -871,9 +892,9 @@ class _PriceLocationStep extends StatelessWidget {
           pricingSettingsLoaded: pricingSettingsLoaded,
         ),
         _Input(
-          label: 'Punto de partida *',
+          label: 'Punto de partida general *',
           initialValue: form.startLocation,
-          hint: 'Dirección exacta del punto de partida',
+          hint: 'Ej: Zona Colonial, Santo Domingo',
           maxLines: 3,
           prefixIcon: Icons.location_on,
           onChanged: (value) {
@@ -890,10 +911,9 @@ class _PriceLocationStep extends StatelessWidget {
             onChanged();
           },
         ),
-        _EditableStringList(
-          label: 'Puntos de recogida *',
-          items: form.pickupPoints,
-          hint: 'Ej: Agora Mall',
+        _MapPickupPointsSearchEditor(
+          token: token,
+          points: form.mapPickupPoints,
           onChanged: onChanged,
         ),
       ],
@@ -1593,6 +1613,405 @@ class _EditableStringList extends StatelessWidget {
           },
           icon: const Icon(Icons.add),
           label: const Text('Agregar más'),
+        ),
+      ],
+    );
+  }
+}
+
+class _MapPickupPointsSearchEditor extends StatefulWidget {
+  final String? token;
+  final List<ProviderExperienceMapPickupPointForm> points;
+  final VoidCallback onChanged;
+
+  const _MapPickupPointsSearchEditor({
+    required this.token,
+    required this.points,
+    required this.onChanged,
+  });
+
+  @override
+  State<_MapPickupPointsSearchEditor> createState() =>
+      _MapPickupPointsSearchEditorState();
+}
+
+class _MapPickupPointsSearchEditorState
+    extends State<_MapPickupPointsSearchEditor> {
+  final ProviderExperienceService _service = ProviderExperienceService();
+  final TextEditingController _searchController = TextEditingController();
+
+  Timer? _debounce;
+  int _requestId = 0;
+
+  bool _isSearching = false;
+  String? _error;
+  List<ProviderPlaceSearchResult> _results = [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+
+    final query = value.trim();
+
+    if (query.length < 3) {
+      setState(() {
+        _results = [];
+        _error = null;
+        _isSearching = false;
+      });
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 1000), () {
+      _searchPlaces(query);
+    });
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    final currentRequestId = ++_requestId;
+
+    setState(() {
+      _isSearching = true;
+      _error = null;
+    });
+
+    try {
+      final results = await _service.searchPlaces(
+        token: widget.token,
+        query: query,
+      );
+
+      if (!mounted || currentRequestId != _requestId) return;
+
+      setState(() {
+        _results = results;
+        _isSearching = false;
+      });
+    } catch (error) {
+      if (!mounted || currentRequestId != _requestId) return;
+
+      setState(() {
+        _results = [];
+        _isSearching = false;
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+
+    setState(() {
+      _results = [];
+      _error = null;
+      _isSearching = false;
+    });
+  }
+
+  void _addPlace(ProviderPlaceSearchResult place) {
+    final lat = place.latitude.toStringAsFixed(7);
+    final lng = place.longitude.toStringAsFixed(7);
+
+    final alreadyAdded = widget.points.any((point) {
+      return point.latitude.trim() == lat && point.longitude.trim() == lng;
+    });
+
+    if (alreadyAdded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este punto ya fue agregado.'),
+        ),
+      );
+      return;
+    }
+
+    widget.points.add(
+      ProviderExperienceMapPickupPointForm(
+        name: place.name,
+        address: place.address,
+        latitude: lat,
+        longitude: lng,
+        instructions: '',
+      ),
+    );
+
+    _clearSearch();
+    widget.onChanged();
+  }
+
+  void _removePoint(int index) {
+    widget.points.removeAt(index);
+    widget.onChanged();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPoints = widget.points.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Puntos de recogida para el cliente *',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Busca un lugar y selecciónalo. El cliente podrá abrirlo luego en Google Maps con “Cómo llegar”.',
+          style: TextStyle(
+            color: Colors.black54,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _searchController,
+          onChanged: _onSearchChanged,
+          decoration: InputDecoration(
+            labelText: 'Buscar punto de recogida',
+            hintText: 'Ej: Parque Colón, Ágora Mall, Hotel Catalonia',
+            filled: true,
+            fillColor: Colors.white,
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _isSearching
+                ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : _searchController.text.trim().isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: _clearSearch,
+                      )
+                    : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFFED7AA),
+              ),
+            ),
+            child: Text(
+              _error!,
+              style: const TextStyle(
+                color: Color(0xFF9A3412),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+        if (_results.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFE5E7EB),
+              ),
+            ),
+            child: Column(
+              children: List.generate(_results.length, (index) {
+                final place = _results[index];
+
+                return InkWell(
+                  onTap: () => _addPlace(place),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      border: index == _results.length - 1
+                          ? null
+                          : const Border(
+                              bottom: BorderSide(
+                                color: Color(0xFFE5E7EB),
+                              ),
+                            ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.place_outlined,
+                          color: Color(0xFF003B73),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                place.name.trim().isEmpty
+                                    ? 'Ubicación encontrada'
+                                    : place.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF111827),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                place.address,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  height: 1.3,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.add_circle_outline_rounded,
+                          color: Color(0xFF003B73),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        if (!hasPoints)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: const Text(
+              'Todavía no has agregado puntos de recogida.',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ...List.generate(widget.points.length, (index) {
+          final point = widget.points[index];
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFE5E7EB),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEFF6FF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.location_on_outlined,
+                        color: Color(0xFF003B73),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        point.name.trim().isEmpty
+                            ? 'Punto de recogida'
+                            : point.name.trim(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _removePoint(index),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  point.address.trim().isEmpty
+                      ? 'Dirección no especificada'
+                      : point.address.trim(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: ValueKey(
+                    'pickup_instructions_${point.latitude}_${point.longitude}_$index',
+                  ),
+                  initialValue: point.instructions,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Instrucciones para el cliente',
+                    hintText: 'Ej: Esperar frente a la entrada principal.',
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    point.instructions = value;
+                    widget.onChanged();
+                  },
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 4),
+        const Text(
+          'Búsqueda por OpenStreetMap. Verifica que el resultado seleccionado corresponda al punto correcto.',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF94A3B8),
+            height: 1.3,
+          ),
         ),
       ],
     );

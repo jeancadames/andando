@@ -658,6 +658,16 @@ Future<void> _reserveExperience() async {
               ),
             ),
           ),
+          if (experience.mapPickupPoints.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
+              child: _PickupPointsCard(
+                pickupPoints: experience.mapPickupPoints,
+                onOpenDirections: _openPickupPointDirections,
+              ),
+            ),
+          ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
@@ -816,6 +826,34 @@ Future<void> _reserveExperience() async {
     await launchUrl(
       uri,
       mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    );
+  }
+
+  Future<void> _openPickupPointDirections(
+    CustomerExperiencePickupPointModel point,
+  ) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${point.latitude},${point.longitude}',
+    );
+
+    final canOpen = await canLaunchUrl(uri);
+
+    if (!canOpen) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo abrir Google Maps.'),
+        ),
+      );
+
+      return;
+    }
+
+    await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
       webOnlyWindowName: '_blank',
     );
   }
@@ -1569,6 +1607,215 @@ class _BottomBookingBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PickupPointsCard extends StatelessWidget {
+  final List<CustomerExperiencePickupPointModel> pickupPoints;
+  final ValueChanged<CustomerExperiencePickupPointModel> onOpenDirections;
+
+  const _PickupPointsCard({
+    required this.pickupPoints,
+    required this.onOpenDirections,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.location_on_rounded,
+                color: Color(0xFF003B73),
+                size: 24,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Puntos de recogida',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'El afiliado ha indicado estos puntos para iniciar la experiencia.',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...pickupPoints.map(
+            (point) => _PickupPointItem(
+              point: point,
+              onOpenDirections: () => onOpenDirections(point),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PickupPointItem extends StatelessWidget {
+  final CustomerExperiencePickupPointModel point;
+  final VoidCallback onOpenDirections;
+
+  const _PickupPointItem({
+    required this.point,
+    required this.onOpenDirections,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final instructions = point.displayInstructions;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEFF6FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.place_outlined,
+                  color: Color(0xFF003B73),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      point.displayName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      point.displayAddress,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.35,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (instructions != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFFFDE68A),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: Color(0xFFB45309),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      instructions,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.35,
+                        color: Color(0xFF92400E),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: OutlinedButton.icon(
+              onPressed: onOpenDirections,
+              icon: const Icon(Icons.directions_rounded),
+              label: const Text('Cómo llegar'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF003B73),
+                side: const BorderSide(
+                  color: Color(0xFF003B73),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -54,6 +54,8 @@ class CustomerExperienceModel {
   /// - moneda
   final List<CustomerExperienceScheduleModel> availableSchedules;
 
+  final List<CustomerExperiencePickupPointModel> mapPickupPoints;
+
   /// Próxima fecha disponible para reservar.
   final DateTime? nextAvailableDate;
 
@@ -87,6 +89,7 @@ class CustomerExperienceModel {
     required this.isFavorite,
     required this.availableDates,
     required this.availableSchedules,
+    required this.mapPickupPoints,
     required this.nextAvailableDate,
     required this.amenities,
     required this.itinerary,
@@ -115,6 +118,9 @@ class CustomerExperienceModel {
       availableDates: _parseAvailableDates(json['available_dates']),
       availableSchedules: _parseAvailableSchedules(
         json['available_schedules'],
+      ),
+      mapPickupPoints: _parseMapPickupPoints(
+        json['map_pickup_points'],
       ),
       amenities: _parseStringList(json['amenities']),
       itinerary: _parseItinerary(json['itinerary']),
@@ -445,6 +451,26 @@ class CustomerExperienceModel {
         .toList();
   }
 
+  static List<CustomerExperiencePickupPointModel> _parseMapPickupPoints(
+    dynamic value,
+  ) {
+    final decoded = _decodeIfJsonString(value);
+
+    if (decoded == null || decoded is! List) {
+      return [];
+    }
+
+    return decoded
+        .whereType<Map>()
+        .map(
+          (item) => CustomerExperiencePickupPointModel.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .where((point) => point.hasValidCoordinates)
+        .toList();
+  }
+
   static List<CustomerExperienceItineraryItem> _parseItinerary(dynamic value) {
     final decoded = _decodeIfJsonString(value);
 
@@ -502,6 +528,78 @@ class CustomerExperiencePhotoModel {
       isCover: CustomerExperienceModel._toBool(json['is_cover']),
       sortOrder: CustomerExperienceModel._toInt(json['sort_order']),
     );
+  }
+}
+
+class CustomerExperiencePickupPointModel {
+  final int id;
+  final String? name;
+  final String? address;
+  final double latitude;
+  final double longitude;
+  final String? instructions;
+  final int sortOrder;
+
+  const CustomerExperiencePickupPointModel({
+    required this.id,
+    required this.name,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.instructions,
+    required this.sortOrder,
+  });
+
+  factory CustomerExperiencePickupPointModel.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return CustomerExperiencePickupPointModel(
+      id: CustomerExperienceModel._toInt(json['id']),
+      name: json['name']?.toString(),
+      address: json['address']?.toString(),
+      latitude: CustomerExperienceModel._toDouble(json['latitude']),
+      longitude: CustomerExperienceModel._toDouble(json['longitude']),
+      instructions: json['instructions']?.toString(),
+      sortOrder: CustomerExperienceModel._toInt(json['sort_order']),
+    );
+  }
+
+  bool get hasValidCoordinates {
+    return latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180 &&
+        !(latitude == 0 && longitude == 0);
+  }
+
+  String get displayName {
+    final cleanName = name?.trim();
+
+    if (cleanName != null && cleanName.isNotEmpty) {
+      return cleanName;
+    }
+
+    return 'Punto de recogida';
+  }
+
+  String get displayAddress {
+    final cleanAddress = address?.trim();
+
+    if (cleanAddress != null && cleanAddress.isNotEmpty) {
+      return cleanAddress;
+    }
+
+    return 'Dirección no especificada';
+  }
+
+  String? get displayInstructions {
+    final cleanInstructions = instructions?.trim();
+
+    if (cleanInstructions != null && cleanInstructions.isNotEmpty) {
+      return cleanInstructions;
+    }
+
+    return null;
   }
 }
 

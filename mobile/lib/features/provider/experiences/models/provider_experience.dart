@@ -26,6 +26,7 @@ class ProviderExperience {
   final double rating;
   final int schedulesCount;
   final String? nextAvailable;
+  final List<ProviderExperienceMapPickupPoint> mapPickupPoints;
 
   ProviderExperience({
     required this.id,
@@ -55,6 +56,7 @@ class ProviderExperience {
     required this.rating,
     required this.schedulesCount,
     required this.nextAvailable,
+    required this.mapPickupPoints,
   });
 
   factory ProviderExperience.fromJson(Map<String, dynamic> json) {
@@ -68,6 +70,7 @@ class ProviderExperience {
       province: json['province'],
       startLocation: json['start_location'],
       pickupPoints: _stringList(json['pickup_points']),
+      mapPickupPoints: _mapPickupPoints(json['map_pickup_points']),
       price: _toDouble(json['price']),
       currency: json['currency'] ?? 'DOP',
       capacity: _toInt(json['capacity']),
@@ -121,5 +124,54 @@ class ProviderExperience {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0;
     return 0;
+  }
+
+  static List<ProviderExperienceMapPickupPoint> _mapPickupPoints(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<Map>()
+          .map(
+            (item) => ProviderExperienceMapPickupPoint.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+    }
+
+    return [];
+  }
+}
+
+class ProviderExperienceMapPickupPoint {
+  final int id;
+  final String name;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String instructions;
+  final int sortOrder;
+
+  const ProviderExperienceMapPickupPoint({
+    required this.id,
+    required this.name,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.instructions,
+    required this.sortOrder,
+  });
+
+  factory ProviderExperienceMapPickupPoint.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return ProviderExperienceMapPickupPoint(
+      id: ProviderExperience._toInt(json['id']),
+      name: json['name']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      latitude: ProviderExperience._toDouble(json['latitude']),
+      longitude: ProviderExperience._toDouble(json['longitude']),
+      instructions: json['instructions']?.toString() ?? '',
+      sortOrder: ProviderExperience._toInt(json['sort_order']),
+    );
   }
 }
