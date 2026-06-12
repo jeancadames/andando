@@ -19,11 +19,12 @@ class ProviderBooking extends Model
         'customer_phone',
         'customer_email',
         'booking_date',
+        'pickup_point',
         'guests_count',
         'unit_price',
         'total_amount',
         'provider_earning',
-        'status',
+    'status',
     ];
 
     protected $casts = [

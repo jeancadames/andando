@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Client;
 
 use Barryvdh\DomPDF\Facade\Pdf;
 
+
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
@@ -53,7 +54,8 @@ class ClientBookingController extends Controller
                     'unit_price' => (float) $booking->unit_price,
                     'total_amount' => (float) $booking->total_amount,
                     'currency' => $experience?->currency ?? 'DOP',
-                    'pickup_point' => $experience?->start_location
+                    'pickup_point' => $booking->pickup_point
+                        ?? $experience?->start_location
                         ?? $experience?->location
                         ?? $experience?->province,
                     'duration' => $experience?->duration,
