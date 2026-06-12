@@ -153,4 +153,21 @@ class ProviderExperience extends Model
             'provider_experience_id'
         );
     }
+
+    /**
+     * Puntos de recogida geolocalizados para mostrar en mapa.
+     *
+     * Se usa mapPickupPoints para evitar conflicto con el campo JSON
+     * pickup_points que ya existe en el modelo.
+     */
+    public function mapPickupPoints(): HasMany
+    {
+        return $this->hasMany(
+            ProviderExperiencePickupPoint::class,
+            'provider_experience_id'
+        )
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
 }

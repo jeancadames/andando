@@ -28,7 +28,7 @@ class ProviderExperienceController extends Controller
 
         $query = ProviderExperience::query()
             ->where('provider_id', $provider->id)
-            ->with(['coverPhoto', 'photos'])
+            ->with(['coverPhoto', 'photos', 'mapPickupPoints'])
             ->withCount([
                 'schedules as schedules_count' => function ($query) {
                     $query->where('status', 'active')
@@ -102,6 +102,11 @@ class ProviderExperienceController extends Controller
 
             $this->storePhotos($request, $experience);
 
+            $this->syncMapPickupPoints(
+                $experience,
+                $validated['map_pickup_points'] ?? []
+            );
+
             if ($publishing) {
                 $this->ensurePublishable($experience->fresh(['photos']));
             }
@@ -110,7 +115,7 @@ class ProviderExperienceController extends Controller
                 'message' => $publishing
                     ? 'Experiencia publicada correctamente.'
                     : 'Borrador guardado correctamente.',
-                'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto'])),
+                'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])),
             ], 201);
         });
     }
@@ -119,7 +124,7 @@ class ProviderExperienceController extends Controller
     {
         $this->authorizeProvider($request, $experience);
 
-        $experience->load(['photos', 'coverPhoto']);
+        $experience->load(['photos', 'coverPhoto', 'mapPickupPoints']);
 
         return response()->json([
             'data' => $this->formatExperience($experience),
@@ -151,6 +156,13 @@ class ProviderExperienceController extends Controller
 
             $this->storePhotos($request, $experience);
 
+            if ($request->has('map_pickup_points')) {
+                $this->syncMapPickupPoints(
+                    $experience,
+                    $validated['map_pickup_points'] ?? []
+                );
+            }
+
             if ($publishing) {
                 $this->ensurePublishable($experience->fresh(['photos']));
             }
@@ -159,7 +171,7 @@ class ProviderExperienceController extends Controller
                 'message' => $publishing
                     ? 'Experiencia actualizada y publicada correctamente.'
                     : 'Experiencia actualizada correctamente.',
-                'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto'])),
+                'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])),
             ]);
         });
     }
@@ -183,7 +195,7 @@ class ProviderExperienceController extends Controller
 
         return response()->json([
             'message' => 'Experiencia publicada correctamente.',
-            'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto'])),
+            'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])),
         ]);
     }
 
@@ -200,7 +212,7 @@ class ProviderExperienceController extends Controller
 
         return response()->json([
             'message' => 'Experiencia pausada correctamente.',
-            'data' => $this->formatExperience($experience->fresh(['coverPhoto'])),
+            'data' => $this->formatExperience($experience->fresh(['coverPhoto', 'photos', 'mapPickupPoints'])),
         ]);
     }
 
@@ -226,7 +238,7 @@ class ProviderExperienceController extends Controller
         $requiredIfPublishing = $publishing ? 'required' : 'nullable';
 
         return $request->validate([
-            'title' => [$requiredIfPublishing, 'string', 'max:160'],
+            'title' => ['required', 'string', 'max:160'],
             'category' => [$requiredIfPublishing, 'string', 'max:80'],
             'description' => [$requiredIfPublishing, 'string'],
             'duration' => [$requiredIfPublishing, 'string', 'max:80'],
@@ -244,6 +256,13 @@ class ProviderExperienceController extends Controller
 
             'pickup_points' => [$requiredIfPublishing, 'array'],
             'pickup_points.*' => ['nullable', 'string', 'max:255'],
+
+            'map_pickup_points' => ['nullable', 'array'],
+            'map_pickup_points.*.name' => ['nullable', 'string', 'max:255'],
+            'map_pickup_points.*.address' => ['nullable', 'string', 'max:500'],
+            'map_pickup_points.*.latitude' => ['required', 'numeric', 'between:-90,90'],
+            'map_pickup_points.*.longitude' => ['required', 'numeric', 'between:-180,180'],
+            'map_pickup_points.*.instructions' => ['nullable', 'string', 'max:1000'],
 
             'itinerary' => [$requiredIfPublishing, 'array'],
             'itinerary.*.time' => ['nullable', 'string', 'max:20'],
@@ -272,7 +291,7 @@ class ProviderExperienceController extends Controller
     private function experiencePayload(array $validated): array
     {
         return [
-            'title' => $validated['title'] ?? null,
+            'title' => $validated['title'] ?? 'Borrador sin título',
             'category' => $validated['category'] ?? null,
             'description' => $validated['description'] ?? null,
             'duration' => $validated['duration'] ?? null,
@@ -396,6 +415,10 @@ class ProviderExperienceController extends Controller
 
         $displayPhoto = $coverPhoto ?? $firstPhoto;
 
+        $mapPickupPoints = $experience->relationLoaded('mapPickupPoints')
+            ? $experience->mapPickupPoints
+            : $experience->mapPickupPoints()->get();
+
         return [
             'id' => $experience->id,
             'title' => $experience->title,
@@ -406,6 +429,15 @@ class ProviderExperienceController extends Controller
             'province' => $experience->province,
             'start_location' => $experience->start_location,
             'pickup_points' => $experience->pickup_points ?? [],
+            'map_pickup_points' => $mapPickupPoints->map(fn ($point) => [
+                'id' => $point->id,
+                'name' => $point->name,
+                'address' => $point->address,
+                'latitude' => (float) $point->latitude,
+                'longitude' => (float) $point->longitude,
+                'instructions' => $point->instructions,
+                'sort_order' => (int) $point->sort_order,
+            ])->values(),
             'price' => (float) $experience->price,
             'currency' => $experience->currency,
             'capacity' => $experience->capacity,
@@ -439,5 +471,29 @@ class ProviderExperienceController extends Controller
             'schedules_count' => (int) ($experience->schedules_count ?? 0),
             'next_available' => $experience->next_available,
         ];
+    }
+
+    private function syncMapPickupPoints(ProviderExperience $experience, array $points): void
+    {
+        $experience->mapPickupPoints()->delete();
+
+        foreach ($points as $index => $point) {
+            $latitude = $point['latitude'] ?? null;
+            $longitude = $point['longitude'] ?? null;
+
+            if ($latitude === null || $longitude === null) {
+                continue;
+            }
+
+            $experience->mapPickupPoints()->create([
+                'name' => $point['name'] ?? null,
+                'address' => $point['address'] ?? null,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'instructions' => $point['instructions'] ?? null,
+                'sort_order' => $index,
+                'is_active' => true,
+            ]);
+        }
     }
 }

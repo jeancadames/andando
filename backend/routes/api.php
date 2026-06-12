@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Client\ClientClaimController;
 use App\Http\Controllers\Api\Provider\ProviderClaimController;
 
 use App\Http\Controllers\Api\DeviceTokenController;
+use App\Http\Controllers\Api\Provider\ProviderPlacesController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -162,6 +163,8 @@ Route::prefix('provider')->group(function () {
         Route::delete('/experiences/{experience}/schedules/{schedule}', [ProviderExperienceScheduleController::class, 'destroy']);
 
         Route::get('/experiences/{experience}/schedules/{schedule}/bookings',[ProviderExperienceScheduleController::class, 'bookings']);
+
+        Route::get('/places/search', [ProviderPlacesController::class, 'search']);
 
         Route::get('/analytics', ProviderAnalyticsController::class);
 

@@ -17,6 +17,7 @@ class ExploreController extends Controller
                 'coverPhoto',
                 'photos',
                 'provider',
+                'mapPickupPoints',
                 'schedules' => function ($scheduleQuery) {
                     $this->availableScheduleQuery($scheduleQuery);
                     $scheduleQuery->orderBy('starts_at');
@@ -94,6 +95,7 @@ class ExploreController extends Controller
                 'photos',
                 'coverPhoto',
                 'provider',
+                'mapPickupPoints',
                 'schedules' => function ($scheduleQuery) {
                     $this->availableScheduleQuery($scheduleQuery);
                     $scheduleQuery->orderBy('starts_at');
@@ -157,6 +159,10 @@ class ExploreController extends Controller
 
         $displayPhoto = $coverPhoto ?? $firstPhoto;
 
+        $mapPickupPoints = $experience->relationLoaded('mapPickupPoints')
+            ? $experience->mapPickupPoints
+            : $experience->mapPickupPoints()->get();
+
         $data = [
             'id' => $experience->id,
             'title' => $experience->title,
@@ -182,6 +188,15 @@ class ExploreController extends Controller
             'is_favorite' => $this->isFavoriteForCurrentUser($experience),
             'available_dates' => $this->formatAvailableDates($experience),
             'available_schedules' => $this->formatAvailableSchedules($experience),
+            'map_pickup_points' => $mapPickupPoints->map(fn ($point) => [
+                'id' => $point->id,
+                'name' => $point->name,
+                'address' => $point->address,
+                'latitude' => (float) $point->latitude,
+                'longitude' => (float) $point->longitude,
+                'instructions' => $point->instructions,
+                'sort_order' => (int) $point->sort_order,
+            ])->values(),
             'next_available_date' => $experience->schedules()
                 ->where('status', 'active')
                 ->where('starts_at', '>=', now())
