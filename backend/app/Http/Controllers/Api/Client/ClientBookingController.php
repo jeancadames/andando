@@ -53,7 +53,8 @@ class ClientBookingController extends Controller
                     'unit_price' => (float) $booking->unit_price,
                     'total_amount' => (float) $booking->total_amount,
                     'currency' => $experience?->currency ?? 'DOP',
-                    'pickup_point' => $experience?->start_location
+                    'pickup_point' => $booking->pickup_point
+                        ?? $experience?->start_location
                         ?? $experience?->location
                         ?? $experience?->province,
                     'duration' => $experience?->duration,
@@ -93,6 +94,11 @@ class ClientBookingController extends Controller
                 'integer',
                 'min:1',
             ],
+            'pickup_point' => [
+                'required',
+                'string',
+                'max:255',
+            ],
         ]);
 
         $user = $request->user();
@@ -104,6 +110,19 @@ class ClientBookingController extends Controller
                 ->where('status', 'active')
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $pickupPoints = collect($schedule->experience?->pickup_points ?? [])
+                ->map(fn ($point) => trim((string) $point))
+                ->filter()
+                ->values();
+
+            if ($pickupPoints->isEmpty()) {
+                abort(422, 'Esta experiencia no tiene puntos de recogida disponibles.');
+            }
+
+            if (! $pickupPoints->contains($data['pickup_point'])) {
+                abort(422, 'Selecciona un punto de recogida válido.');
+}
 
             $reservedGuests = ProviderBooking::query()
                 ->where('provider_experience_schedule_id', $schedule->id)
@@ -129,6 +148,7 @@ class ClientBookingController extends Controller
                 'customer_phone' => $user->phone ?? null,
                 'customer_email' => $user->email,
                 'booking_date' => $schedule->starts_at,
+                'pickup_point' => $data['pickup_point'],
                 'guests_count' => $data['guests_count'],
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
@@ -236,6 +256,16 @@ class ClientBookingController extends Controller
 
         $includedItems = $experience?->included ?? [];
 
+        $pickupPointText = $booking->pickup_point
+            ?? $experience?->start_location
+            ?? $experience?->location
+            ?? $experience?->province
+            ?? 'No especificado';
+
+        $cancellationPolicyText = $this->formatCancellationPolicy(
+            $experience?->cancellation_policy
+        );
+        
         $html = view('pdf.booking-receipt', [
             'booking' => $booking,
             'experience' => $experience,
@@ -245,6 +275,8 @@ class ClientBookingController extends Controller
             'logoPath' => file_exists($logoPath) ? $logoPath : null,
             'coverPath' => $coverPath,
             'includedItems' => is_array($includedItems) ? $includedItems : [],
+            'pickupPointText' => $pickupPointText,
+            'cancellationPolicyText' => $cancellationPolicyText,
         ])->render();
 
         $pdf = Pdf::loadHTML($html)
@@ -351,4 +383,21 @@ class ClientBookingController extends Controller
 
         return url('/api/public-files/' . ltrim($path, '/'));
     }
+
+    private function formatCancellationPolicy(?string $policy): string
+    {
+        $normalized = trim((string) $policy);
+
+        return match ($normalized) {
+            'free_24h' => 'Cancelación gratuita hasta 24 horas antes del inicio de la experiencia. Después de ese plazo, la reserva no será reembolsable salvo decisión del proveedor.',
+            'free_48h' => 'Cancelación gratuita hasta 48 horas antes del inicio de la experiencia. Después de ese plazo, la reserva no será reembolsable salvo decisión del proveedor.',
+            'free_72h' => 'Cancelación gratuita hasta 72 horas antes del inicio de la experiencia. Después de ese plazo, la reserva no será reembolsable salvo decisión del proveedor.',
+            'no_refund' => 'Esta experiencia no permite reembolsos después de confirmada la reserva, salvo cancelación realizada por el proveedor.',
+            'flexible' => 'Política flexible: puedes solicitar cancelación o cambio de fecha sujeto a disponibilidad y aprobación del proveedor.',
+            default => $normalized !== ''
+                ? $normalized
+                : 'Cancelación sujeta a las políticas del proveedor y disponibilidad de la experiencia.',
+        };
+    }
+
 }

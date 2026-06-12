@@ -56,6 +56,9 @@ class CustomerExperienceModel {
 
   final List<CustomerExperiencePickupPointModel> mapPickupPoints;
 
+   /// Puntos de recogida
+  final List<String> pickupPoints;
+
   /// Próxima fecha disponible para reservar.
   final DateTime? nextAvailableDate;
 
@@ -90,6 +93,7 @@ class CustomerExperienceModel {
     required this.availableDates,
     required this.availableSchedules,
     required this.mapPickupPoints,
+    required this.pickupPoints,
     required this.nextAvailableDate,
     required this.amenities,
     required this.itinerary,
@@ -120,6 +124,10 @@ class CustomerExperienceModel {
         json['available_schedules'],
       ),
       mapPickupPoints: _parseMapPickupPoints(
+        json['map_pickup_points'],
+      ),
+      pickupPoints: _parsePickupPointNames(
+        json['pickup_points'],
         json['map_pickup_points'],
       ),
       amenities: _parseStringList(json['amenities']),
@@ -468,6 +476,24 @@ class CustomerExperienceModel {
           ),
         )
         .where((point) => point.hasValidCoordinates)
+        .toList();
+  }
+
+  static List<String> _parsePickupPointNames(
+    dynamic pickupPointsValue,
+    dynamic mapPickupPointsValue,
+  ) {
+    final directPoints = _parseStringList(pickupPointsValue);
+
+    if (directPoints.isNotEmpty) {
+      return directPoints;
+    }
+
+    final mapPoints = _parseMapPickupPoints(mapPickupPointsValue);
+
+    return mapPoints
+        .map((point) => point.displayName)
+        .where((name) => name.trim().isNotEmpty)
         .toList();
   }
 

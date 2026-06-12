@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../reviews/presentation/widgets/experience_reviews_section.dart';
 import '../../data/models/customer_experience_model.dart';
-import '../../../reservations/data/datasources/customer_booking_remote_datasource.dart';
+import '../../../booking/data/datasources/customer_booking_remote_datasource.dart';
 import '../../../../../core/router/route_names.dart';
 import '../../../../auth/application/auth_controller.dart';
 import '../../../chat/data/services/customer_chat_service.dart';
@@ -44,6 +44,8 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   bool isReserving = false;
 
   CustomerExperienceScheduleModel? selectedSchedule;
+  String? selectedPickupPoint; 
+
   late List<CustomerExperienceScheduleModel> _availableSchedules;
 
   late final TextEditingController _travelersController;
@@ -70,9 +72,13 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   }
 
   bool get canReserve {
+    final hasRequiredPickupPoint = widget.experience.pickupPoints.isEmpty ||
+        (selectedPickupPoint != null && selectedPickupPoint!.trim().isNotEmpty);
+
     return selectedSchedule != null &&
         travelers >= 1 &&
         travelers <= maxTravelers &&
+        hasRequiredPickupPoint &&
         !isReserving;
   }
 
@@ -494,11 +500,20 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 }
 
 Future<void> _reserveExperience() async {
-
   if (!canReserve || selectedSchedule == null) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Selecciona una fecha y cantidad válida de viajeros.'),
+      ),
+    );
+    return;
+  }
+
+  if (widget.experience.pickupPoints.isNotEmpty &&
+      (selectedPickupPoint == null || selectedPickupPoint!.trim().isEmpty)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Selecciona un punto de recogida antes de reservar.'),
       ),
     );
     return;
@@ -525,9 +540,7 @@ Future<void> _reserveExperience() async {
     },
   );
 
-  if (shouldConfirm != true) {
-    return;
-  }
+  if (shouldConfirm != true) return;
 
   setState(() {
     isReserving = true;
@@ -539,6 +552,7 @@ Future<void> _reserveExperience() async {
     final booking = await _bookingDataSource.createBooking(
       scheduleId: selectedSchedule!.id,
       guestsCount: travelers,
+      pickupPoint: selectedPickupPoint ?? '',
     );
 
     _decreaseAvailableSpotsAfterBooking();
@@ -559,22 +573,17 @@ Future<void> _reserveExperience() async {
     if (goToBooking == true && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-
         context.go('/client/bookings?bookingCode=${booking.bookingCode}');
       });
     }
-  } on CustomerBookingException catch (error) {
+  } catch (error) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.message)),
-    );
-  } catch (_) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('No se pudo crear la reserva. Inténtalo nuevamente.'),
+      SnackBar(
+        content: Text(
+          error.toString().replaceFirst('Exception: ', ''),
+        ),
       ),
     );
   } finally {
@@ -653,8 +662,6 @@ Future<void> _reserveExperience() async {
                 experience: experience,
                 rating: _currentRating,
                 reviewsCount: _currentReviewsCount,
-                isOpeningChat: isOpeningChat,
-                onContactProvider: _contactProvider,
               ),
             ),
           ),
@@ -686,8 +693,15 @@ Future<void> _reserveExperience() async {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 20, 18, 130),
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
               child: _BookingCard(
+                pickupPoints: experience.pickupPoints,
+                selectedPickupPoint: selectedPickupPoint,
+                onPickupPointChanged: (value) {
+                  setState(() {
+                    selectedPickupPoint = value;
+                  });
+                },
                 availableSchedules: availableSchedules,
                 selectedSchedule: selectedSchedule,
                 travelersController: _travelersController,
@@ -701,6 +715,15 @@ Future<void> _reserveExperience() async {
                   if (parsed == null) return;
                   _updateTravelers(parsed);
                 },
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 130),
+              child: _ContactProviderCard(
+                isOpeningChat: isOpeningChat,
+                onContactProvider: _contactProvider,
               ),
             ),
           ),
@@ -863,15 +886,11 @@ class _MainInfoCard extends StatelessWidget {
   final CustomerExperienceModel experience;
   final double rating;
   final int reviewsCount;
-  final bool isOpeningChat;
-  final VoidCallback onContactProvider;
 
   const _MainInfoCard({
     required this.experience,
     required this.rating,
     required this.reviewsCount,
-    required this.isOpeningChat,
-    required this.onContactProvider,
   });
 
   @override
@@ -1025,86 +1044,6 @@ class _MainInfoCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFFBFDBFE),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      color: Color(0xFF003B73),
-                      size: 22,
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '¿Tienes dudas antes de reservar?',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Comunícate con el afiliado para consultar disponibilidad, punto de encuentro, transporte o cualquier detalle de la experiencia.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.4,
-                    color: Color(0xFF475569),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: isOpeningChat ? null : onContactProvider,
-                    icon: isOpeningChat
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                            ),
-                          )
-                        : const Icon(Icons.chat_bubble_outline_rounded),
-                    label: Text(
-                      isOpeningChat ? 'Abriendo chat...' : 'Contactar afiliado',
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF003B73),
-                      side: const BorderSide(
-                        color: Color(0xFF003B73),
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      textStyle: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 22),
           const Divider(),
           const SizedBox(height: 18),
@@ -1150,7 +1089,104 @@ class _MainInfoCard extends StatelessWidget {
   }
 }
 
+class _ContactProviderCard extends StatelessWidget {
+  final bool isOpeningChat;
+  final VoidCallback onContactProvider;
+
+  const _ContactProviderCard({
+    required this.isOpeningChat,
+    required this.onContactProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFFBFDBFE),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Color(0xFF003B73),
+                size: 22,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¿Tienes dudas antes de reservar?',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Comunícate con el afiliado para consultar disponibilidad, punto de encuentro, transporte o cualquier detalle de la experiencia.',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: isOpeningChat ? null : onContactProvider,
+              icon: isOpeningChat
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                      ),
+                    )
+                  : const Icon(Icons.chat_bubble_outline_rounded),
+              label: Text(
+                isOpeningChat ? 'Abriendo chat...' : 'Contactar afiliado',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF003B73),
+                side: const BorderSide(
+                  color: Color(0xFF003B73),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BookingCard extends StatelessWidget {
+  final List<String> pickupPoints;
+  final String? selectedPickupPoint;
+  final ValueChanged<String?> onPickupPointChanged;
+
   final List<CustomerExperienceScheduleModel> availableSchedules;
   final CustomerExperienceScheduleModel? selectedSchedule;
   final TextEditingController travelersController;
@@ -1162,6 +1198,9 @@ class _BookingCard extends StatelessWidget {
   final ValueChanged<String> onTravelersTyped;
 
   const _BookingCard({
+    required this.pickupPoints,
+    required this.selectedPickupPoint,
+    required this.onPickupPointChanged,
     required this.availableSchedules,
     required this.selectedSchedule,
     required this.travelersController,
@@ -1195,6 +1234,47 @@ class _BookingCard extends StatelessWidget {
               color: Color(0xFF111827),
             ),
           ),
+
+          if (pickupPoints.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Text(
+              'Punto de recogida',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: selectedPickupPoint,
+              isExpanded: true,
+              decoration: InputDecoration(
+                hintText: 'Selecciona dónde te recogerán',
+                filled: true,
+                fillColor: const Color(0xFFF9FAFB),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: const BorderSide(color: Color(0xFF003B73)),
+                ),
+              ),
+              items: pickupPoints.map((point) {
+                return DropdownMenuItem<String>(
+                  value: point,
+                  child: Text(point),
+                );
+              }).toList(),
+              onChanged: onPickupPointChanged,
+            ),
+          ],
           const SizedBox(height: 24),
           const Text(
             'Fecha disponible',

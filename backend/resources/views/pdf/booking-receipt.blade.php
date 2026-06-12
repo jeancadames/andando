@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        @page {
-            margin: 0;
-        }
+        @page { margin: 0; }
 
         body {
             margin: 0;
@@ -18,65 +16,65 @@
         .header {
             background: #003b73;
             color: white;
-            padding: 30px 36px 38px;
+            padding: 24px 36px 30px;
         }
 
         .logo-box {
             background: white;
-            border-radius: 18px;
-            width: 118px;
-            height: 54px;
+            border-radius: 16px;
+            width: 110px;
+            height: 48px;
             text-align: center;
-            line-height: 54px;
-            margin-bottom: 26px;
+            line-height: 48px;
+            margin-bottom: 20px;
         }
 
         .logo {
-            max-width: 92px;
-            max-height: 38px;
+            max-width: 86px;
+            max-height: 34px;
             vertical-align: middle;
         }
 
         .doc-number {
             float: right;
             text-align: right;
-            font-size: 12px;
+            font-size: 11px;
             margin-top: 4px;
         }
 
         .confirmed {
             color: #00e676;
             font-weight: bold;
-            margin-bottom: 10px;
-            font-size: 14px;
+            margin-bottom: 8px;
+            font-size: 13px;
         }
 
         h1 {
-            margin: 0 0 8px;
-            font-size: 26px;
+            margin: 0 0 6px;
+            font-size: 24px;
             letter-spacing: .4px;
         }
 
         .issued {
-            font-size: 12px;
+            font-size: 11px;
             color: #dbeafe;
         }
 
         .content {
-            padding: 24px 36px 34px;
+            padding: 20px 36px 26px;
         }
 
         .cover {
-            height: 190px;
-            border-radius: 18px;
+            height: 155px;
+            border-radius: 16px;
             overflow: hidden;
             background: #e5e7eb;
-            margin-bottom: 22px;
+            margin-bottom: 16px;
         }
 
         .cover img {
             width: 100%;
-            height: 190px;
+            height: 155px;
             object-fit: cover;
         }
 
@@ -84,24 +82,27 @@
             display: inline-block;
             background: #dc2626;
             color: white;
-            padding: 6px 10px;
+            padding: 5px 9px;
             border-radius: 999px;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: bold;
-            margin-bottom: 8px;
+            margin-bottom: 7px;
         }
 
         .experience-title {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: bold;
-            margin-bottom: 20px;
+            margin-bottom: 14px;
             color: #0f172a;
+            page-break-inside: avoid;
         }
 
         .box {
-            border-radius: 18px;
-            padding: 18px;
-            margin-bottom: 16px;
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 12px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .blue-box {
@@ -124,11 +125,11 @@
         }
 
         .section-title {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
             letter-spacing: .6px;
             color: #003b73;
-            margin-bottom: 14px;
+            margin-bottom: 10px;
             text-transform: uppercase;
         }
 
@@ -138,17 +139,17 @@
 
         .grid td {
             width: 50%;
-            padding: 6px 0;
+            padding: 5px 0;
             vertical-align: top;
         }
 
         .label {
             color: #64748b;
-            font-size: 11px;
+            font-size: 10px;
         }
 
         .value {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
             color: #0f172a;
             margin-top: 2px;
@@ -156,27 +157,28 @@
 
         .divider {
             border-top: 2px dashed #e5e7eb;
-            margin: 22px 0;
+            margin: 16px 0;
         }
 
-        .customer-row {
-            width: 100%;
+        .section-block {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
         }
 
         .avatar {
-            width: 42px;
-            height: 42px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             background: #003b73;
             color: white;
             text-align: center;
-            line-height: 42px;
+            line-height: 38px;
             font-weight: bold;
             font-size: 14px;
         }
 
         .included-item {
-            margin-bottom: 8px;
+            margin-bottom: 7px;
             color: #334155;
         }
 
@@ -189,6 +191,7 @@
         .payment-row {
             width: 100%;
             margin-bottom: 10px;
+            page-break-inside: avoid;
         }
 
         .payment-row td:last-child {
@@ -197,7 +200,7 @@
         }
 
         .total {
-            font-size: 20px;
+            font-size: 18px;
             color: #003b73;
             font-weight: bold;
         }
@@ -205,28 +208,29 @@
         .footer {
             background: #003b73;
             color: white;
-            padding: 28px 36px;
+            padding: 18px 36px;
             text-align: center;
+            page-break-inside: avoid;
         }
 
         .footer-logo-box {
             background: white;
-            border-radius: 18px;
-            width: 105px;
-            height: 48px;
+            border-radius: 14px;
+            width: 92px;
+            height: 40px;
             text-align: center;
-            line-height: 48px;
-            margin-bottom: 16px;
+            line-height: 40px;
+            margin-bottom: 10px;
         }
 
         .footer-logo {
-            max-width: 82px;
-            max-height: 34px;
+            max-width: 72px;
+            max-height: 28px;
             vertical-align: middle;
         }
 
         .small {
-            font-size: 11px;
+            font-size: 10px;
             color: #64748b;
         }
 
@@ -274,7 +278,7 @@
         {{ $experience?->title ?? 'Experiencia reservada' }}
     </div>
 
-    <div class="box blue-box">
+    <div class="box blue-box section-block">
         <div class="section-title">Detalles de la experiencia</div>
 
         <table class="grid">
@@ -310,47 +314,66 @@
         </table>
     </div>
 
-    <div class="box yellow-box">
-        <div class="section-title" style="color:#b45309;">Punto de encuentro</div>
+    <div class="box yellow-box section-block">
+        <div class="section-title" style="color:#b45309;">Punto de recogida</div>
+
         <div class="value">
-            {{ $experience?->start_location ?? $experience?->location ?? $experience?->province ?? 'No especificado' }}
+            {{ $pickupPointText }}
         </div>
-        <div class="small" style="margin-top:6px;">
-            Llega 15 minutos antes del inicio.
+
+        <div class="small" style="margin-top:6px; color:#92400e;">
+            Preséntate en este punto 15 minutos antes del inicio de la experiencia.
+        </div>
+
+        <div class="small" style="margin-top:6px; color:#92400e;">
+            Si tienes dudas sobre cómo llegar, contacta al proveedor desde la app antes de la salida.
         </div>
     </div>
 
-    <div class="divider"></div>
+    <div class="section-block">
+        <div class="divider"></div>
 
-    <div class="section-title">Código de reserva</div>
-    <div class="value" style="font-size:18px; color:#003b73;">
-        {{ $booking->booking_code }}
+        <table style="width:100%;">
+            <tr>
+                <td style="width:50%; vertical-align:top;">
+                    <div class="section-title">Código de reserva</div>
+
+                    <div class="value" style="font-size:17px; color:#003b73;">
+                        {{ $booking->booking_code }}
+                    </div>
+
+                    <div style="margin-top:9px;">
+                        <div><span class="check">✓</span> Pago verificado</div>
+                        <div><span class="check">✓</span> Confirmación instantánea</div>
+                        <div><span class="check">✓</span> Proveedor verificado</div>
+                    </div>
+                </td>
+
+                <td style="width:50%; vertical-align:top; padding-left:24px;">
+                    <div class="section-title">Titular de la reserva</div>
+
+                    <table style="width:100%;">
+                        <tr>
+                            <td style="width:46px;">
+                                <div class="avatar">
+                                    {{ strtoupper(mb_substr($booking->customer_name ?? 'C', 0, 1)) }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="value">{{ $booking->customer_name }}</div>
+                                <div class="small">{{ $booking->customer_email }}</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <div class="divider"></div>
     </div>
-    <div style="margin-top:8px;">
-        <div><span class="check">✓</span> Pago verificado</div>
-        <div><span class="check">✓</span> Confirmación instantánea</div>
-        <div><span class="check">✓</span> Proveedor verificado</div>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="section-title">Titular de la reserva</div>
-    <table class="customer-row">
-        <tr>
-            <td style="width:52px;">
-                <div class="avatar">
-                    {{ strtoupper(mb_substr($booking->customer_name ?? 'C', 0, 1)) }}
-                </div>
-            </td>
-            <td>
-                <div class="value">{{ $booking->customer_name }}</div>
-                <div class="small">{{ $booking->customer_email }}</div>
-            </td>
-        </tr>
-    </table>
 
     @if(count($includedItems) > 0)
-        <div style="margin-top:22px;">
+        <div class="section-block" style="margin-top:12px;">
             <div class="section-title">Incluido en tu experiencia</div>
 
             @foreach($includedItems as $item)
@@ -363,29 +386,31 @@
 
     <div class="divider"></div>
 
-    <div class="section-title">Resumen de pago</div>
+    <div class="section-block">
+        <div class="section-title">Resumen de pago</div>
 
-    <table class="payment-row">
-        <tr>
-            <td>
-                RD${{ number_format((float) $booking->unit_price, 2) }}
-                × {{ $booking->guests_count }}
-                {{ $booking->guests_count == 1 ? 'persona' : 'personas' }}
-            </td>
-            <td>RD${{ number_format((float) $booking->total_amount, 2) }}</td>
-        </tr>
-    </table>
+        <table class="payment-row">
+            <tr>
+                <td>
+                    RD${{ number_format((float) $booking->unit_price, 2) }}
+                    × {{ $booking->guests_count }}
+                    {{ $booking->guests_count == 1 ? 'persona' : 'personas' }}
+                </td>
+                <td>RD${{ number_format((float) $booking->total_amount, 2) }}</td>
+            </tr>
+        </table>
 
-    <div style="border-top:1px solid #e5e7eb; margin:14px 0;"></div>
+        <div style="border-top:1px solid #e5e7eb; margin:12px 0;"></div>
 
-    <table class="payment-row">
-        <tr>
-            <td><strong>Total pagado</strong></td>
-            <td class="total">RD${{ number_format((float) $booking->total_amount, 2) }}</td>
-        </tr>
-    </table>
+        <table class="payment-row">
+            <tr>
+                <td><strong>Total pagado</strong></td>
+                <td class="total">RD${{ number_format((float) $booking->total_amount, 2) }}</td>
+            </tr>
+        </table>
+    </div>
 
-    <div class="box gray-box" style="margin-top:20px;">
+    <div class="box gray-box section-block" style="margin-top:14px;">
         <div class="section-title">Proveedor de la experiencia</div>
         <div class="value">
             {{ $provider?->business_name ?? $provider?->name ?? 'Proveedor AndanDO' }}
@@ -400,16 +425,16 @@
         @endif
     </div>
 
-    <div class="box red-box">
+    <div class="box red-box section-block">
         <div class="section-title" style="color:#dc2626;">Política de cancelación</div>
         <div>
-            {{ $experience?->cancellation_policy ?? 'Cancelación sujeta a las políticas del proveedor y disponibilidad de la experiencia.' }}
+            {{ $cancellationPolicyText }}
         </div>
     </div>
 
 </div>
 
-<div class="footer">
+<div class="footer section-block">
     <div class="footer-logo-box">
         @if($logoPath)
             <img class="footer-logo" src="{{ $logoPath }}">
@@ -422,12 +447,12 @@
         Este comprobante es tu documento oficial de reserva. Preséntalo al proveedor al inicio de tu experiencia.
     </div>
 
-    <div style="margin-top:20px;">
+    <div style="margin-top:12px; font-size:11px;">
         República Dominicana<br>
         andando.com.do
     </div>
 
-    <div class="small" style="margin-top:18px;">
+    <div class="small" style="margin-top:10px;">
         © {{ now()->year }} AndanDO · {{ $booking->booking_code }}
     </div>
 </div>
