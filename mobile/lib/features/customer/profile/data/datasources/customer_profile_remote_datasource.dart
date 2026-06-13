@@ -7,6 +7,7 @@ import '../../../../../core/config/api_config.dart';
 import '../../../../../core/constants/storage_keys.dart';
 import '../../../../../core/storage/secure_storage.dart';
 import '../models/customer_profile_model.dart';
+import '../models/customer_legal_settings_model.dart';
 
 /// Datasource remoto para el perfil del cliente.
 ///
@@ -88,6 +89,29 @@ class CustomerProfileRemoteDataSource {
     return CustomerProfileUser.fromJson(
       Map<String, dynamic>.from(data['user'] ?? {}),
     );
+  }
+
+  /// Obtiene configuración legal dinámica desde backend.
+  ///
+  /// Consume:
+  /// GET /api/client/legal-settings
+  Future<CustomerLegalSettingsModel> getLegalSettings() async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/legal-settings');
+
+    final response = await _client.get(
+      uri,
+      headers: await _jsonHeaders(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo cargar la configuración legal.',
+      );
+    }
+
+    return CustomerLegalSettingsModel.fromJson(body);
   }
 
   /// Actualiza la foto de perfil del cliente.
