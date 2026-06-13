@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "jsx": "preserve",
+        "esModuleInterop": true,
+        "allowImportingTsExtensions": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "types": ["vite/client"],
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["resources/js/*"]
+        }
+    },
+    "include": [
+        "resources/js/**/*.ts",
+        "resources/js/**/*.d.ts",
+        "resources/js/**/*.vue"
+    ]
+}
