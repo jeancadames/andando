@@ -10,6 +10,8 @@ import 'package:flutter/foundation.dart';
 
 import '../models/provider_schedule_bookings_response.dart';
 
+import '../../../../core/config/api_config.dart';
+
 class ProviderPricingSettings {
   final double commissionRate;
   final double commissionPercentage;
@@ -217,7 +219,7 @@ class ProviderExperienceService {
   ///
   /// Para emulador Android:
   /// http://10.0.2.2:8000/api
-  static const String baseUrl = 'http://127.0.0.1:8000/api';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   bool _isSuccessStatus(int statusCode) {
     return statusCode >= 200 && statusCode < 300;

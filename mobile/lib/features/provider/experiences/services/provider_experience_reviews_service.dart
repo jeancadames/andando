@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../../../core/config/api_config.dart';
+
 class ProviderExperienceReviewsService {
   String get _baseUrl {
     const envUrl = String.fromEnvironment('API_BASE_URL');
@@ -12,7 +14,7 @@ class ProviderExperienceReviewsService {
     // En web usamos localhost/127.0.0.1.
     if (kIsWeb) {
       if (cleanedEnvUrl.isEmpty || cleanedEnvUrl.contains('10.0.2.2')) {
-        return 'http://127.0.0.1:8000/api';
+        return ApiConfig.baseUrl;
       }
 
       return cleanedEnvUrl;
@@ -28,7 +30,7 @@ class ProviderExperienceReviewsService {
     }
 
     // iOS simulator / desktop.
-    return 'http://127.0.0.1:8000/api';
+    return ApiConfig.baseUrl;
   }
 
   String _cleanBaseUrl(String value) {
