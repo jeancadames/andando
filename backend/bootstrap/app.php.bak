@@ -16,12 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [
-            \App\Http\Middleware\HandleInertiaRequests::class,
-        ]);
-        $middleware->redirectGuestsTo(fn () => route('admin.login'));
         /**
-         * ConfÃ­a en proxies durante desarrollo/local.
+         * Confía en proxies durante desarrollo/local.
          */
         $middleware->trustProxies(at: '*');
 
@@ -43,7 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(HandleCors::class);
 
         /**
-         * CORS especÃ­fico para imÃ¡genes pÃºblicas servidas desde /storage.
+         * CORS específico para imágenes públicas servidas desde /storage.
          */
         $middleware->append(CorsForStorage::class);
 
@@ -51,7 +47,6 @@ return Application::configure(basePath: dirname(__DIR__))
          * Alias opcional para aplicar CORS manualmente si alguna ruta lo necesita.
          */
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'storage.cors' => CorsForStorage::class,
         ]);
     })
@@ -62,15 +57,15 @@ return Application::configure(basePath: dirname(__DIR__))
          * Esto evita errores como:
          * Route [login] not defined
          *
-         * cuando una ruta protegida con auth:sanctum recibe una peticiÃ³n
-         * sin token vÃ¡lido.
+         * cuando una ruta protegida con auth:sanctum recibe una petición
+         * sin token válido.
          */
         $exceptions->shouldRenderJsonWhen(function ($request, \Throwable $e) {
             return $request->is('api/*') || $request->expectsJson();
         });
 
         /**
-         * Respuesta clara cuando una ruta API protegida no tiene token vÃ¡lido.
+         * Respuesta clara cuando una ruta API protegida no tiene token válido.
          */
         $exceptions->render(function (AuthenticationException $e, $request) {
             if ($request->is('api/*') || $request->expectsJson()) {

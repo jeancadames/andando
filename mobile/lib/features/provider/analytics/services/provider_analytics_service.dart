@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 
 import '../models/provider_analytics_model.dart';
 
+import '../../../../core/config/api_config.dart';
+
 /// Servicio encargado de consumir el endpoint de análisis del proveedor.
 ///
 /// Endpoint:
@@ -12,11 +14,10 @@ import '../models/provider_analytics_model.dart';
 /// No modifica datos.
 /// Solo consulta estadísticas reales del backend.
 class ProviderAnalyticsService {
-  ProviderAnalyticsService({
-    this.baseUrl = 'http://127.0.0.1:8000/api',
-  });
-
   final String baseUrl;
+  ProviderAnalyticsService({String? baseUrl})
+      : baseUrl = baseUrl ?? ApiConfig.baseUrl;
+
 
   /// Obtiene el analytics del afiliado.
   ///

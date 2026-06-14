@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../chat/data/models/chat_conversation_model.dart';
 import '../../../../chat/data/models/chat_message_model.dart';
 
+import '../../../../../core/config/api_config.dart';
+
 class ProviderChatService {
   String get _baseUrl {
     const envUrl = String.fromEnvironment('API_BASE_URL');
@@ -16,7 +18,7 @@ class ProviderChatService {
 
     if (kIsWeb) {
       if (cleanedEnvUrl.isEmpty || cleanedEnvUrl.contains('10.0.2.2')) {
-        return 'http://127.0.0.1:8000/api';
+        return ApiConfig.baseUrl;
       }
 
       return cleanedEnvUrl;
@@ -30,7 +32,7 @@ class ProviderChatService {
       return 'http://10.0.2.2:8000/api';
     }
 
-    return 'http://127.0.0.1:8000/api';
+    return ApiConfig.baseUrl;
   }
 
   Future<List<ChatConversationModel>> getConversations({
