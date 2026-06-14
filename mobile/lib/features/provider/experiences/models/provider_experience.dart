@@ -1,3 +1,5 @@
+import 'map_pickup_point.dart';
+
 class ProviderExperience {
   final int id;
   final String title;
@@ -7,7 +9,13 @@ class ProviderExperience {
   final String? location;
   final String? province;
   final String? startLocation;
+
+  final String? experienceAddress;
+  final double? experienceLatitude;
+  final double? experienceLongitude;
+
   final List<String> pickupPoints;
+  final List<MapPickupPoint> mapPickupPoints;
   final double price;
   final String currency;
   final int capacity;
@@ -36,7 +44,11 @@ class ProviderExperience {
     required this.location,
     required this.province,
     required this.startLocation,
+    required this.experienceAddress,
+    required this.experienceLatitude,
+    required this.experienceLongitude,
     required this.pickupPoints,
+    required this.mapPickupPoints,
     required this.price,
     required this.currency,
     required this.capacity,
@@ -67,7 +79,11 @@ class ProviderExperience {
       location: json['location'],
       province: json['province'],
       startLocation: json['start_location'],
+      experienceAddress: json['experience_address'],
+      experienceLatitude: _toNullableDouble(json['experience_latitude']),
+      experienceLongitude: _toNullableDouble(json['experience_longitude']),
       pickupPoints: _stringList(json['pickup_points']),
+      mapPickupPoints: _mapPickupPointList(json['map_pickup_points']),
       price: _toDouble(json['price']),
       currency: json['currency'] ?? 'DOP',
       capacity: _toInt(json['capacity']),
@@ -97,6 +113,19 @@ class ProviderExperience {
     return [];
   }
 
+  static List<MapPickupPoint> _mapPickupPointList(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<Map>()
+          .map((item) => MapPickupPoint.fromJson(
+                Map<String, dynamic>.from(item),
+              ))
+          .toList();
+    }
+
+    return [];
+  }
+
   static List<Map<String, dynamic>> _mapList(dynamic value) {
     if (value is List) {
       return value
@@ -121,5 +150,14 @@ class ProviderExperience {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0;
     return 0;
+  }
+
+  static double? _toNullableDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }

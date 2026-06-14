@@ -1,5 +1,11 @@
 import 'dart:typed_data';
 
+import '../models/map_pickup_point.dart';
+import '../presentation/screens/location_picker_map_screen.dart';
+
+import '../models/experience_location.dart';
+import '../presentation/screens/experience_location_picker_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -207,7 +213,11 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.currency = loadedForm.currency;
         _form.startLocation = loadedForm.startLocation;
         _form.province = loadedForm.province;
+        _form.experienceAddress = loadedForm.experienceAddress;
+        _form.experienceLatitude = loadedForm.experienceLatitude;
+        _form.experienceLongitude = loadedForm.experienceLongitude;
         _form.pickupPoints = loadedForm.pickupPoints;
+        _form.mapPickupPoints = loadedForm.mapPickupPoints;
         _form.itinerary = loadedForm.itinerary;
         _form.amenities = loadedForm.amenities;
         _form.included = loadedForm.included;
@@ -247,10 +257,20 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         return widget.isEditing || _form.photos.length >= 3;
 
       case 3:
+        final hasPickupPoint =
+            _form.pickupPoints.any((item) => item.trim().isNotEmpty) ||
+                _form.mapPickupPoints.isNotEmpty;
+
+        final hasExperienceLocation =
+            _form.experienceAddress.trim().isNotEmpty &&
+                _form.experienceLatitude != null &&
+                _form.experienceLongitude != null;
+
         return _form.price > 0 &&
             _form.startLocation.trim().isNotEmpty &&
             _form.province.trim().isNotEmpty &&
-            _form.pickupPoints.any((item) => item.trim().isNotEmpty);
+            hasPickupPoint &&
+            hasExperienceLocation;
 
       case 4:
         return _form.itinerary.length >= 2 &&
@@ -509,6 +529,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
           provinces: _provinces,
           commissionRate: _commissionRate,
           pricingSettingsLoaded: _pricingSettingsLoaded,
+          token: widget.authController.token,
           onChanged: () => setState(() {}),
         );
 
@@ -834,6 +855,7 @@ class _PriceLocationStep extends StatelessWidget {
   final List<String> provinces;
   final double commissionRate;
   final bool pricingSettingsLoaded;
+  final String? token;
   final VoidCallback onChanged;
 
   const _PriceLocationStep({
@@ -841,6 +863,7 @@ class _PriceLocationStep extends StatelessWidget {
     required this.provinces,
     required this.commissionRate,
     required this.pricingSettingsLoaded,
+    required this.token,
     required this.onChanged,
   });
 
@@ -890,12 +913,273 @@ class _PriceLocationStep extends StatelessWidget {
             onChanged();
           },
         ),
+        _ExperienceLocationSection(
+          form: form,
+          token: token,
+          onChanged: onChanged,
+        ),
+        _PickupPointsSection(
+          form: form,
+          token: token,
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _ExperienceLocationSection extends StatelessWidget {
+  final ProviderExperienceForm form;
+  final String? token;
+  final VoidCallback onChanged;
+
+  const _ExperienceLocationSection({
+    required this.form,
+    required this.token,
+    required this.onChanged,
+  });
+
+  bool get hasLocation =>
+      form.experienceAddress.trim().isNotEmpty &&
+      form.experienceLatitude != null &&
+      form.experienceLongitude != null;
+
+  Future<void> _openLocationPicker(BuildContext context) async {
+    final location = await Navigator.of(context).push<ExperienceLocation>(
+      MaterialPageRoute(
+        builder: (_) => ExperienceLocationPickerScreen(
+          token: token,
+        ),
+      ),
+    );
+
+    if (location == null) return;
+
+    form.experienceAddress = location.address;
+    form.experienceLatitude = location.latitude;
+    form.experienceLongitude = location.longitude;
+
+    onChanged();
+  }
+
+  void _clearLocation() {
+    form.experienceAddress = '';
+    form.experienceLatitude = null;
+    form.experienceLongitude = null;
+
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ubicación de la experiencia *',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Esta ubicación se usará para mostrar experiencias cerca del cliente.',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _openLocationPicker(context),
+            icon: const Icon(Icons.place_outlined),
+            label: Text(
+              hasLocation
+                  ? 'Cambiar ubicación de la experiencia'
+                  : 'Seleccionar ubicación de la experiencia',
+            ),
+          ),
+        ),
+        if (hasLocation) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFE5E7EB),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.place, color: Colors.blue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        form.experienceAddress,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${form.experienceLatitude!.toStringAsFixed(6)}, '
+                        '${form.experienceLongitude!.toStringAsFixed(6)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _clearLocation,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PickupPointsSection extends StatelessWidget {
+  final ProviderExperienceForm form;
+  final String? token;
+  final VoidCallback onChanged;
+
+  const _PickupPointsSection({
+    required this.form,
+    required this.token,
+    required this.onChanged,
+  });
+
+  Future<void> _openMapPicker(BuildContext context) async {
+    final point = await Navigator.of(context).push<MapPickupPoint>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerMapScreen(
+          token: token,
+        ),
+      ),
+    );
+
+    if (point == null) return;
+
+    form.mapPickupPoints.add(point);
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         _EditableStringList(
-          label: 'Puntos de recogida *',
+          label: 'Puntos de recogida manuales *',
           items: form.pickupPoints,
           hint: 'Ej: Agora Mall',
           onChanged: onChanged,
         ),
+
+        const SizedBox(height: 12),
+
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _openMapPicker(context),
+            icon: const Icon(Icons.map_outlined),
+            label: const Text('Seleccionar punto en mapa'),
+          ),
+        ),
+
+        if (form.mapPickupPoints.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Text(
+            'Puntos seleccionados en mapa',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+
+          ...List.generate(form.mapPickupPoints.length, (index) {
+            final point = form.mapPickupPoints[index];
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFE5E7EB),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_pin, color: Colors.red),
+                  const SizedBox(width: 8),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          point.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          point.address,
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                        ),
+                        if (point.instructions != null &&
+                            point.instructions!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            point.instructions!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  IconButton(
+                    onPressed: () {
+                      form.mapPickupPoints.removeAt(index);
+                      onChanged();
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ],
     );
   }

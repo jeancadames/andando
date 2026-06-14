@@ -8,18 +8,10 @@ use App\Models\ProviderExperiencePhoto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ProviderExperienceController extends Controller
 {
-    /**
-     * Lista experiencias reales del afiliado autenticado.
-     *
-     * Soporta:
-     * - ?status=published
-     * - ?status=draft
-     */
     public function index(Request $request): JsonResponse
     {
         $provider = $request->user();
@@ -75,15 +67,6 @@ class ProviderExperienceController extends Controller
         ]);
     }
 
-    /**
-     * Crea una experiencia.
-     *
-     * Para guardar borrador:
-     * publish=false
-     *
-     * Para crear y publicar de una vez:
-     * publish=true
-     */
     public function store(Request $request): JsonResponse
     {
         $provider = $request->user();
@@ -115,7 +98,9 @@ class ProviderExperienceController extends Controller
                 'message' => $publishing
                     ? 'Experiencia publicada correctamente.'
                     : 'Borrador guardado correctamente.',
-                'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])),
+                'data' => $this->formatExperience(
+                    $experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])
+                ),
             ], 201);
         });
     }
@@ -131,12 +116,6 @@ class ProviderExperienceController extends Controller
         ]);
     }
 
-    /**
-     * Actualiza una experiencia existente.
-     *
-     * Enviar como multipart:
-     * POST /api/provider/experiences/{id}
-     */
     public function update(Request $request, ProviderExperience $experience): JsonResponse
     {
         $this->authorizeProvider($request, $experience);
@@ -171,14 +150,13 @@ class ProviderExperienceController extends Controller
                 'message' => $publishing
                     ? 'Experiencia actualizada y publicada correctamente.'
                     : 'Experiencia actualizada correctamente.',
-                'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])),
+                'data' => $this->formatExperience(
+                    $experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])
+                ),
             ]);
         });
     }
 
-    /**
-     * Publica una experiencia ya guardada como borrador.
-     */
     public function publish(Request $request, ProviderExperience $experience): JsonResponse
     {
         $this->authorizeProvider($request, $experience);
@@ -195,13 +173,12 @@ class ProviderExperienceController extends Controller
 
         return response()->json([
             'message' => 'Experiencia publicada correctamente.',
-            'data' => $this->formatExperience($experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])),
+            'data' => $this->formatExperience(
+                $experience->fresh(['photos', 'coverPhoto', 'mapPickupPoints'])
+            ),
         ]);
     }
 
-    /**
-     * Pausa una experiencia publicada.
-     */
     public function pause(Request $request, ProviderExperience $experience): JsonResponse
     {
         $this->authorizeProvider($request, $experience);
@@ -212,16 +189,12 @@ class ProviderExperienceController extends Controller
 
         return response()->json([
             'message' => 'Experiencia pausada correctamente.',
-            'data' => $this->formatExperience($experience->fresh(['coverPhoto', 'photos', 'mapPickupPoints'])),
+            'data' => $this->formatExperience(
+                $experience->fresh(['coverPhoto', 'photos', 'mapPickupPoints'])
+            ),
         ]);
     }
 
-    /**
-     * Eliminación lógica.
-     *
-     * No borra de la base de datos.
-     * Esto evita romper reservas, estadísticas y auditoría.
-     */
     public function destroy(Request $request, ProviderExperience $experience): JsonResponse
     {
         $this->authorizeProvider($request, $experience);
@@ -253,6 +226,10 @@ class ProviderExperienceController extends Controller
             'province' => [$requiredIfPublishing, 'string', 'max:100'],
             'start_location' => ['nullable', 'string'],
             'startLocation' => ['nullable', 'string'],
+
+            'experience_address' => ['nullable', 'string', 'max:255'],
+            'experience_latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'experience_longitude' => ['nullable', 'numeric', 'between:-180,180'],
 
             'pickup_points' => [$requiredIfPublishing, 'array'],
             'pickup_points.*' => ['nullable', 'string', 'max:255'],
@@ -298,6 +275,11 @@ class ProviderExperienceController extends Controller
             'location' => $validated['location'] ?? null,
             'province' => $validated['province'] ?? null,
             'start_location' => $validated['start_location'] ?? $validated['startLocation'] ?? null,
+
+            'experience_address' => $validated['experience_address'] ?? null,
+            'experience_latitude' => $validated['experience_latitude'] ?? null,
+            'experience_longitude' => $validated['experience_longitude'] ?? null,
+
             'pickup_points' => $this->cleanArray($validated['pickup_points'] ?? []),
             'price' => $validated['price'] ?? 0,
             'currency' => $validated['currency'] ?? 'DOP',
@@ -428,6 +410,15 @@ class ProviderExperienceController extends Controller
             'location' => $experience->location,
             'province' => $experience->province,
             'start_location' => $experience->start_location,
+
+            'experience_address' => $experience->experience_address,
+            'experience_latitude' => $experience->experience_latitude !== null
+                ? (float) $experience->experience_latitude
+                : null,
+            'experience_longitude' => $experience->experience_longitude !== null
+                ? (float) $experience->experience_longitude
+                : null,
+
             'pickup_points' => $experience->pickup_points ?? [],
             'map_pickup_points' => $mapPickupPoints->map(fn ($point) => [
                 'id' => $point->id,
@@ -438,6 +429,7 @@ class ProviderExperienceController extends Controller
                 'instructions' => $point->instructions,
                 'sort_order' => (int) $point->sort_order,
             ])->values(),
+
             'price' => (float) $experience->price,
             'currency' => $experience->currency,
             'capacity' => $experience->capacity,
