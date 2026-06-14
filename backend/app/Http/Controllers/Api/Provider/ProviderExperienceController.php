@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Provider;
 
 use App\Http\Controllers\Controller;
+use App\Models\Provider;
 use App\Models\ProviderExperience;
 use App\Models\ProviderExperiencePhoto;
 use Illuminate\Http\JsonResponse;
@@ -14,7 +15,7 @@ class ProviderExperienceController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $provider = $request->user();
+        $provider = $this->currentProvider($request);
 
         $status = $request->query('status');
 
@@ -69,7 +70,7 @@ class ProviderExperienceController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $provider = $request->user();
+        $provider = $this->currentProvider($request);
         $publishing = $request->boolean('publish');
 
         $validated = $this->validateExperience($request, $publishing);
@@ -366,9 +367,26 @@ class ProviderExperienceController extends Controller
 
     private function authorizeProvider(Request $request, ProviderExperience $experience): void
     {
-        if ((int) $experience->provider_id !== (int) $request->user()->id) {
+        $provider = $this->currentProvider($request);
+
+        if ((int) $experience->provider_id !== (int) $provider->id) {
             abort(403, 'No tienes permiso para modificar esta experiencia.');
         }
+    }
+
+    private function currentProvider(Request $request): Provider
+    {
+        $user = $request->user();
+
+        $provider = Provider::where('user_id', $user->id)->first();
+
+        if (! $provider) {
+            abort(response()->json([
+                'message' => 'Este usuario no tiene un perfil de proveedor asociado.',
+            ], 403));
+        }
+
+        return $provider;
     }
 
     private function cleanArray(array $items): array
