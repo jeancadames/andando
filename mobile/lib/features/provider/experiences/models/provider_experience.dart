@@ -34,6 +34,7 @@ class ProviderExperience {
   final double rating;
   final int schedulesCount;
   final String? nextAvailable;
+  final List<ProviderExperienceMapPickupPoint> mapPickupPoints;
 
   ProviderExperience({
     required this.id,
@@ -67,6 +68,7 @@ class ProviderExperience {
     required this.rating,
     required this.schedulesCount,
     required this.nextAvailable,
+    required this.mapPickupPoints,
   });
 
   factory ProviderExperience.fromJson(Map<String, dynamic> json) {
@@ -83,7 +85,6 @@ class ProviderExperience {
       experienceLatitude: _toNullableDouble(json['experience_latitude']),
       experienceLongitude: _toNullableDouble(json['experience_longitude']),
       pickupPoints: _stringList(json['pickup_points']),
-      mapPickupPoints: _mapPickupPointList(json['map_pickup_points']),
       price: _toDouble(json['price']),
       currency: json['currency'] ?? 'DOP',
       capacity: _toInt(json['capacity']),

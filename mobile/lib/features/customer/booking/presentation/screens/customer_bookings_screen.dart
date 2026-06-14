@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../claims/data/datasources/customer_claim_remote_datasource.dart';
 import '../../../claims/presentation/controllers/create_claim_controller.dart';
@@ -82,6 +83,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       context: context,
       builder: (_) => _BookingDetailsDialog(
         booking: booking,
+        onOpenPickupDirections: () async {
+          await _openPickupDirections(booking);
+        },
         onDownloadReceipt: () async {
           await _downloadReceipt(booking);
         },
@@ -156,6 +160,46 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       builder: (_) {
         return _ClaimDetailBottomSheet(claimId: claimId);
       },
+    );
+  }
+
+  Future<void> _openPickupDirections(CustomerBookingModel booking) async {
+    final pickup = booking.pickupPoint?.trim();
+
+    if (pickup == null || pickup.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Esta reserva no tiene punto de recogida disponible.'),
+        ),
+      );
+      return;
+    }
+
+    final query = Uri.encodeComponent(
+      '$pickup, ${booking.displayLocation}',
+    );
+
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$query',
+    );
+
+    final canOpen = await canLaunchUrl(uri);
+
+    if (!mounted) return;
+
+    if (!canOpen) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo abrir Google Maps.'),
+        ),
+      );
+      return;
+    }
+
+    await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
     );
   }
 
@@ -897,11 +941,13 @@ class _BookingDetailsDialog extends StatelessWidget {
   final CustomerBookingModel booking;
   final Future<void> Function() onDownloadReceipt;
   final Future<void> Function() onCancelBooking;
+  final Future<void> Function() onOpenPickupDirections;
 
   const _BookingDetailsDialog({
     required this.booking,
     required this.onCancelBooking,
     required this.onDownloadReceipt,
+    required this.onOpenPickupDirections,
   });
 
   @override
@@ -1027,6 +1073,88 @@ class _BookingDetailsDialog extends StatelessWidget {
                           ],
                         ),
                       ),
+                      if (booking.pickupPoint?.trim().isNotEmpty == true) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: const Color(0xFFFDE68A),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_rounded,
+                                    color: Color(0xFFB45309),
+                                    size: 22,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Punto de recogida',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFF92400E),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                booking.pickupPoint!,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF111827),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Llega 15 minutos antes del inicio de la experiencia.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.35,
+                                  color: Color(0xFF92400E),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 46,
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    await onOpenPickupDirections();
+                                  },
+                                  icon: const Icon(Icons.directions_rounded),
+                                  label: const Text('Cómo llegar'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF003B73),
+                                    side: const BorderSide(
+                                      color: Color(0xFF003B73),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    textStyle: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 26),
                       const Text(
                         'Desglose de precios',
@@ -1081,6 +1209,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
+
                       SizedBox(
                         width: double.infinity,
                         height: 54,
@@ -1089,11 +1218,10 @@ class _BookingDetailsDialog extends StatelessWidget {
                             await onDownloadReceipt();
                           },
                           icon: const Icon(Icons.download_rounded),
-                          label: const Text('Descargar Comprobante'),
+                          label: const Text('Descargar comprobante'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF003B73),
                             foregroundColor: Colors.white,
-                            elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(18),
                             ),
@@ -1104,9 +1232,11 @@ class _BookingDetailsDialog extends StatelessWidget {
                           ),
                         ),
                       ),
+
                       if (!booking.isCompleted &&
                           booking.status.toLowerCase() != 'cancelled') ...[
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
+
                         SizedBox(
                           width: double.infinity,
                           height: 54,

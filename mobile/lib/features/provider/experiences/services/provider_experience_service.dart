@@ -50,6 +50,14 @@ class ProviderPricingSettings {
   }
 }
 
+double _readDouble(dynamic value) {
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? 0;
+  return 0;
+}
+
 class ProviderExperienceForm {
   String title = '';
   String category = '';
@@ -100,7 +108,6 @@ class ProviderExperienceForm {
     form.experienceLongitude = experience.experienceLongitude;
     form.pickupPoints =
         experience.pickupPoints.isEmpty ? [''] : experience.pickupPoints;
-    form.mapPickupPoints = experience.mapPickupPoints;
 
     form.itinerary = experience.itinerary.isEmpty
         ? [
@@ -128,6 +135,75 @@ class ProviderExperienceForm {
   }
 }
 
+class ProviderPlaceSearchResult {
+  final String placeId;
+  final String name;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String? type;
+  final String? category;
+
+  const ProviderPlaceSearchResult({
+    required this.placeId,
+    required this.name,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.type,
+    required this.category,
+  });
+
+  factory ProviderPlaceSearchResult.fromJson(Map<String, dynamic> json) {
+    return ProviderPlaceSearchResult(
+      placeId: json['place_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      latitude: _readDouble(json['latitude']),
+      longitude: _readDouble(json['longitude']),
+      type: json['type']?.toString(),
+      category: json['category']?.toString(),
+    );
+  }
+
+  bool get hasValidCoordinates {
+    return latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180 &&
+        !(latitude == 0 && longitude == 0);
+  }
+}
+
+class ProviderExperienceMapPickupPointForm {
+  String name;
+  String address;
+  String latitude;
+  String longitude;
+  String instructions;
+
+  ProviderExperienceMapPickupPointForm({
+    this.name = '',
+    this.address = '',
+    this.latitude = '',
+    this.longitude = '',
+    this.instructions = '',
+  });
+
+  bool get hasValidCoordinates {
+    final lat = double.tryParse(latitude.trim());
+    final lng = double.tryParse(longitude.trim());
+
+    if (lat == null || lng == null) return false;
+
+    return lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180 &&
+        !(lat == 0 && lng == 0);
+  }
+}
+
 class ProviderExperienceService {
   static const String baseUrl = 'http://127.0.0.1:8000/api';
 
@@ -137,6 +213,101 @@ class ProviderExperienceService {
 
   String _cleanToken(String? token) {
     return token?.trim() ?? '';
+  }
+
+  Future<ProviderPricingSettings> getPricingSettings({
+    required String? token,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/provider/pricing-settings'),
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (!_isSuccessStatus(response.statusCode)) {
+      throw Exception(
+        body['message'] ?? 'No se pudo cargar la configuración de precios.',
+      );
+    }
+
+    return ProviderPricingSettings.fromJson(body);
+  }
+
+  Future<List<ProviderPlaceSearchResult>> searchPlaces({
+    required String? token,
+    required String query,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final cleanQuery = query.trim();
+
+    if (cleanQuery.length < 3) {
+      return [];
+    }
+
+    final uri = Uri.parse('$baseUrl/provider/places/search').replace(
+      queryParameters: {
+        'q': cleanQuery,
+        'limit': '5',
+      },
+    );
+
+    final response = await http.get(
+      uri,
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (!_isSuccessStatus(response.statusCode)) {
+      throw Exception(
+        body['message'] ?? 'No se pudieron buscar ubicaciones.',
+      );
+    }
+
+    final data = body['data'] as List? ?? [];
+
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => ProviderPlaceSearchResult.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .where((place) => place.hasValidCoordinates)
+        .toList();
+  }
+
+  Future<void> updateSchedule({
+    required int experienceId,
+    required int scheduleId,
+    required String? token,
+    required String date,
+    required String time,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId'),
+      headers: _jsonHeaders(token),
+      body: jsonEncode({
+        // El backend actual acepta starts_at.
+        // Enviamos formato local simple para evitar problemas de UTC/Z.
+        'starts_at': '$date $time:00',
+        'status': 'active',
+      }),
+    );
+
+    final body = _decode(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo actualizar la fecha.',
+      );
+    }
   }
 
   void _ensureAuthenticated(String? token) {
@@ -489,6 +660,73 @@ class ProviderExperienceService {
       throw Exception(
         body['message'] ?? 'No se pudo crear la fecha.',
       );
+    }
+  }
+
+  Future<void> deleteSchedule({
+    required int experienceId,
+    required int scheduleId,
+    required String? token,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.delete(
+      Uri.parse(
+        '$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId',
+      ),
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo eliminar la fecha.',
+      );
+    }
+  }
+
+  void _addStringArray(
+    http.MultipartRequest request,
+    String key,
+    List<String> values,
+  ) {
+    for (int i = 0; i < values.length; i++) {
+      request.fields['$key[$i]'] = values[i];
+    }
+  }
+
+  void _addMapPickupPoints(
+    http.MultipartRequest request,
+    List<ProviderExperienceMapPickupPointForm> points,
+  ) {
+    final validPoints = points
+        .where((point) => point.hasValidCoordinates)
+        .toList();
+
+    for (int i = 0; i < validPoints.length; i++) {
+      final point = validPoints[i];
+
+      request.fields['map_pickup_points[$i][name]'] = point.name.trim();
+      request.fields['map_pickup_points[$i][address]'] = point.address.trim();
+      request.fields['map_pickup_points[$i][latitude]'] =
+          point.latitude.trim();
+      request.fields['map_pickup_points[$i][longitude]'] =
+          point.longitude.trim();
+      request.fields['map_pickup_points[$i][instructions]'] =
+          point.instructions.trim();
+    }
+  }
+
+  Map<String, dynamic> _decode(http.Response response) {
+    try {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      return {
+        'message': response.body.isNotEmpty
+            ? response.body
+            : 'Respuesta inválida del servidor.',
+      };
     }
   }
 

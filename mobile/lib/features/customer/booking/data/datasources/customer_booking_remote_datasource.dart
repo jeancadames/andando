@@ -110,4 +110,40 @@ class CustomerBookingRemoteDataSource {
     );
   }
 
+  Future<CustomerBookingModel> createBooking({
+    required int scheduleId,
+    required int guestsCount,
+    required String pickupPoint,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/bookings');
+
+    final response = await _client.post(
+      uri,
+      headers: await _headers(),
+      body: jsonEncode({
+        'provider_experience_schedule_id': scheduleId,
+        'guests_count': guestsCount,
+        'pickup_point': pickupPoint,
+      }),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo realizar la reserva.',
+      );
+    }
+
+    final data = body['data'];
+
+    if (data is Map) {
+      return CustomerBookingModel.fromJson(
+        Map<String, dynamic>.from(data),
+      );
+    }
+
+    return CustomerBookingModel.fromJson(body);
+  }
+
 }
