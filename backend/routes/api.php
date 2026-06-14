@@ -133,6 +133,11 @@ Route::get('/public-files/{path}', function (string $path) {
 */
 Route::post('/auth/login', LoginController::class);
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
+    Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy']);
+});
+
 /*
 |--------------------------------------------------------------------------
 | Rutas de proveedor
@@ -197,7 +202,7 @@ Route::prefix('provider')->group(function () {
         Route::post('/conversations/{conversation}/messages', [ProviderConversationController::class, 'sendMessage']);
         Route::post('/conversations/{conversation}/read', [ProviderConversationController::class, 'markAsRead']);
         Route::post('/conversations/{conversation}/close', [ProviderConversationController::class, 'close']);
-        Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
+
 
         Route::get('/claims', [ProviderClaimController::class, 'index']);
 
@@ -272,8 +277,6 @@ Route::prefix('client/explore')->group(function () {
         Route::get('/conversations/{conversation}/messages', [ClientConversationController::class, 'messages']);
         Route::post('/conversations/{conversation}/messages', [ClientConversationController::class, 'sendMessage']);
         Route::post('/conversations/{conversation}/read', [ClientConversationController::class, 'markAsRead']);
-
-        Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
         
         Route::get('/payment-methods', [ClientPaymentMethodController::class, 'index']);
         Route::post('/payment-methods', [ClientPaymentMethodController::class, 'store']);

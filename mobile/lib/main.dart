@@ -9,6 +9,8 @@ import 'core/storage/secure_storage.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'firebase_options.dart';
 
+import 'core/notifications/firebase_push_service.dart';
+
 /// main() es el punto de entrada principal de la aplicación.
 ///
 /// Aquí:

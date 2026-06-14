@@ -12,17 +12,17 @@ class DeviceTokenController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'token' => ['required', 'string'],
-            'platform' => ['nullable', 'string', 'max:30'],
+            'token' => ['required', 'string', 'max:2048'],
+            'platform' => ['nullable', 'string', 'max:50'],
             'device_name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        DeviceToken::query()->updateOrCreate(
+        $deviceToken = DeviceToken::updateOrCreate(
             [
-                'user_id' => $request->user()->id,
                 'token' => $data['token'],
             ],
             [
+                'user_id' => $request->user()->id,
                 'platform' => $data['platform'] ?? null,
                 'device_name' => $data['device_name'] ?? null,
                 'last_used_at' => now(),
@@ -30,8 +30,24 @@ class DeviceTokenController extends Controller
         );
 
         return response()->json([
-            'message' => 'Token de dispositivo guardado correctamente.',
-            'push_enabled' => false,
+            'message' => 'Token de dispositivo registrado correctamente.',
+            'data' => $deviceToken,
+        ]);
+    }
+
+    public function destroy(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'max:2048'],
+        ]);
+
+        DeviceToken::query()
+            ->where('user_id', $request->user()->id)
+            ->where('token', $data['token'])
+            ->delete();
+
+        return response()->json([
+            'message' => 'Token de dispositivo eliminado correctamente.',
         ]);
     }
 }

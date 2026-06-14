@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/constants/storage_keys.dart';
+import '../../../core/notifications/device_token_api_service.dart';
+import '../../../core/notifications/firebase_push_service.dart';
 import '../../../core/storage/secure_storage.dart';
 
 /// Representa el estado actual de autenticación de la aplicación.
@@ -18,62 +22,47 @@ import '../../../core/storage/secure_storage.dart';
 /// - ClientExplore
 enum AuthStatus {
   /// Estado inicial mientras la app lee el token guardado.
-  ///
-  /// Ejemplo:
-  /// La app abre y todavía no sabemos si el usuario tiene sesión.
   checking,
 
   /// El usuario tiene un token guardado.
-  ///
-  /// Esto no significa necesariamente que el token sea válido en backend,
-  /// pero sí significa que localmente existe una sesión.
   authenticated,
 
   /// No hay token guardado.
-  ///
-  /// La app debe mandar al usuario al WelcomeScreen.
   unauthenticated,
 }
 
 /// Controlador global de autenticación.
 ///
-/// Esta clase es una pieza central de la app.
-/// Su responsabilidad es manejar:
-///
+/// Esta clase maneja:
 /// - lectura del token guardado.
 /// - guardado de sesión después de login o registro.
 /// - cierre de sesión.
 /// - datos mínimos del usuario autenticado.
 /// - estado del proveedor.
-///
-/// Extiende ChangeNotifier porque go_router necesita escuchar cambios.
-/// Cuando llamamos notifyListeners(), el router vuelve a evaluar
-/// las redirecciones automáticamente.
+/// - registro del FCM token en backend.
 class AuthController extends ChangeNotifier {
   AuthController({
     required SecureStorage secureStorage,
-  }) : _secureStorage = secureStorage;
+    FirebasePushService? firebasePushService,
+    DeviceTokenApiService? deviceTokenApiService,
+  })  : _secureStorage = secureStorage,
+        _firebasePushService = firebasePushService ?? FirebasePushService(),
+        _deviceTokenApiService =
+            deviceTokenApiService ?? const DeviceTokenApiService();
 
   /// Servicio encargado de leer/escribir datos sensibles.
-  ///
-  /// Aquí se guardan:
-  /// - token
-  /// - tipo de usuario
-  /// - email
-  /// - nombre
-  /// - estado del proveedor
   final SecureStorage _secureStorage;
 
+  /// Servicio encargado de pedir permisos y obtener el FCM token.
+  final FirebasePushService _firebasePushService;
+
+  /// Servicio encargado de guardar/borrar el FCM token en Laravel.
+  final DeviceTokenApiService _deviceTokenApiService;
+
   /// Estado interno de autenticación.
-  ///
-  /// Arranca en checking porque al abrir la app todavía no sabemos
-  /// si hay una sesión guardada.
   AuthStatus _status = AuthStatus.checking;
 
   /// Token de autenticación devuelto por Laravel/Sanctum.
-  ///
-  /// Este token se enviará luego en el header:
-  /// Authorization: Bearer <token>
   String? _token;
 
   /// Tipo de usuario autenticado.
@@ -85,8 +74,6 @@ class AuthController extends ChangeNotifier {
   String? _userType;
 
   /// Estado del proveedor.
-  ///
-  /// Esto solo aplica cuando userType == provider.
   ///
   /// Valores esperados:
   /// - pending
@@ -101,45 +88,25 @@ class AuthController extends ChangeNotifier {
   /// Email del usuario autenticado.
   String? _userEmail;
 
-  /// Getter público del estado.
-  ///
-  /// Otras clases pueden leerlo, pero no modificarlo directamente.
   AuthStatus get status => _status;
 
-  /// Getter del token actual.
   String? get token => _token;
 
-  /// Getter del tipo de usuario.
   String? get userType => _userType;
 
-  /// Getter del estado del proveedor.
   String? get providerStatus => _providerStatus;
 
-  /// Getter del nombre del usuario.
   String? get userName => _userName;
 
-  /// Getter del email del usuario.
   String? get userEmail => _userEmail;
 
-  /// Atajo para saber si la app está verificando sesión.
   bool get isChecking => _status == AuthStatus.checking;
 
-  /// Atajo para saber si el usuario está autenticado.
   bool get isAuthenticated => _status == AuthStatus.authenticated;
 
-  /// Atajo para saber si el usuario NO está autenticado.
   bool get isUnauthenticated => _status == AuthStatus.unauthenticated;
 
   /// Revisa si existe una sesión guardada cuando abre la app.
-  ///
-  /// Esta función normalmente se ejecuta una vez en main.dart.
-  ///
-  /// Flujo:
-  /// 1. La app abre.
-  /// 2. Lee el token desde secure storage.
-  /// 3. Si no hay token, marca usuario como no autenticado.
-  /// 4. Si hay token, carga datos mínimos de sesión.
-  /// 5. Notifica al router para que redirija.
   Future<void> checkAuthStatus() async {
     _status = AuthStatus.checking;
     notifyListeners();
@@ -163,17 +130,11 @@ class AuthController extends ChangeNotifier {
 
     _status = AuthStatus.authenticated;
     notifyListeners();
+
+    unawaited(_registerDeviceTokenForSession(savedToken));
   }
 
   /// Guarda la sesión del usuario después de login o registro.
-  ///
-  /// Este método se usa cuando Laravel responde correctamente con:
-  /// - token
-  /// - user
-  /// - provider, si aplica
-  ///
-  /// Después de guardar estos datos, se llama notifyListeners()
-  /// para que go_router pueda redirigir automáticamente.
   Future<void> saveSession({
     required String token,
     required String userType,
@@ -207,10 +168,6 @@ class AuthController extends ChangeNotifier {
         value: providerStatus,
       );
     } else {
-      /// Si el usuario no es proveedor, eliminamos cualquier estado viejo.
-      ///
-      /// Esto evita que un login de cliente herede accidentalmente
-      /// un providerStatus guardado de una sesión anterior.
       await _secureStorage.delete(StorageKeys.providerStatus);
     }
 
@@ -222,14 +179,11 @@ class AuthController extends ChangeNotifier {
     _status = AuthStatus.authenticated;
 
     notifyListeners();
+
+    unawaited(_registerDeviceTokenForSession(token));
   }
 
   /// Actualiza únicamente el estado del proveedor.
-  ///
-  /// Esto será útil más adelante cuando el backend diga:
-  /// - proveedor aprobado
-  /// - proveedor rechazado
-  /// - proveedor suspendido
   Future<void> updateProviderStatus(String status) async {
     await _secureStorage.write(
       key: StorageKeys.providerStatus,
@@ -241,13 +195,14 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Cierra la sesión local.
-  ///
-  /// Esto borra todo lo guardado en secure storage y limpia
-  /// la sesión en memoria.
-  ///
-  /// Después de esto, el router debe mandar al usuario al WelcomeScreen.
+  /// Cierra la sesión local y borra el device token en backend.
   Future<void> logout() async {
+    final currentApiToken = _token;
+
+    if (currentApiToken != null && currentApiToken.trim().isNotEmpty) {
+      await _deleteDeviceTokenForSession(currentApiToken);
+    }
+
     await _secureStorage.clear();
 
     _clearMemorySession();
@@ -255,6 +210,51 @@ class AuthController extends ChangeNotifier {
     _status = AuthStatus.unauthenticated;
 
     notifyListeners();
+  }
+
+  Future<void> _registerDeviceTokenForSession(String apiToken) async {
+    try {
+      final fcmToken = await _firebasePushService.initialize();
+
+      if (fcmToken == null || fcmToken.trim().isEmpty) {
+        debugPrint('DEVICE TOKEN: no se registró porque FCM token está vacío.');
+        return;
+      }
+
+      final platform = kIsWeb
+          ? 'web'
+          : defaultTargetPlatform.toString().split('.').last;
+
+      final deviceName = kIsWeb ? 'Flutter Web' : 'Flutter $platform';
+
+      await _deviceTokenApiService.registerToken(
+        apiToken: apiToken,
+        fcmToken: fcmToken,
+        platform: platform,
+        deviceName: deviceName,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('DEVICE TOKEN REGISTER ERROR: $error');
+      debugPrint('$stackTrace');
+    }
+  }
+
+  Future<void> _deleteDeviceTokenForSession(String apiToken) async {
+    try {
+      final fcmToken = await _firebasePushService.getCurrentToken();
+
+      if (fcmToken == null || fcmToken.trim().isEmpty) {
+        return;
+      }
+
+      await _deviceTokenApiService.deleteToken(
+        apiToken: apiToken,
+        fcmToken: fcmToken,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('DEVICE TOKEN DELETE ERROR: $error');
+      debugPrint('$stackTrace');
+    }
   }
 
   /// Limpia todas las variables de sesión que viven en memoria.
