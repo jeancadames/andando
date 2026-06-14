@@ -1,13 +1,13 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
+import '../models/map_pickup_point.dart';
+import '../models/place_search_result.dart';
 import '../models/provider_experience.dart';
 import '../models/provider_experience_schedule.dart';
-
-import 'package:flutter/foundation.dart';
-
 import '../models/provider_schedule_bookings_response.dart';
 
 import '../../../../core/config/api_config.dart';
@@ -41,24 +41,10 @@ class ProviderPricingSettings {
   }
 
   static double _readDouble(dynamic value, double fallback) {
-    if (value is num) {
-      return value.toDouble();
-    }
-
-    if (value is String) {
-      return double.tryParse(value) ?? fallback;
-    }
-
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
     return fallback;
   }
-}
-
-double _readDouble(dynamic value) {
-  if (value is double) return value;
-  if (value is int) return value.toDouble();
-  if (value is num) return value.toDouble();
-  if (value is String) return double.tryParse(value) ?? 0;
-  return 0;
 }
 
 class ProviderExperienceForm {
@@ -73,8 +59,13 @@ class ProviderExperienceForm {
   String startLocation = '';
   String province = '';
 
+  String experienceAddress = '';
+  double? experienceLatitude;
+  double? experienceLongitude;
+
   List<String> pickupPoints = [''];
-  List<ProviderExperienceMapPickupPointForm> mapPickupPoints = [];
+  List<MapPickupPoint> mapPickupPoints = [];
+
   List<Map<String, String>> itinerary = [
     {'time': '', 'activity': ''},
   ];
@@ -86,9 +77,6 @@ class ProviderExperienceForm {
 
   String cancellationPolicy = '';
 
-  /// Fotos nuevas seleccionadas por el afiliado.
-  ///
-  /// XFile funciona correctamente en Flutter Web y mobile.
   List<XFile> photos = [];
 
   ProviderExperienceForm();
@@ -105,19 +93,14 @@ class ProviderExperienceForm {
     form.currency = experience.currency;
     form.startLocation = experience.startLocation ?? '';
     form.province = experience.province ?? '';
+
+    form.experienceAddress = experience.experienceAddress ?? '';
+    form.experienceLatitude = experience.experienceLatitude;
+    form.experienceLongitude = experience.experienceLongitude;
+
     form.pickupPoints =
         experience.pickupPoints.isEmpty ? [''] : experience.pickupPoints;
-    form.mapPickupPoints = experience.mapPickupPoints
-    .map(
-      (point) => ProviderExperienceMapPickupPointForm(
-        name: point.name,
-        address: point.address,
-        latitude: point.latitude.toString(),
-        longitude: point.longitude.toString(),
-        instructions: point.instructions,
-      ),
-    )
-    .toList();
+    form.mapPickupPoints = experience.mapPickupPoints;
 
     form.itinerary = experience.itinerary.isEmpty
         ? [
@@ -144,75 +127,6 @@ class ProviderExperienceForm {
   }
 }
 
-class ProviderPlaceSearchResult {
-  final String placeId;
-  final String name;
-  final String address;
-  final double latitude;
-  final double longitude;
-  final String? type;
-  final String? category;
-
-  const ProviderPlaceSearchResult({
-    required this.placeId,
-    required this.name,
-    required this.address,
-    required this.latitude,
-    required this.longitude,
-    required this.type,
-    required this.category,
-  });
-
-  factory ProviderPlaceSearchResult.fromJson(Map<String, dynamic> json) {
-    return ProviderPlaceSearchResult(
-      placeId: json['place_id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      address: json['address']?.toString() ?? '',
-      latitude: _readDouble(json['latitude']),
-      longitude: _readDouble(json['longitude']),
-      type: json['type']?.toString(),
-      category: json['category']?.toString(),
-    );
-  }
-
-  bool get hasValidCoordinates {
-    return latitude >= -90 &&
-        latitude <= 90 &&
-        longitude >= -180 &&
-        longitude <= 180 &&
-        !(latitude == 0 && longitude == 0);
-  }
-}
-
-class ProviderExperienceMapPickupPointForm {
-  String name;
-  String address;
-  String latitude;
-  String longitude;
-  String instructions;
-
-  ProviderExperienceMapPickupPointForm({
-    this.name = '',
-    this.address = '',
-    this.latitude = '',
-    this.longitude = '',
-    this.instructions = '',
-  });
-
-  bool get hasValidCoordinates {
-    final lat = double.tryParse(latitude.trim());
-    final lng = double.tryParse(longitude.trim());
-
-    if (lat == null || lng == null) return false;
-
-    return lat >= -90 &&
-        lat <= 90 &&
-        lng >= -180 &&
-        lng <= 180 &&
-        !(lat == 0 && lng == 0);
-  }
-}
-
 class ProviderExperienceService {
   /// Para Chrome local:
   /// http://127.0.0.1:8000/api
@@ -227,101 +141,6 @@ class ProviderExperienceService {
 
   String _cleanToken(String? token) {
     return token?.trim() ?? '';
-  }
-
-  Future<ProviderPricingSettings> getPricingSettings({
-    required String? token,
-  }) async {
-    _ensureAuthenticated(token);
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/provider/pricing-settings'),
-      headers: _jsonHeaders(token),
-    );
-
-    final body = _decode(response);
-
-    if (!_isSuccessStatus(response.statusCode)) {
-      throw Exception(
-        body['message'] ?? 'No se pudo cargar la configuración de precios.',
-      );
-    }
-
-    return ProviderPricingSettings.fromJson(body);
-  }
-
-  Future<List<ProviderPlaceSearchResult>> searchPlaces({
-    required String? token,
-    required String query,
-  }) async {
-    _ensureAuthenticated(token);
-
-    final cleanQuery = query.trim();
-
-    if (cleanQuery.length < 3) {
-      return [];
-    }
-
-    final uri = Uri.parse('$baseUrl/provider/places/search').replace(
-      queryParameters: {
-        'q': cleanQuery,
-        'limit': '5',
-      },
-    );
-
-    final response = await http.get(
-      uri,
-      headers: _jsonHeaders(token),
-    );
-
-    final body = _decode(response);
-
-    if (!_isSuccessStatus(response.statusCode)) {
-      throw Exception(
-        body['message'] ?? 'No se pudieron buscar ubicaciones.',
-      );
-    }
-
-    final data = body['data'] as List? ?? [];
-
-    return data
-        .whereType<Map>()
-        .map(
-          (item) => ProviderPlaceSearchResult.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
-        )
-        .where((place) => place.hasValidCoordinates)
-        .toList();
-  }
-
-  Future<void> updateSchedule({
-    required int experienceId,
-    required int scheduleId,
-    required String? token,
-    required String date,
-    required String time,
-  }) async {
-    _ensureAuthenticated(token);
-
-    final response = await http.put(
-      Uri.parse('$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId'),
-      headers: _jsonHeaders(token),
-      body: jsonEncode({
-        // El backend actual acepta starts_at.
-        // Enviamos formato local simple para evitar problemas de UTC/Z.
-        'starts_at': '$date $time:00',
-        'status': 'active',
-      }),
-    );
-
-    final body = _decode(response);
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudo actualizar la fecha.',
-      );
-    }
   }
 
   void _ensureAuthenticated(String? token) {
@@ -349,6 +168,71 @@ class ProviderExperienceService {
       'Accept': 'application/json',
       if (cleanToken.isNotEmpty) 'Authorization': 'Bearer $cleanToken',
     };
+  }
+
+  Future<ProviderPricingSettings> getPricingSettings({
+    required String? token,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/provider/pricing-settings'),
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (!_isSuccessStatus(response.statusCode)) {
+      throw Exception(
+        body['message'] ?? 'No se pudo cargar la configuración de precios.',
+      );
+    }
+
+    return ProviderPricingSettings.fromJson(body);
+  }
+
+  Future<List<PlaceSearchResult>> searchPlaces({
+    required String? token,
+    required String query,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final cleanQuery = query.trim();
+
+    if (cleanQuery.length < 3) {
+      return [];
+    }
+
+    final uri = Uri.parse('$baseUrl/provider/places/search').replace(
+      queryParameters: {
+        'q': cleanQuery,
+        'limit': '8',
+      },
+    );
+
+    final response = await http.get(
+      uri,
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (!_isSuccessStatus(response.statusCode)) {
+      throw Exception(
+        body['message'] ?? 'No se pudieron buscar lugares.',
+      );
+    }
+
+    final data = body['data'] as List? ?? [];
+
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => PlaceSearchResult.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList();
   }
 
   Future<List<ProviderExperience>> listExperiences({
@@ -430,8 +314,21 @@ class ProviderExperienceService {
     request.fields['province'] = form.province;
     request.fields['cancellation_policy'] = form.cancellationPolicy;
 
+    request.fields['experience_address'] = form.experienceAddress;
+
+    if (form.experienceLatitude != null) {
+      request.fields['experience_latitude'] =
+          form.experienceLatitude.toString();
+    }
+
+    if (form.experienceLongitude != null) {
+      request.fields['experience_longitude'] =
+          form.experienceLongitude.toString();
+    }
+
     _addStringArray(request, 'pickup_points', form.pickupPoints);
     _addMapPickupPoints(request, form.mapPickupPoints);
+
     _addStringArray(request, 'amenities', form.amenities);
     _addStringArray(request, 'included', form.included);
     _addStringArray(request, 'not_included', form.notIncluded);
@@ -445,8 +342,6 @@ class ProviderExperienceService {
           form.itinerary[i]['activity'] ?? '';
     }
 
-    /// En Flutter Web no se puede usar MultipartFile.fromPath.
-    /// Usamos bytes para que funcione en Chrome, Android e iOS.
     for (int i = 0; i < form.photos.length; i++) {
       final photo = form.photos[i];
 
@@ -493,6 +388,35 @@ class ProviderExperienceService {
     }
   }
 
+  Future<void> updateSchedule({
+    required int experienceId,
+    required int scheduleId,
+    required String? token,
+    required String date,
+    required String time,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.put(
+      Uri.parse(
+        '$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId',
+      ),
+      headers: _jsonHeaders(token),
+      body: jsonEncode({
+        'starts_at': '$date $time:00',
+        'status': 'active',
+      }),
+    );
+
+    final body = _decode(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo actualizar la fecha.',
+      );
+    }
+  }
+
   Future<List<ProviderExperienceSchedule>> listSchedules(
     int experienceId, {
     String? token,
@@ -505,6 +429,7 @@ class ProviderExperienceService {
     );
 
     final body = _decode(response);
+
     debugPrint('SCHEDULES STATUS: ${response.statusCode}');
     debugPrint('SCHEDULES BODY: ${response.body}');
 
@@ -576,73 +501,6 @@ class ProviderExperienceService {
     }
   }
 
-  Future<void> deleteSchedule({
-    required int experienceId,
-    required int scheduleId,
-    required String? token,
-  }) async {
-    _ensureAuthenticated(token);
-
-    final response = await http.delete(
-      Uri.parse(
-        '$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId',
-      ),
-      headers: _jsonHeaders(token),
-    );
-
-    final body = _decode(response);
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudo eliminar la fecha.',
-      );
-    }
-  }
-
-  void _addStringArray(
-    http.MultipartRequest request,
-    String key,
-    List<String> values,
-  ) {
-    for (int i = 0; i < values.length; i++) {
-      request.fields['$key[$i]'] = values[i];
-    }
-  }
-
-  void _addMapPickupPoints(
-    http.MultipartRequest request,
-    List<ProviderExperienceMapPickupPointForm> points,
-  ) {
-    final validPoints = points
-        .where((point) => point.hasValidCoordinates)
-        .toList();
-
-    for (int i = 0; i < validPoints.length; i++) {
-      final point = validPoints[i];
-
-      request.fields['map_pickup_points[$i][name]'] = point.name.trim();
-      request.fields['map_pickup_points[$i][address]'] = point.address.trim();
-      request.fields['map_pickup_points[$i][latitude]'] =
-          point.latitude.trim();
-      request.fields['map_pickup_points[$i][longitude]'] =
-          point.longitude.trim();
-      request.fields['map_pickup_points[$i][instructions]'] =
-          point.instructions.trim();
-    }
-  }
-
-  Map<String, dynamic> _decode(http.Response response) {
-    try {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (_) {
-      return {
-        'message': response.body.isNotEmpty
-            ? response.body
-            : 'Respuesta inválida del servidor.',
-      };
-    }
-  }
-
   Future<void> createSingleSchedule({
     required int experienceId,
     required String? token,
@@ -702,6 +560,73 @@ class ProviderExperienceService {
       throw Exception(
         body['message'] ?? 'No se pudieron crear las fechas.',
       );
+    }
+  }
+
+  Future<void> deleteSchedule({
+    required int experienceId,
+    required int scheduleId,
+    required String? token,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.delete(
+      Uri.parse(
+        '$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId',
+      ),
+      headers: _jsonHeaders(token),
+    );
+
+    final body = _decode(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo eliminar la fecha.',
+      );
+    }
+  }
+
+  void _addStringArray(
+    http.MultipartRequest request,
+    String key,
+    List<String> values,
+  ) {
+    for (int i = 0; i < values.length; i++) {
+      request.fields['$key[$i]'] = values[i];
+    }
+  }
+
+  void _addMapPickupPoints(
+    http.MultipartRequest request,
+    List<MapPickupPoint> points,
+  ) {
+    for (int i = 0; i < points.length; i++) {
+      final point = points[i];
+
+      request.fields['map_pickup_points[$i][name]'] = point.name;
+      request.fields['map_pickup_points[$i][address]'] = point.address;
+      request.fields['map_pickup_points[$i][latitude]'] =
+          point.latitude.toString();
+      request.fields['map_pickup_points[$i][longitude]'] =
+          point.longitude.toString();
+
+      if (point.instructions != null &&
+          point.instructions!.trim().isNotEmpty) {
+        request.fields['map_pickup_points[$i][instructions]'] =
+            point.instructions!;
+      }
+    }
+  }
+
+  Map<String, dynamic> _decode(http.Response response) {
+    try {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      return {
+        'message': response.body.isNotEmpty
+            ? response.body
+            : 'Respuesta inválida del servidor.',
+      };
     }
   }
 }

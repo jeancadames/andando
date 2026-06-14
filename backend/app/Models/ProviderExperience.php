@@ -37,6 +37,9 @@ class ProviderExperience extends Model
         'location',
         'province',
         'start_location',
+        'experience_address',
+        'experience_latitude',
+        'experience_longitude',
         'pickup_points',
         'price',
         'currency',
@@ -60,6 +63,8 @@ class ProviderExperience extends Model
      */
     protected $casts = [
         'pickup_points' => 'array',
+        'experience_latitude' => 'decimal:7',
+        'experience_longitude' => 'decimal:7',
         'itinerary' => 'array',
         'amenities' => 'array',
         'included' => 'array',

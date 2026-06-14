@@ -1,3 +1,5 @@
+import 'map_pickup_point.dart';
+
 class ProviderExperience {
   final int id;
   final String title;
@@ -7,7 +9,14 @@ class ProviderExperience {
   final String? location;
   final String? province;
   final String? startLocation;
+
+  final String? experienceAddress;
+  final double? experienceLatitude;
+  final double? experienceLongitude;
+
   final List<String> pickupPoints;
+  final List<MapPickupPoint> mapPickupPoints;
+
   final double price;
   final String currency;
   final int capacity;
@@ -26,7 +35,6 @@ class ProviderExperience {
   final double rating;
   final int schedulesCount;
   final String? nextAvailable;
-  final List<ProviderExperienceMapPickupPoint> mapPickupPoints;
 
   ProviderExperience({
     required this.id,
@@ -37,7 +45,11 @@ class ProviderExperience {
     required this.location,
     required this.province,
     required this.startLocation,
+    required this.experienceAddress,
+    required this.experienceLatitude,
+    required this.experienceLongitude,
     required this.pickupPoints,
+    required this.mapPickupPoints,
     required this.price,
     required this.currency,
     required this.capacity,
@@ -56,45 +68,65 @@ class ProviderExperience {
     required this.rating,
     required this.schedulesCount,
     required this.nextAvailable,
-    required this.mapPickupPoints,
   });
 
   factory ProviderExperience.fromJson(Map<String, dynamic> json) {
     return ProviderExperience(
-      id: json['id'] ?? 0,
-      title: json['title'] ?? '',
-      category: json['category'],
-      description: json['description'],
-      duration: json['duration'],
-      location: json['location'],
-      province: json['province'],
-      startLocation: json['start_location'],
+      id: _toInt(json['id']),
+      title: json['title']?.toString() ?? '',
+      category: json['category']?.toString(),
+      description: json['description']?.toString(),
+      duration: json['duration']?.toString(),
+      location: json['location']?.toString(),
+      province: json['province']?.toString(),
+      startLocation: json['start_location']?.toString(),
+
+      experienceAddress: json['experience_address']?.toString(),
+      experienceLatitude: _toNullableDouble(json['experience_latitude']),
+      experienceLongitude: _toNullableDouble(json['experience_longitude']),
+
       pickupPoints: _stringList(json['pickup_points']),
-      mapPickupPoints: _mapPickupPoints(json['map_pickup_points']),
+      mapPickupPoints: _mapPickupPointList(json['map_pickup_points']),
+
       price: _toDouble(json['price']),
-      currency: json['currency'] ?? 'DOP',
+      currency: json['currency']?.toString() ?? 'DOP',
       capacity: _toInt(json['capacity']),
       itinerary: _mapList(json['itinerary']),
       amenities: _stringList(json['amenities']),
       included: _stringList(json['included']),
       notIncluded: _stringList(json['not_included']),
       requirements: _stringList(json['requirements']),
-      cancellationPolicy: json['cancellation_policy'],
-      status: json['status'] ?? 'draft',
-      isActive: json['is_active'] ?? true,
-      coverPhotoUrl: json['cover_photo_url'],
+      cancellationPolicy: json['cancellation_policy']?.toString(),
+      status: json['status']?.toString() ?? 'draft',
+      isActive: json['is_active'] == null ? true : json['is_active'] == true,
+      coverPhotoUrl: json['cover_photo_url']?.toString(),
       bookingsCount: _toInt(json['bookings_count']),
       revenue: _toDouble(json['revenue']),
       views: _toInt(json['views']),
       rating: _toDouble(json['rating']),
       schedulesCount: _toInt(json['schedules_count']),
-      nextAvailable: json['next_available'],
+      nextAvailable: json['next_available']?.toString(),
     );
   }
 
   static List<String> _stringList(dynamic value) {
     if (value is List) {
       return value.map((item) => item.toString()).toList();
+    }
+
+    return [];
+  }
+
+  static List<MapPickupPoint> _mapPickupPointList(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<Map>()
+          .map(
+            (item) => MapPickupPoint.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
     }
 
     return [];
@@ -126,52 +158,12 @@ class ProviderExperience {
     return 0;
   }
 
-  static List<ProviderExperienceMapPickupPoint> _mapPickupPoints(dynamic value) {
-    if (value is List) {
-      return value
-          .whereType<Map>()
-          .map(
-            (item) => ProviderExperienceMapPickupPoint.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .toList();
-    }
-
-    return [];
-  }
-}
-
-class ProviderExperienceMapPickupPoint {
-  final int id;
-  final String name;
-  final String address;
-  final double latitude;
-  final double longitude;
-  final String instructions;
-  final int sortOrder;
-
-  const ProviderExperienceMapPickupPoint({
-    required this.id,
-    required this.name,
-    required this.address,
-    required this.latitude,
-    required this.longitude,
-    required this.instructions,
-    required this.sortOrder,
-  });
-
-  factory ProviderExperienceMapPickupPoint.fromJson(
-    Map<String, dynamic> json,
-  ) {
-    return ProviderExperienceMapPickupPoint(
-      id: ProviderExperience._toInt(json['id']),
-      name: json['name']?.toString() ?? '',
-      address: json['address']?.toString() ?? '',
-      latitude: ProviderExperience._toDouble(json['latitude']),
-      longitude: ProviderExperience._toDouble(json['longitude']),
-      instructions: json['instructions']?.toString() ?? '',
-      sortOrder: ProviderExperience._toInt(json['sort_order']),
-    );
+  static double? _toNullableDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }

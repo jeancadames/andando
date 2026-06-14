@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/customer/profile/presentation/screens/customer_terms_conditions_screen.dart';
+import '../../features/customer/profile/presentation/screens/customer_help_center_screen.dart';
 import '../../features/customer/claims/presentation/screens/create_claim_screen.dart';
 import '../../features/customer/reviews/presentation/screens/experience_reviews_screen.dart';
 import '../../features/customer/booking/data/models/customer_booking_model.dart';
@@ -517,6 +519,23 @@ class AppRouter {
           );
         },
       ),
+
+      GoRoute(
+        path: '/customer/profile/help-center',
+        name: 'customerHelpCenter',
+        builder: (context, state) {
+          return const CustomerHelpCenterScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/customer/profile/terms',
+        name: 'customerTermsConditions',
+        builder: (context, state) {
+          return const CustomerTermsConditionsScreen();
+        },
+      ),
+
     ],
   );
 

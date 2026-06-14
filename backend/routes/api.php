@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
+
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Client\ClientReviewCommentController;
 use App\Http\Controllers\Api\Client\ClientReviewController;
@@ -279,6 +281,8 @@ Route::prefix('client/explore')->group(function () {
         Route::delete('/payment-methods/{paymentMethod}', [ClientPaymentMethodController::class, 'destroy']);
 
         Route::get('/payment-transactions', [ClientPaymentTransactionController::class, 'index']);
+
+        Route::get('/legal-settings', ClientLegalSettingsController::class);
 
         });
         

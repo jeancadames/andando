@@ -24,7 +24,7 @@ class ProviderBooking extends Model
         'unit_price',
         'total_amount',
         'provider_earning',
-        'status',
+    'status',
     ];
 
     protected $casts = [

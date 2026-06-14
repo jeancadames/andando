@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Provider;
 
+use App\Http\Controllers\Api\Provider\Concerns\ResolvesCurrentProvider;
 use App\Http\Controllers\Controller;
 use App\Models\ProviderExperience;
 use App\Models\ProviderExperienceSchedule;
@@ -14,6 +15,8 @@ use Illuminate\Validation\Rule;
 
 class ProviderExperienceScheduleController extends Controller
 {
+    use ResolvesCurrentProvider;
+
     private const MAX_GENERATED_DATES = 370;
 
     public function index(Request $request, ProviderExperience $experience): JsonResponse
@@ -400,7 +403,9 @@ class ProviderExperienceScheduleController extends Controller
 
     private function authorizeProvider(Request $request, ProviderExperience $experience): void
     {
-        if ((int) $experience->provider_id !== (int) $request->user()->id) {
+        $provider = $this->currentProvider($request);
+
+        if ((int) $experience->provider_id !== (int) $provider->id) {
             abort(403, 'No tienes permiso para esta experiencia.');
         }
     }
