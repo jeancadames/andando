@@ -36,7 +36,6 @@ class ProviderExperience extends Model
         'duration',
         'location',
         'province',
-        'start_location',
         'experience_address',
         'experience_latitude',
         'experience_longitude',
@@ -53,6 +52,7 @@ class ProviderExperience extends Model
         'status',
         'published_at',
         'is_active',
+        'includes_transport',
     ];
 
     /**
@@ -74,6 +74,7 @@ class ProviderExperience extends Model
         'capacity' => 'integer',
         'is_active' => 'boolean',
         'published_at' => 'datetime',
+        'includes_transport' => 'boolean',
     ];
 
     /**

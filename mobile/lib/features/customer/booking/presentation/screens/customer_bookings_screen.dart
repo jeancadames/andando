@@ -164,24 +164,40 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   }
 
   Future<void> _openPickupDirections(CustomerBookingModel booking) async {
-    final pickup = booking.pickupPoint?.trim();
+    Uri? uri;
 
-    if (pickup == null || pickup.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Esta reserva no tiene punto de recogida disponible.'),
-        ),
+    if (booking.includesTransport) {
+      final pickup = booking.pickupPoint?.trim();
+
+      if (pickup == null || pickup.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esta reserva no tiene punto de recogida disponible.'),
+          ),
+        );
+        return;
+      }
+
+      final query = Uri.encodeComponent(pickup);
+
+      uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$query',
       );
-      return;
+    } else {
+      if (booking.experienceLatitude == null ||
+          booking.experienceLongitude == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esta reserva no tiene ubicación disponible.'),
+          ),
+        );
+        return;
+      }
+
+      uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=${booking.experienceLatitude},${booking.experienceLongitude}',
+      );
     }
-
-    final query = Uri.encodeComponent(
-      '$pickup, ${booking.displayLocation}',
-    );
-
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$query',
-    );
 
     final canOpen = await canLaunchUrl(uri);
 
@@ -766,10 +782,8 @@ class _BookingCard extends StatelessWidget {
                     Expanded(
                       child: _MiniInfo(
                         icon: Icons.place_outlined,
-                        label: 'Recogida',
-                        value: booking.pickupPoint?.trim().isNotEmpty == true
-                            ? booking.pickupPoint!
-                            : 'No especificada',
+                        label: booking.includesTransport ? 'Recogida' : 'Destino',
+                        value: booking.displayBookingLocationValue,
                       ),
                     ),
                   ],
@@ -1063,17 +1077,16 @@ class _BookingDetailsDialog extends StatelessWidget {
                                   : '${booking.guestsCount} personas',
                             ),
                             _DetailRow(
-                              label: 'Punto de recogida',
-                              value: booking.pickupPoint?.trim().isNotEmpty ==
-                                      true
-                                  ? booking.pickupPoint!
-                                  : 'No especificado',
+                              label: 'Provincia',
+                              value: booking.province?.trim().isNotEmpty == true
+                                  ? booking.province!
+                                  : booking.displayLocation,
                               isLast: true,
                             ),
                           ],
                         ),
                       ),
-                      if (booking.pickupPoint?.trim().isNotEmpty == true) ...[
+                      if (booking.hasDirectionsLocation) ...[
                         const SizedBox(height: 16),
                         Container(
                           width: double.infinity,
@@ -1088,7 +1101,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
                                   Icon(
                                     Icons.location_on_rounded,
@@ -1098,7 +1111,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                                   SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Punto de recogida',
+                                      booking.displayBookingLocationLabel,
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900,
@@ -1110,7 +1123,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                booking.pickupPoint!,
+                                booking.displayBookingLocationValue,
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w900,
@@ -1118,7 +1131,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              const Text(
+                              Text(
                                 'Llega 15 minutos antes del inicio de la experiencia.',
                                 style: TextStyle(
                                   fontSize: 13,

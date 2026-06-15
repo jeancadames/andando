@@ -19,11 +19,16 @@ class CustomerExperienceModel {
   final String? duration;
   final String? location;
   final String? province;
+  final String? experienceAddress;
+  final double? experienceLatitude;
+  final double? experienceLongitude;
+  final double? distanceKm;
   final double price;
   final String currency;
   final int capacity;
   final String? cancellationPolicy;
   final bool instantConfirmation;
+  final bool includesTransport;
   
 
   /// URL principal que se muestra en cards y detalle.
@@ -80,11 +85,16 @@ class CustomerExperienceModel {
     required this.duration,
     required this.location,
     required this.province,
+    required this.experienceAddress,
+    required this.experienceLatitude,
+    required this.experienceLongitude,
+    required this.distanceKm,
     required this.price,
     required this.currency,
     required this.capacity,
     required this.cancellationPolicy,
     required this.instantConfirmation,
+    required this.includesTransport,
     required this.coverPhotoUrl,
     required this.photos,
     required this.rating,
@@ -109,11 +119,25 @@ class CustomerExperienceModel {
       duration: json['duration']?.toString(),
       location: json['location']?.toString(),
       province: json['province']?.toString(),
+      experienceAddress: json['experience_address']?.toString(),
+
+      experienceLatitude: json['experience_latitude'] == null
+          ? null
+          : _toDouble(json['experience_latitude']),
+
+      experienceLongitude: json['experience_longitude'] == null
+          ? null
+          : _toDouble(json['experience_longitude']),
+
+      distanceKm: json['distance_km'] == null
+          ? null
+          : _toDouble(json['distance_km']),
       price: _toDouble(json['price']),
       currency: json['currency']?.toString() ?? 'DOP',
       capacity: _toInt(json['capacity']),
       cancellationPolicy: json['cancellation_policy']?.toString(),
       instantConfirmation: _toBool(json['instant_confirmation']),
+      includesTransport: _toBool(json['includes_transport']),
       coverPhotoUrl: _resolveCoverPhotoUrl(json),
       photos: _parsePhotos(json['photos']),
       rating: _toDouble(json['rating']),
@@ -169,6 +193,27 @@ class CustomerExperienceModel {
     }
 
     return 'Ubicación no especificada';
+  }
+
+  String get displayDestinationLocation {
+    if (experienceAddress != null &&
+        experienceAddress!.trim().isNotEmpty) {
+      return experienceAddress!;
+    }
+
+    return displayLocation;
+  }
+
+  String get displayDistance {
+    if (distanceKm == null) {
+      return '';
+    }
+
+    if (distanceKm! < 1) {
+      return '${(distanceKm! * 1000).round()} m de ti';
+    }
+
+    return '${distanceKm!.toStringAsFixed(1)} km de ti';
   }
 
   /// Duración segura para UI.

@@ -209,8 +209,8 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.capacity = loadedForm.capacity;
         _form.price = loadedForm.price;
         _form.currency = loadedForm.currency;
-        _form.startLocation = loadedForm.startLocation;
         _form.province = loadedForm.province;
+        _form.includesTransport = loadedForm.includesTransport;
         _form.experienceAddress = loadedForm.experienceAddress;
         _form.experienceLatitude = loadedForm.experienceLatitude;
         _form.experienceLongitude = loadedForm.experienceLongitude;
@@ -255,20 +255,17 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         return widget.isEditing || _form.photos.length >= 3;
 
       case 3:
-        final hasPickupPoint =
-            _form.pickupPoints.any((item) => item.trim().isNotEmpty) ||
-                _form.mapPickupPoints.isNotEmpty;
-
         final hasExperienceLocation =
             _form.experienceAddress.trim().isNotEmpty &&
                 _form.experienceLatitude != null &&
                 _form.experienceLongitude != null;
 
+        final hasPickupPoint = _form.mapPickupPoints.isNotEmpty;
+
         return _form.price > 0 &&
-          _form.startLocation.trim().isNotEmpty &&
-          _form.province.trim().isNotEmpty &&
-          hasPickupPoint &&
-          hasExperienceLocation;
+            _form.province.trim().isNotEmpty &&
+            hasExperienceLocation &&
+            (!_form.includesTransport || hasPickupPoint);
 
       case 4:
         return _form.itinerary.length >= 2 &&
@@ -909,17 +906,6 @@ class _PriceLocationStep extends StatelessWidget {
           commissionRate: commissionRate,
           pricingSettingsLoaded: pricingSettingsLoaded,
         ),
-        _Input(
-          label: 'Punto de partida general *',
-          initialValue: form.startLocation,
-          hint: 'Ej: Zona Colonial, Santo Domingo',
-          maxLines: 3,
-          prefixIcon: Icons.location_on,
-          onChanged: (value) {
-            form.startLocation = value;
-            onChanged();
-          },
-        ),
         _DropdownInput(
           label: 'Provincia *',
           value: form.province.isEmpty ? null : form.province,
@@ -934,11 +920,35 @@ class _PriceLocationStep extends StatelessWidget {
           token: token,
           onChanged: onChanged,
         ),
-        _PickupPointsSection(
-          form: form,
-          token: token,
-          onChanged: onChanged,
+
+        SwitchListTile(
+          value: form.includesTransport,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            '¿Esta experiencia incluye transporte?',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text(
+            'Actívalo si vas a recoger al cliente en puntos específicos.',
+          ),
+          onChanged: (value) {
+            form.includesTransport = value;
+
+            if (!value) {
+              form.mapPickupPoints.clear();
+              form.pickupPoints = [''];
+            }
+
+            onChanged();
+          },
         ),
+
+        if (form.includesTransport)
+          _PickupPointsSection(
+            form: form,
+            token: token,
+            onChanged: onChanged,
+          ),
       ],
     );
   }
@@ -1099,13 +1109,6 @@ class _PickupPointsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _EditableStringList(
-          label: 'Puntos de recogida manuales *',
-          items: form.pickupPoints,
-          hint: 'Ej: Agora Mall',
-          onChanged: onChanged,
-        ),
-
         const SizedBox(height: 12),
 
         SizedBox(

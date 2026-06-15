@@ -8,11 +8,11 @@ class ProviderExperience {
   final String? duration;
   final String? location;
   final String? province;
-  final String? startLocation;
 
   final String? experienceAddress;
   final double? experienceLatitude;
   final double? experienceLongitude;
+  final bool includesTransport;
 
   final List<String> pickupPoints;
   final List<MapPickupPoint> mapPickupPoints;
@@ -44,10 +44,10 @@ class ProviderExperience {
     required this.duration,
     required this.location,
     required this.province,
-    required this.startLocation,
     required this.experienceAddress,
     required this.experienceLatitude,
     required this.experienceLongitude,
+    required this.includesTransport,
     required this.pickupPoints,
     required this.mapPickupPoints,
     required this.price,
@@ -79,11 +79,13 @@ class ProviderExperience {
       duration: json['duration']?.toString(),
       location: json['location']?.toString(),
       province: json['province']?.toString(),
-      startLocation: json['start_location']?.toString(),
 
       experienceAddress: json['experience_address']?.toString(),
       experienceLatitude: _toNullableDouble(json['experience_latitude']),
       experienceLongitude: _toNullableDouble(json['experience_longitude']),
+      includesTransport: json['includes_transport'] == true ||
+        json['includes_transport'] == 1 ||
+        json['includes_transport']?.toString() == '1',
 
       pickupPoints: _stringList(json['pickup_points']),
       mapPickupPoints: _mapPickupPointList(json['map_pickup_points']),

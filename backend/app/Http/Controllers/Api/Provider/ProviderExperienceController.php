@@ -225,12 +225,11 @@ class ProviderExperienceController extends Controller
 
             'location' => ['nullable', 'string', 'max:255'],
             'province' => [$requiredIfPublishing, 'string', 'max:100'],
-            'start_location' => ['nullable', 'string'],
-            'startLocation' => ['nullable', 'string'],
 
             'experience_address' => ['nullable', 'string', 'max:255'],
             'experience_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'experience_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'includes_transport' => ['nullable', 'boolean'],
 
             'pickup_points' => [$requiredIfPublishing, 'array'],
             'pickup_points.*' => ['nullable', 'string', 'max:255'],
@@ -275,11 +274,11 @@ class ProviderExperienceController extends Controller
             'duration' => $validated['duration'] ?? null,
             'location' => $validated['location'] ?? null,
             'province' => $validated['province'] ?? null,
-            'start_location' => $validated['start_location'] ?? $validated['startLocation'] ?? null,
 
             'experience_address' => $validated['experience_address'] ?? null,
             'experience_latitude' => $validated['experience_latitude'] ?? null,
             'experience_longitude' => $validated['experience_longitude'] ?? null,
+            'includes_transport' => (bool) ($validated['includes_transport'] ?? false),
 
             'pickup_points' => $this->cleanArray($validated['pickup_points'] ?? []),
             'price' => $validated['price'] ?? 0,
@@ -331,7 +330,6 @@ class ProviderExperienceController extends Controller
             'description',
             'duration',
             'province',
-            'start_location',
             'price',
             'capacity',
             'cancellation_policy',
@@ -341,8 +339,20 @@ class ProviderExperienceController extends Controller
             }
         }
 
-        if (count($experience->pickup_points ?? []) < 1) {
-            $missing[] = 'pickup_points';
+        if (
+            blank($experience->experience_address) ||
+            blank($experience->experience_latitude) ||
+            blank($experience->experience_longitude)
+        ) {
+            $missing[] = 'experience_location';
+        }
+
+        if ($experience->includes_transport) {
+            $mapPickupPointsCount = $experience->mapPickupPoints()->count();
+
+            if ($mapPickupPointsCount < 1) {
+                $missing[] = 'map_pickup_points';
+            }
         }
 
         if (count($experience->itinerary ?? []) < 2) {
@@ -427,7 +437,6 @@ class ProviderExperienceController extends Controller
             'duration' => $experience->duration,
             'location' => $experience->location,
             'province' => $experience->province,
-            'start_location' => $experience->start_location,
 
             'experience_address' => $experience->experience_address,
             'experience_latitude' => $experience->experience_latitude !== null
@@ -436,7 +445,8 @@ class ProviderExperienceController extends Controller
             'experience_longitude' => $experience->experience_longitude !== null
                 ? (float) $experience->experience_longitude
                 : null,
-
+            'includes_transport' => (bool) $experience->includes_transport,
+            
             'pickup_points' => $experience->pickup_points ?? [],
             'map_pickup_points' => $mapPickupPoints->map(fn ($point) => [
                 'id' => $point->id,

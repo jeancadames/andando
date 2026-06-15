@@ -113,7 +113,7 @@ class CustomerBookingRemoteDataSource {
   Future<CustomerBookingModel> createBooking({
     required int scheduleId,
     required int guestsCount,
-    required String pickupPoint,
+    String? pickupPoint,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/client/bookings');
 
@@ -123,7 +123,8 @@ class CustomerBookingRemoteDataSource {
       body: jsonEncode({
         'provider_experience_schedule_id': scheduleId,
         'guests_count': guestsCount,
-        'pickup_point': pickupPoint,
+        if (pickupPoint != null && pickupPoint.trim().isNotEmpty)
+          'pickup_point': pickupPoint,
       }),
     );
 

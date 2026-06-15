@@ -54,10 +54,19 @@ class ClientBookingController extends Controller
                     'unit_price' => (float) $booking->unit_price,
                     'total_amount' => (float) $booking->total_amount,
                     'currency' => $experience?->currency ?? 'DOP',
-                    'pickup_point' => $booking->pickup_point
-                        ?? $experience?->start_location
-                        ?? $experience?->location
-                        ?? $experience?->province,
+
+                    'includes_transport' => (bool) ($experience?->includes_transport ?? false),
+
+                    'experience_address' => $experience?->experience_address,
+                    'experience_latitude' => $experience?->experience_latitude !== null
+                        ? (float) $experience->experience_latitude
+                        : null,
+                    'experience_longitude' => $experience?->experience_longitude !== null
+                        ? (float) $experience->experience_longitude
+                        : null,
+
+                    'pickup_point' => $booking->pickup_point,
+
                     'duration' => $experience?->duration,
                     'has_review' => $booking->review !== null,
                     'review_id' => $booking->review?->id,
@@ -96,7 +105,7 @@ class ClientBookingController extends Controller
                 'min:1',
             ],
             'pickup_point' => [
-                'required',
+                'nullable',
                 'string',
                 'max:255',
             ],
@@ -112,18 +121,34 @@ class ClientBookingController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $pickupPoints = collect($schedule->experience?->pickup_points ?? [])
-                ->map(fn ($point) => trim((string) $point))
-                ->filter()
-                ->values();
+            $experience = $schedule->experience;
 
-            if ($pickupPoints->isEmpty()) {
-                abort(422, 'Esta experiencia no tiene puntos de recogida disponibles.');
+            if (! $experience) {
+                abort(422, 'La experiencia no está disponible.');
             }
 
-            if (! $pickupPoints->contains($data['pickup_point'])) {
-                abort(422, 'Selecciona un punto de recogida válido.');
-}
+            $includesTransport = (bool) $experience->includes_transport;
+
+            if ($includesTransport) {
+                $pickupPoints = collect($experience->mapPickupPoints ?? [])
+                    ->map(fn ($point) => trim((string) $point->name))
+                    ->filter()
+                    ->values();
+
+                if ($pickupPoints->isEmpty()) {
+                    abort(422, 'Esta experiencia no tiene puntos de recogida disponibles.');
+                }
+
+                $selectedPickupPoint = trim((string) ($data['pickup_point'] ?? ''));
+
+                if ($selectedPickupPoint === '') {
+                    abort(422, 'Selecciona un punto de recogida.');
+                }
+
+                if (! $pickupPoints->contains($selectedPickupPoint)) {
+                    abort(422, 'Selecciona un punto de recogida válido.');
+                }
+            }
 
             $reservedGuests = ProviderBooking::query()
                 ->where('provider_experience_schedule_id', $schedule->id)
@@ -136,7 +161,7 @@ class ClientBookingController extends Controller
                 abort(422, 'No hay cupos suficientes para esta fecha.');
             }
 
-            $unitPrice = $schedule->price ?? $schedule->experience->price;
+            $unitPrice = $schedule->price ?? $experience->price;
             $totalAmount = $unitPrice * $data['guests_count'];
 
             $booking = ProviderBooking::create([
@@ -149,7 +174,9 @@ class ClientBookingController extends Controller
                 'customer_phone' => $user->phone ?? null,
                 'customer_email' => $user->email,
                 'booking_date' => $schedule->starts_at,
-                'pickup_point' => $data['pickup_point'],
+                'pickup_point' => $includesTransport
+                    ? trim((string) ($data['pickup_point'] ?? ''))
+                    : null,
                 'guests_count' => $data['guests_count'],
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
@@ -258,9 +285,6 @@ class ClientBookingController extends Controller
         $includedItems = $experience?->included ?? [];
 
         $pickupPointText = $booking->pickup_point
-            ?? $experience?->start_location
-            ?? $experience?->location
-            ?? $experience?->province
             ?? 'No especificado';
 
         $cancellationPolicyText = $this->formatCancellationPolicy(

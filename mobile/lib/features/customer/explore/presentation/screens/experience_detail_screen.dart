@@ -72,7 +72,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   }
 
   bool get canReserve {
-    final hasRequiredPickupPoint = widget.experience.pickupPoints.isEmpty ||
+    final hasRequiredPickupPoint = !widget.experience.includesTransport ||
         (selectedPickupPoint != null && selectedPickupPoint!.trim().isNotEmpty);
 
     return selectedSchedule != null &&
@@ -509,8 +509,8 @@ Future<void> _reserveExperience() async {
     return;
   }
 
-  if (widget.experience.pickupPoints.isNotEmpty &&
-      (selectedPickupPoint == null || selectedPickupPoint!.trim().isEmpty)) {
+  if (widget.experience.includesTransport &&
+    (selectedPickupPoint == null || selectedPickupPoint!.trim().isEmpty)) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Selecciona un punto de recogida antes de reservar.'),
@@ -552,7 +552,9 @@ Future<void> _reserveExperience() async {
     final booking = await _bookingDataSource.createBooking(
       scheduleId: selectedSchedule!.id,
       guestsCount: travelers,
-      pickupPoint: selectedPickupPoint ?? '',
+      pickupPoint: widget.experience.includesTransport
+        ? selectedPickupPoint
+        : null,
     );
 
     _decreaseAvailableSpotsAfterBooking();
@@ -695,7 +697,9 @@ Future<void> _reserveExperience() async {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
               child: _BookingCard(
-                pickupPoints: experience.pickupPoints,
+                pickupPoints: experience.includesTransport
+                  ? experience.pickupPoints
+                  : const [],
                 selectedPickupPoint: selectedPickupPoint,
                 onPickupPointChanged: (value) {
                   setState(() {

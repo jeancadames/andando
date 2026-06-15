@@ -15,6 +15,8 @@ class ExploreRemoteDataSource {
     String? category,
     String? province,
     DateTime? selectedDate,
+    double? latitude,
+    double? longitude,
   }) async {
     final queryParams = <String, String>{};
 
@@ -34,6 +36,11 @@ class ExploreRemoteDataSource {
 
     if (province != null && province.trim().isNotEmpty) {
       queryParams['province'] = province.trim();
+    }
+
+    if (latitude != null && longitude != null) {
+      queryParams['latitude'] = latitude.toString();
+      queryParams['longitude'] = longitude.toString();
     }
 
     final uri = Uri.parse(
