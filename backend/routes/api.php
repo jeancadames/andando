@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Client\ClientPasswordController;
 use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
 
 use App\Http\Controllers\Api\Auth\LoginController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\Client\ClientPaymentMethodController;
 use App\Http\Controllers\Api\Client\ClientPaymentTransactionController;
 use App\Http\Controllers\Api\Client\ClientClaimController;
 use App\Http\Controllers\Api\Provider\ProviderClaimController;
+
 
 use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Api\Provider\ProviderPlacesController;
@@ -246,6 +248,7 @@ Route::prefix('client/explore')->group(function () {
         Route::put('/profile', [ClientProfileController::class, 'update']);
         Route::post('/profile/photo', [ClientProfileController::class, 'updatePhoto']);
         Route::post('/logout', [ClientProfileController::class, 'logout']);
+        Route::put('/profile/password', [ClientPasswordController::class, 'update']);
         
         Route::get('/bookings', [ClientBookingController::class, 'index']);
         Route::post('/bookings', [ClientBookingController::class, 'store']);

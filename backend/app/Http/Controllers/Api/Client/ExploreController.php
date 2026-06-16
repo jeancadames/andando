@@ -86,6 +86,12 @@ class ExploreController extends Controller
             $lat = (float) $userLatitude;
             $lng = (float) $userLongitude;
 
+            $radiusKm = $request->query('radius_km');
+
+            $radiusKm = is_numeric($radiusKm)
+                ? max(10, min(200, (float) $radiusKm))
+                : null;
+
             $query
                 ->whereNotNull('experience_latitude')
                 ->whereNotNull('experience_longitude')
@@ -99,8 +105,13 @@ class ExploreController extends Controller
                         sin(radians(experience_latitude))
                     )) as distance_km',
                     [$lat, $lng, $lat]
-                )
-                ->orderBy('distance_km');
+                );
+
+            if ($radiusKm !== null) {
+                $query->having('distance_km', '<=', $radiusKm);
+            }
+
+            $query->orderBy('distance_km');
         } else {
             $query->latest('published_at');
         }

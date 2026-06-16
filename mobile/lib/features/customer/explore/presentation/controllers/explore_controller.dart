@@ -3,9 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../data/datasources/explore_remote_datasource.dart';
 import '../../data/models/customer_experience_model.dart';
+import '../../../profile/data/services/customer_location_preferences_service.dart';
 
 class ExploreController extends ChangeNotifier {
   final ExploreRemoteDataSource _dataSource;
+
+  final CustomerLocationPreferencesService _locationPreferencesService =
+    CustomerLocationPreferencesService();
+
+    int searchRadiusKm = 50;
+    bool gpsEnabled = true;
+    bool autoDetectLocation = false;
 
   ExploreRemoteDataSource get dataSource => _dataSource;
 
@@ -65,13 +73,24 @@ class ExploreController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
-    await _loadUserLocation();
+    await _loadLocationPreferences();
+
+    if (gpsEnabled || autoDetectLocation) {
+      await _loadUserLocation();
+    }
 
     await Future.wait([
       loadCategories(),
       loadExperiences(),
       loadNearbyExperiences(),
     ]);
+  }
+
+  Future<void> _loadLocationPreferences() async {
+    gpsEnabled = await _locationPreferencesService.getGpsEnabled();
+    autoDetectLocation =
+        await _locationPreferencesService.getAutoDetectEnabled();
+    searchRadiusKm = await _locationPreferencesService.getSearchRadiusKm();
   }
 
   Future<void> loadExperiences() async {
@@ -184,6 +203,7 @@ class ExploreController extends ChangeNotifier {
         selectedDate: selectedDate,
         latitude: userLatitude,
         longitude: userLongitude,
+        radiusKm: searchRadiusKm,
       );
 
       nearbyExperiencesList = nearbyExperiencesList
