@@ -224,25 +224,44 @@ class _LoginScreenState extends State<LoginScreen> {
   /// Por ahora NO llama backend.
   /// Solo dejamos el botón visualmente listo para conectar después.
   Future<void> _handleGoogleLogin() async {
+    if (_isGoogleLoading || _isLoading || _isAppleLoading) {
+      return;
+    }
+
     setState(() {
       _isGoogleLoading = true;
     });
 
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    try {
+      await widget.authController.loginWithGoogle();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isGoogleLoading = false;
-    });
+      final normalizedUserType = _normalizeUserType(
+        widget.authController.userType ?? 'customer',
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Inicio de sesión con Google pendiente de conectar.',
+      _redirectAfterLogin(
+        userType: normalizedUserType,
+        providerStatus: widget.authController.providerStatus,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGoogleLoading = false;
+        });
+      }
+    }
   }
 
   /// Acción temporal del botón "Continuar con Apple".
