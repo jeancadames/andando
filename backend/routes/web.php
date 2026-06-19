@@ -2,10 +2,9 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', fn () => Inertia::render('Home'))->name('home');
 
 // /*
 // |--------------------------------------------------------------------------
