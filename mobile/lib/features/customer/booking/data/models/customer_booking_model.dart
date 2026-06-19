@@ -110,7 +110,18 @@ class CustomerBookingModel {
 
   bool get isCompleted => status.toLowerCase() == 'completed';
 
-  bool get isUpcoming => !isCompleted;
+  bool get isCancelled {
+    final normalizedStatus = status.toLowerCase();
+
+    return normalizedStatus == 'cancelled' ||
+        normalizedStatus == 'cancelled_free' ||
+        normalizedStatus == 'cancelled_with_fee' ||
+        normalizedStatus == 'cancelled_refund_pending' ||
+        normalizedStatus == 'cancelled_refunded' ||
+        normalizedStatus == 'cancelled_penalty_applied';
+  }
+
+  bool get isUpcoming => !isCompleted && !isCancelled;
 
   String get formattedTotalAmount {
     final formatter = NumberFormat('#,###', 'en_US');

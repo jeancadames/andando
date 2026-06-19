@@ -254,7 +254,9 @@ Route::prefix('client/explore')->group(function () {
         Route::post('/bookings', [ClientBookingController::class, 'store']);
         Route::get('/bookings/{booking}/receipt', [ClientBookingController::class, 'receipt']);
         Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
-        
+        Route::get('/bookings/{booking}/cancellation-preview', [ClientBookingController::class, 'cancellationPreview']);
+        Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
+
         Route::get('/claims', [ClientClaimController::class, 'index']);
         Route::post('/claims', [ClientClaimController::class, 'store']);
         Route::get('/claims/{claim}', [ClientClaimController::class, 'show']);

@@ -49,6 +49,9 @@ class ProviderExperience extends Model
         'not_included',
         'requirements',
         'cancellation_policy',
+        'cancellation_penalty_hours',
+        'cancellation_penalty_percentage',
+        'cancellation_policy_description',
         'status',
         'published_at',
         'is_active',
@@ -75,6 +78,8 @@ class ProviderExperience extends Model
         'is_active' => 'boolean',
         'published_at' => 'datetime',
         'includes_transport' => 'boolean',
+        'cancellation_penalty_hours' => 'integer',
+        'cancellation_penalty_percentage' => 'integer',
     ];
 
     /**

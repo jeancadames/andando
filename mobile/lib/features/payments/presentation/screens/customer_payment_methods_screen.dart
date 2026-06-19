@@ -80,9 +80,15 @@ class _CustomerPaymentMethodsScreenState
     if (added == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Tarjeta guardada correctamente.'),
+          content: Text('Tarjeta agregada correctamente. Ya puedes continuar con tu reserva.'),
         ),
       );
+
+      await Future.delayed(const Duration(milliseconds: 650));
+
+      if (!mounted) return;
+
+      context.pop(true);
     } else if (_controller.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

@@ -24,7 +24,12 @@ class ProviderBooking extends Model
         'unit_price',
         'total_amount',
         'provider_earning',
-    'status',
+        'status',
+        'cancelled_at',
+        'cancellation_policy_type',
+        'refund_amount',
+        'administrative_fee_amount',
+        'refund_percentage',
     ];
 
     protected $casts = [
@@ -33,6 +38,10 @@ class ProviderBooking extends Model
         'unit_price' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'provider_earning' => 'decimal:2',
+        'cancelled_at' => 'datetime',
+        'refund_amount' => 'decimal:2',
+        'administrative_fee_amount' => 'decimal:2',
+        'refund_percentage' => 'integer',
     ];
 
     /**

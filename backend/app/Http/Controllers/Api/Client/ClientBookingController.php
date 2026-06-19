@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\Client;
 
 use Barryvdh\DomPDF\Facade\Pdf;
 
-
+use App\Models\CustomerPaymentMethod;
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
@@ -113,6 +113,18 @@ class ClientBookingController extends Controller
 
         $user = $request->user();
 
+        $defaultPaymentMethod = CustomerPaymentMethod::query()
+            ->where('user_id', $user->id)
+            ->where('is_default', true)
+            ->first();
+
+        if (! $defaultPaymentMethod) {
+            return response()->json([
+                'message' => 'Debes registrar una tarjeta principal antes de realizar una reserva.',
+                'code' => 'CARD_REQUIRED',
+            ], 422);
+        }
+
         $booking = DB::transaction(function () use ($data, $user) {
             $schedule = ProviderExperienceSchedule::query()
                 ->with('experience.provider')
@@ -207,6 +219,40 @@ class ClientBookingController extends Controller
         ], 201);
     }
 
+    public function cancellationPreview(Request $request, ProviderBooking $booking): JsonResponse
+    {
+        if ($booking->user_id !== $request->user()->id) {
+            abort(403, 'No tienes permiso para consultar esta reserva.');
+        }
+
+        if (in_array($booking->status, ['completed', 'cancelled'], true)) {
+            return response()->json([
+                'message' => 'Esta reserva ya no puede ser cancelada.',
+                'data' => [
+                    'can_cancel' => false,
+                ],
+            ], 422);
+        }
+
+        $booking->load(['schedule', 'experience']);
+
+        $startsAt = $booking->schedule?->starts_at ?? $booking->booking_date;
+
+        if ($startsAt && $startsAt->lte(now())) {
+            return response()->json([
+                'message' => 'No puedes cancelar una reserva que ya inició.',
+                'data' => [
+                    'can_cancel' => false,
+                ],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Vista previa de cancelación generada correctamente.',
+            'data' => $this->buildCancellationPreviewData($booking),
+        ]);
+    }
+
     public function cancel(Request $request, ProviderBooking $booking): JsonResponse
     {
         if ($booking->user_id !== $request->user()->id) {
@@ -219,7 +265,7 @@ class ClientBookingController extends Controller
             ], 422);
         }
 
-        $booking->load('schedule');
+        $booking->load(['schedule', 'experience']);
 
         $startsAt = $booking->schedule?->starts_at ?? $booking->booking_date;
 
@@ -229,8 +275,15 @@ class ClientBookingController extends Controller
             ], 422);
         }
 
+        $preview = $this->buildCancellationPreviewData($booking);
+
         $booking->update([
             'status' => 'cancelled',
+            'cancelled_at' => now(),
+            'cancellation_policy_type' => $preview['policy_type'],
+            'refund_amount' => $preview['refund_amount'],
+            'administrative_fee_amount' => $preview['administrative_fee_amount'],
+            'refund_percentage' => $preview['refund_percentage'],
         ]);
 
         return response()->json([
@@ -239,6 +292,10 @@ class ClientBookingController extends Controller
                 'id' => $booking->id,
                 'booking_code' => $booking->booking_code,
                 'status' => $booking->status,
+                'cancellation_policy_type' => $booking->cancellation_policy_type,
+                'refund_amount' => (float) $booking->refund_amount,
+                'administrative_fee_amount' => (float) $booking->administrative_fee_amount,
+                'refund_percentage' => (int) $booking->refund_percentage,
             ],
         ]);
     }
@@ -358,6 +415,70 @@ class ClientBookingController extends Controller
         return 8;
     }
 
+    private function buildCancellationPreviewData(ProviderBooking $booking): array
+    {
+        $booking->loadMissing(['schedule', 'experience']);
+
+        $startsAt = $booking->schedule?->starts_at ?? $booking->booking_date;
+
+        $totalAmount = (float) $booking->total_amount;
+        $policy = $booking->experience?->cancellation_policy;
+
+        $penaltyHours = $this->getCancellationPenaltyHours($policy);
+
+        $isNoRefundPolicy = trim((string) $policy) === 'no_refund';
+
+        $isInsideProviderPenaltyWindow = false;
+
+        if ($isNoRefundPolicy) {
+            $isInsideProviderPenaltyWindow = true;
+        } elseif ($startsAt) {
+            $hoursUntilExperience = now()->diffInHours($startsAt, false);
+            $isInsideProviderPenaltyWindow = $hoursUntilExperience <= $penaltyHours;
+        }
+
+        $isWithinFirst24Hours = $booking->created_at
+            ? $booking->created_at->copy()->addHours(24)->gt(now())
+            : false;
+
+        if ($isInsideProviderPenaltyWindow) {
+            return [
+                'can_cancel' => true,
+                'policy_type' => 'no_refund',
+                'total_amount' => $totalAmount,
+                'refund_amount' => 0,
+                'administrative_fee_amount' => 0,
+                'refund_percentage' => 0,
+                'message' => 'Esta reserva se encuentra dentro del período no reembolsable de la experiencia. No aplica reembolso.',
+            ];
+        }
+
+        if ($isWithinFirst24Hours) {
+            return [
+                'can_cancel' => true,
+                'policy_type' => 'free_refund',
+                'total_amount' => $totalAmount,
+                'refund_amount' => $totalAmount,
+                'administrative_fee_amount' => 0,
+                'refund_percentage' => 100,
+                'message' => 'Tu reserva aún se encuentra dentro de las primeras 24 horas. Puedes cancelar sin penalidad.',
+            ];
+        }
+
+        $administrativeFee = round($totalAmount * 0.05, 2);
+        $refundAmount = round($totalAmount - $administrativeFee, 2);
+
+        return [
+            'can_cancel' => true,
+            'policy_type' => 'partial_refund',
+            'total_amount' => $totalAmount,
+            'refund_amount' => $refundAmount,
+            'administrative_fee_amount' => $administrativeFee,
+            'refund_percentage' => 95,
+            'message' => 'Puedes cancelar esta reserva. AndanDO retendrá un 5% por costos administrativos y reembolsará el 95% restante.',
+        ];
+    }
+
     private function generateUniqueBookingCode(): string
     {
         do {
@@ -422,6 +543,18 @@ class ClientBookingController extends Controller
             default => $normalized !== ''
                 ? $normalized
                 : 'Cancelación sujeta a las políticas del proveedor y disponibilidad de la experiencia.',
+        };
+    }
+
+    private function getCancellationPenaltyHours(?string $policy): int
+    {
+        return match (trim((string) $policy)) {
+            'free_24h' => 24,
+            'free_48h' => 48,
+            'free_72h' => 72,
+            'free_5d' => 120,
+            'no_refund' => PHP_INT_MAX,
+            default => 24,
         };
     }
 

@@ -536,6 +536,7 @@ Future<void> _reserveExperience() async {
         unitPrice: formattedUnitPrice,
         totalPrice: formattedTotal,
         includedItems: widget.experience.displayAmenities,
+        cancellationPolicy: widget.experience.cancellationPolicy,
       );
     },
   );
@@ -578,6 +579,101 @@ Future<void> _reserveExperience() async {
         context.go('/client/bookings?bookingCode=${booking.bookingCode}');
       });
     }
+  } on CustomerBookingException catch (error) {
+    if (!mounted) return;
+
+    if (error.code == 'CARD_REQUIRED') {
+      final goToPaymentMethods = await showDialog<bool>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          return Dialog(
+            backgroundColor: Colors.white,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEFF6FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.credit_card_rounded,
+                      size: 34,
+                      color: Color(0xFF003B73),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Agrega una tarjeta',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    error.message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: () =>
+                          Navigator.of(dialogContext).pop(true),
+                      icon: const Icon(Icons.add_card_rounded),
+                      label: const Text('Agregar método de pago'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF003B73),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.of(dialogContext).pop(false),
+                    child: const Text('Cancelar'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      if (goToPaymentMethods == true && mounted) {
+        context.pushNamed('customerPaymentMethods');
+      }
+
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error.message)),
+    );
   } catch (error) {
     if (!mounted) return;
 
@@ -2233,6 +2329,7 @@ class _BookingReviewDialog extends StatefulWidget {
   final String unitPrice;
   final String totalPrice;
   final List<String> includedItems;
+  final String? cancellationPolicy;
 
   const _BookingReviewDialog({
     required this.experienceTitle,
@@ -2242,6 +2339,7 @@ class _BookingReviewDialog extends StatefulWidget {
     required this.unitPrice,
     required this.totalPrice,
     required this.includedItems,
+    required this.cancellationPolicy,
   });
 
   @override
@@ -2385,17 +2483,15 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              const _PolicyItem(
-                icon: Icons.shield_outlined,
-                iconColor: Color(0xFF16A34A),
-                title: 'Cancelación gratuita',
-                text: 'Cancela hasta 24 horas antes del inicio.',
+              _CancellationPolicyCard(
+                policy: widget.cancellationPolicy,
               ),
               const _PolicyItem(
                 icon: Icons.credit_card_rounded,
                 iconColor: Color(0xFF003B73),
                 title: 'Condiciones de cobro',
-                text: 'El cobro se realizará al confirmar la reserva.',
+                text:
+                    'Para reservar necesitas una tarjeta registrada. El cobro se realizará automáticamente 24 horas después de creada la reserva. Si la reserva se realiza dentro del período no reembolsable definido por el proveedor, las condiciones de cancelación aplican desde el momento de la reserva.',
               ),
               _PolicyItem(
                 icon: Icons.check_rounded,
@@ -2514,7 +2610,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
                     ),
                   ),
                   child: const Text(
-                    'Confirmar y Pagar',
+                    'Confirmar reserva',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
@@ -2547,6 +2643,154 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+  String _formatCancellationPolicy(String? policy) {
+  final normalized = policy?.trim();
+
+  switch (normalized) {
+    case 'free_24h':
+      return 'El proveedor permite cancelación gratuita hasta 24 horas antes del inicio. Si cancelas dentro de las últimas 24 horas, la reserva no será reembolsable. Si cancelas fuera de ese período, pero el cobro ya fue realizado, AndanDO retendrá un 5% administrativo y reembolsará el 95%.';
+
+    case 'free_48h':
+      return 'El proveedor permite cancelación gratuita hasta 48 horas antes del inicio. Si cancelas dentro de las últimas 48 horas, la reserva no será reembolsable. Si cancelas fuera de ese período, pero el cobro ya fue realizado, AndanDO retendrá un 5% administrativo y reembolsará el 95%.';
+
+    case 'free_72h':
+      return 'El proveedor permite cancelación gratuita hasta 72 horas antes del inicio. Si cancelas dentro de las últimas 72 horas, la reserva no será reembolsable. Si cancelas fuera de ese período, pero el cobro ya fue realizado, AndanDO retendrá un 5% administrativo y reembolsará el 95%.';
+
+    case 'free_5d':
+      return 'El proveedor permite cancelación gratuita hasta 5 días antes del inicio. Si cancelas dentro de los últimos 5 días, la reserva no será reembolsable. Si cancelas fuera de ese período, pero el cobro ya fue realizado, AndanDO retendrá un 5% administrativo y reembolsará el 95%.';
+
+    case 'no_refund':
+      return 'Esta experiencia es no reembolsable según la política del proveedor. Una vez creada la reserva, no aplica reembolso, salvo cancelación atribuible al proveedor o decisión administrativa de AndanDO.';
+
+    default:
+      return normalized != null && normalized.isNotEmpty
+          ? normalized
+          : 'Cancelación sujeta a la política del proveedor. Si cancelas fuera del período no reembolsable, pero el cobro ya fue realizado, AndanDO retendrá un 5% administrativo y reembolsará el 95%.';
+  }
+}
+
+class _CancellationPolicyCard extends StatelessWidget {
+  final String? policy;
+
+  const _CancellationPolicyCard({
+    required this.policy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = policy?.trim();
+
+    String title;
+    String freeWindow;
+    String penaltyWindow;
+
+    switch (normalized) {
+      case 'free_24h':
+        title = 'Política de esta experiencia';
+        freeWindow = 'Cancelación gratuita hasta 24 horas antes.';
+        penaltyWindow =
+            'Dentro de las últimas 24 horas no aplica reembolso.';
+        break;
+
+      case 'free_48h':
+        title = 'Política de esta experiencia';
+        freeWindow = 'Cancelación gratuita hasta 48 horas antes.';
+        penaltyWindow =
+            'Dentro de las últimas 48 horas no aplica reembolso.';
+        break;
+
+      case 'free_72h':
+        title = 'Política de esta experiencia';
+        freeWindow = 'Cancelación gratuita hasta 72 horas antes.';
+        penaltyWindow =
+            'Dentro de las últimas 72 horas no aplica reembolso.';
+        break;
+
+      case 'free_5d':
+        title = 'Política de esta experiencia';
+        freeWindow = 'Cancelación gratuita hasta 5 días antes.';
+        penaltyWindow =
+            'Dentro de los últimos 5 días no aplica reembolso.';
+        break;
+
+      case 'no_refund':
+        title = 'Política de esta experiencia';
+        freeWindow = 'Esta experiencia es no reembolsable.';
+        penaltyWindow =
+            'No aplica devolución después de creada la reserva.';
+        break;
+
+      default:
+        title = 'Política de esta experiencia';
+        freeWindow = 'Aplican condiciones de cancelación.';
+        penaltyWindow = '';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.gpp_good_rounded,
+                color: Color(0xFF16A34A),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Política de esta experiencia',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            freeWindow,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            penaltyWindow,
+            style: const TextStyle(
+              color: Color(0xFFDC2626),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          const Text(
+            'Luego de 24 horas de realizada la reserva, se procesará el cobro de la experiencia.\n\n'
+            'Si cancelas antes de entrar en el período no reembolsable, AndanDO reembolsará el 95% del monto pagado y retendrá un 5% por costos administrativos.\n\n'
+            'Si cancelas dentro del período no reembolsable de esta experiencia, no aplicará reembolso.',
+            style: TextStyle(
+              height: 1.4,
+              fontSize: 13,
+              color: Color(0xFF475569),
+            ),
+          ),
+        ],
       ),
     );
   }
