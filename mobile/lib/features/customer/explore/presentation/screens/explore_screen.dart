@@ -283,11 +283,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       ],
                     ),
                   ),
-                  if (_controller.isLoading)
-                    const SliverFillRemaining(
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                  if (_controller.isLoading || !_controller.hasLoadedOnce)
+                    const SliverToBoxAdapter(
+                      child: _ExploreLoadingSkeleton(),
                     )
                   else if (_controller.errorMessage != null)
                     SliverFillRemaining(
@@ -296,7 +294,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         onRetry: _controller.loadExperiences,
                       ),
                     )
-                  else if (_controller.experiences.isEmpty)
+                  else if (_controller.hasLoadedOnce && _controller.experiences.isEmpty)
                     SliverFillRemaining(
                       child: _EmptyState(
                         onClearFilters: _controller.clearFilters,
@@ -1048,6 +1046,84 @@ class _ErrorState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ExploreLoadingSkeleton extends StatelessWidget {
+  const _ExploreLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: List.generate(3, (_) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 190,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: 330,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: 3,
+                    separatorBuilder: (_, __) => const SizedBox(width: 16),
+                    itemBuilder: (_, __) {
+                      return Container(
+                        width: 260,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              height: 155,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE5E7EB),
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(26),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                children: List.generate(4, (index) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE5E7EB),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
       ),
     );
   }

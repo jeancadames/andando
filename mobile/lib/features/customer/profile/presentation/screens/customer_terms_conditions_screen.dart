@@ -109,8 +109,11 @@ class _CustomerTermsConditionsScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
       appBar: AppBar(
+        toolbarHeight: 64,
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
+        titleSpacing: 0,
         leading: IconButton(
           onPressed: () => context.pop(),
           icon: const Icon(
@@ -118,26 +121,32 @@ class _CustomerTermsConditionsScreenState
             color: Color(0xFF111827),
           ),
         ),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Términos y Condiciones',
-              style: TextStyle(
-                color: Color(0xFF111827),
-                fontWeight: FontWeight.w900,
-                fontSize: 20,
+        title: const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Términos y Condiciones',
+                style: TextStyle(
+                  color: Color(0xFF111827),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                  height: 1.1,
+                ),
               ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              'Última actualización: 1 de junio de 2026',
-              style: TextStyle(
-                color: Color(0xFF9CA3AF),
-                fontSize: 12,
+              SizedBox(height: 3),
+              Text(
+                'Última actualización: 1 de junio de 2026',
+                style: TextStyle(
+                  color: Color(0xFF9CA3AF),
+                  fontSize: 12,
+                  height: 1.1,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       body: RefreshIndicator(

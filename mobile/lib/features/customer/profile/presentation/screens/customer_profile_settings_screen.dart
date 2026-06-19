@@ -89,13 +89,13 @@ class CustomerProfileSettingsScreen extends StatelessWidget {
                 icon: Icons.notifications_none_rounded,
                 title: 'Notificaciones',
                 subtitle: 'Gestiona tus preferencias',
-                onTap: () => _showComingSoon(context, 'Notificaciones'),
+                onTap: () => context.push('/customer/profile/notifications'),
               ),
               _SettingsTile(
                 icon: Icons.lock_outline_rounded,
                 title: 'Privacidad y Seguridad',
                 subtitle: 'Controla tu privacidad',
-                onTap: () => _showComingSoon(context, 'Privacidad y Seguridad'),
+                onTap: () => context.push('/customer/profile/privacy-security'),
               ),
               _SettingsTile(
                 icon: Icons.credit_card_rounded,
@@ -110,16 +110,10 @@ class CustomerProfileSettingsScreen extends StatelessWidget {
             title: 'Preferencias',
             children: [
               _SettingsTile(
-                icon: Icons.language_rounded,
-                title: 'Idioma',
-                subtitle: 'Español',
-                onTap: () => _showComingSoon(context, 'Idioma'),
-              ),
-              _SettingsTile(
                 icon: Icons.location_on_outlined,
                 title: 'Ubicación',
-                subtitle: 'República Dominicana',
-                onTap: () => _showComingSoon(context, 'Ubicación'),
+                subtitle: 'GPS y radio de búsqueda',
+                onTap: () => context.push('/customer/profile/location'),
               ),
             ],
           ),

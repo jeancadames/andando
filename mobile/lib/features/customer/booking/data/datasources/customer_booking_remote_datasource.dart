@@ -67,6 +67,37 @@ class CustomerBookingRemoteDataSource {
     );
   }
 
+  Future<CustomerCancellationPreview> getCancellationPreview({
+    required int bookingId,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/client/bookings/$bookingId/cancellation-preview',
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: await _headers(),
+    );
+
+    final body = _decodeResponse(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        body['message'] ?? 'No se pudo calcular la cancelación.',
+      );
+    }
+
+    final data = body['data'];
+
+    if (data is! Map) {
+      throw Exception('No se pudo calcular la cancelación.');
+    }
+
+    return CustomerCancellationPreview.fromJson(
+      Map<String, dynamic>.from(data),
+    );
+  }
+
   Future<void> cancelBooking({
     required int bookingId,
   }) async {
@@ -113,7 +144,7 @@ class CustomerBookingRemoteDataSource {
   Future<CustomerBookingModel> createBooking({
     required int scheduleId,
     required int guestsCount,
-    required String pickupPoint,
+    String? pickupPoint,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/client/bookings');
 
@@ -123,15 +154,17 @@ class CustomerBookingRemoteDataSource {
       body: jsonEncode({
         'provider_experience_schedule_id': scheduleId,
         'guests_count': guestsCount,
-        'pickup_point': pickupPoint,
+        if (pickupPoint != null && pickupPoint.trim().isNotEmpty)
+          'pickup_point': pickupPoint,
       }),
     );
 
     final body = _decodeResponse(response);
 
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudo realizar la reserva.',
+      throw CustomerBookingException(
+        message: body['message'] ?? 'No se pudo realizar la reserva.',
+        code: body['code']?.toString(),
       );
     }
 
@@ -146,4 +179,50 @@ class CustomerBookingRemoteDataSource {
     return CustomerBookingModel.fromJson(body);
   }
 
+}
+
+class CustomerBookingException implements Exception {
+  final String message;
+  final String? code;
+
+  CustomerBookingException({
+    required this.message,
+    this.code,
+  });
+
+  @override
+  String toString() => message;
+}
+
+class CustomerCancellationPreview {
+  final bool canCancel;
+  final String policyType;
+  final double totalAmount;
+  final double refundAmount;
+  final double administrativeFeeAmount;
+  final int refundPercentage;
+  final String message;
+
+  const CustomerCancellationPreview({
+    required this.canCancel,
+    required this.policyType,
+    required this.totalAmount,
+    required this.refundAmount,
+    required this.administrativeFeeAmount,
+    required this.refundPercentage,
+    required this.message,
+  });
+
+  factory CustomerCancellationPreview.fromJson(Map<String, dynamic> json) {
+    return CustomerCancellationPreview(
+      canCancel: json['can_cancel'] == true,
+      policyType: json['policy_type']?.toString() ?? '',
+      totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0,
+      refundAmount: (json['refund_amount'] as num?)?.toDouble() ?? 0,
+      administrativeFeeAmount:
+          (json['administrative_fee_amount'] as num?)?.toDouble() ?? 0,
+      refundPercentage: (json['refund_percentage'] as num?)?.toInt() ?? 0,
+      message: json['message']?.toString() ?? '',
+    );
+  }
 }

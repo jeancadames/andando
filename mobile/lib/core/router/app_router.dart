@@ -42,6 +42,10 @@ import '../../features/provider/chat/presentation/screens/provider_chat_list_scr
 import '../../features/provider/chat/presentation/screens/provider_chat_screen.dart';
 
 import '../../features/payments/presentation/screens/customer_payment_methods_screen.dart';
+import '../../features/customer/profile/presentation/screens/customer_location_settings_screen.dart';
+import '../../features/customer/profile/presentation/screens/customer_notification_settings_screen.dart';
+import '../../features/customer/profile/presentation/screens/customer_privacy_security_screen.dart';
+import '../../features/customer/profile/presentation/screens/customer_change_password_screen.dart';
 
 import 'route_names.dart';
 
@@ -188,6 +192,39 @@ class AppRouter {
           );
         },
       ),
+
+      GoRoute(
+        path: '/customer/profile/location',
+        name: 'customerLocationSettings',
+        builder: (context, state) {
+          return const CustomerLocationSettingsScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/customer/profile/notifications',
+        name: 'customerNotificationSettings',
+        builder: (context, state) {
+          return const CustomerNotificationSettingsScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/customer/profile/privacy-security',
+        name: 'customerPrivacySecurity',
+        builder: (context, state) {
+          return const CustomerPrivacySecurityScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/customer/profile/change-password',
+        name: 'customerChangePassword',
+        builder: (context, state) {
+          return const CustomerChangePasswordScreen();
+        },
+      ),
+
       GoRoute(
         path: '/customer/profile/payment-methods',
         name: 'customerPaymentMethods',

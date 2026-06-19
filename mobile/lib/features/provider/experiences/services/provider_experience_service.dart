@@ -56,12 +56,12 @@ class ProviderExperienceForm {
 
   double price = 0;
   String currency = 'DOP';
-  String startLocation = '';
   String province = '';
 
   String experienceAddress = '';
   double? experienceLatitude;
   double? experienceLongitude;
+  bool includesTransport = false;
 
   List<String> pickupPoints = [''];
   List<MapPickupPoint> mapPickupPoints = [];
@@ -91,12 +91,12 @@ class ProviderExperienceForm {
     form.capacity = experience.capacity;
     form.price = experience.price;
     form.currency = experience.currency;
-    form.startLocation = experience.startLocation ?? '';
     form.province = experience.province ?? '';
 
     form.experienceAddress = experience.experienceAddress ?? '';
     form.experienceLatitude = experience.experienceLatitude;
     form.experienceLongitude = experience.experienceLongitude;
+    form.includesTransport = experience.includesTransport;
 
     form.pickupPoints =
         experience.pickupPoints.isEmpty ? [''] : experience.pickupPoints;
@@ -310,8 +310,8 @@ class ProviderExperienceService {
     request.fields['capacity'] = form.capacity.toString();
     request.fields['price'] = form.price.toString();
     request.fields['currency'] = form.currency;
-    request.fields['start_location'] = form.startLocation;
     request.fields['province'] = form.province;
+    request.fields['includes_transport'] = form.includesTransport ? '1' : '0';
     request.fields['cancellation_policy'] = form.cancellationPolicy;
 
     request.fields['experience_address'] = form.experienceAddress;

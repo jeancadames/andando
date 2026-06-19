@@ -38,8 +38,7 @@ class ExploreController extends Controller
             ->whereNotNull('published_at')
             ->whereHas('schedules', function ($scheduleQuery) {
                 $this->availableScheduleQuery($scheduleQuery);
-            })
-            ->latest('published_at');
+            });
 
         if ($request->filled('search')) {
             $search = trim($request->query('search'));
@@ -76,6 +75,45 @@ class ExploreController extends Controller
 
         if ($request->filled('province')) {
             $query->where('province', $request->query('province'));
+        }
+
+        $userLatitude = $request->query('latitude') ?? $request->query('lat');
+        $userLongitude = $request->query('longitude') ?? $request->query('lng');
+
+        $hasUserLocation = is_numeric($userLatitude) && is_numeric($userLongitude);
+
+        if ($hasUserLocation) {
+            $lat = (float) $userLatitude;
+            $lng = (float) $userLongitude;
+
+            $radiusKm = $request->query('radius_km');
+
+            $radiusKm = is_numeric($radiusKm)
+                ? max(10, min(200, (float) $radiusKm))
+                : null;
+
+            $query
+                ->whereNotNull('experience_latitude')
+                ->whereNotNull('experience_longitude')
+                ->select('provider_experiences.*')
+                ->selectRaw(
+                    '(6371 * acos(
+                        cos(radians(?)) *
+                        cos(radians(experience_latitude)) *
+                        cos(radians(experience_longitude) - radians(?)) +
+                        sin(radians(?)) *
+                        sin(radians(experience_latitude))
+                    )) as distance_km',
+                    [$lat, $lng, $lat]
+                );
+
+            if ($radiusKm !== null) {
+                $query->having('distance_km', '<=', $radiusKm);
+            }
+
+            $query->orderBy('distance_km');
+        } else {
+            $query->latest('published_at');
         }
 
         $experiences = $query
@@ -171,6 +209,17 @@ class ExploreController extends Controller
             'duration' => $experience->duration,
             'location' => $experience->location,
             'province' => $experience->province,
+            'experience_address' => $experience->experience_address,
+            'experience_latitude' => $experience->experience_latitude !== null
+                ? (float) $experience->experience_latitude
+                : null,
+            'experience_longitude' => $experience->experience_longitude !== null
+                ? (float) $experience->experience_longitude
+                : null,
+            'includes_transport' => (bool) $experience->includes_transport,
+            'distance_km' => isset($experience->distance_km)
+                ? round((float) $experience->distance_km, 1)
+                : null,
             'price' => (float) $experience->price,
             'currency' => $experience->currency ?? 'DOP',
             'capacity' => $experience->capacity,

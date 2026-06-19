@@ -17,6 +17,10 @@ class CustomerBookingModel {
   final double totalAmount;
   final String currency;
   final String? pickupPoint;
+  final bool includesTransport;
+  final String? experienceAddress;
+  final double? experienceLatitude;
+  final double? experienceLongitude;
   final String? duration;
   final bool hasReview;
   final int? reviewId;
@@ -43,6 +47,10 @@ class CustomerBookingModel {
     required this.totalAmount,
     required this.currency,
     required this.pickupPoint,
+    required this.includesTransport,
+    required this.experienceAddress,
+    required this.experienceLatitude,
+    required this.experienceLongitude,
     required this.duration,
     required this.hasReview,
     required this.reviewId,
@@ -71,6 +79,14 @@ class CustomerBookingModel {
       totalAmount: _toDouble(json['total_amount']),
       currency: json['currency']?.toString() ?? 'DOP',
       pickupPoint: json['pickup_point']?.toString(),
+      includesTransport: _toBool(json['includes_transport']),
+        experienceAddress: json['experience_address']?.toString(),
+        experienceLatitude: json['experience_latitude'] == null
+            ? null
+            : _toDouble(json['experience_latitude']),
+        experienceLongitude: json['experience_longitude'] == null
+            ? null
+            : _toDouble(json['experience_longitude']),
       duration: json['duration']?.toString(),
       hasReview: _toBool(json['has_review']),
       reviewId: json['review_id'] == null ? null : _toInt(json['review_id']),
@@ -94,7 +110,18 @@ class CustomerBookingModel {
 
   bool get isCompleted => status.toLowerCase() == 'completed';
 
-  bool get isUpcoming => !isCompleted;
+  bool get isCancelled {
+    final normalizedStatus = status.toLowerCase();
+
+    return normalizedStatus == 'cancelled' ||
+        normalizedStatus == 'cancelled_free' ||
+        normalizedStatus == 'cancelled_with_fee' ||
+        normalizedStatus == 'cancelled_refund_pending' ||
+        normalizedStatus == 'cancelled_refunded' ||
+        normalizedStatus == 'cancelled_penalty_applied';
+  }
+
+  bool get isUpcoming => !isCompleted && !isCancelled;
 
   String get formattedTotalAmount {
     final formatter = NumberFormat('#,###', 'en_US');
@@ -189,6 +216,34 @@ class CustomerBookingModel {
     }
 
     return raw;
+  }
+  
+  String get displayBookingLocationLabel {
+    return includesTransport ? 'Punto de recogida' : 'Ubicación de la experiencia';
+  }
+
+  String get displayBookingLocationValue {
+    if (includesTransport) {
+      if (pickupPoint != null && pickupPoint!.trim().isNotEmpty) {
+        return pickupPoint!;
+      }
+
+      return 'No especificado';
+    }
+
+    if (experienceAddress != null && experienceAddress!.trim().isNotEmpty) {
+      return experienceAddress!;
+    }
+
+    return displayLocation;
+  }
+
+  bool get hasDirectionsLocation {
+    if (includesTransport) {
+      return pickupPoint != null && pickupPoint!.trim().isNotEmpty;
+    }
+
+    return experienceLatitude != null && experienceLongitude != null;
   }
 
   String get displayLocation {

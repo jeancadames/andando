@@ -15,6 +15,10 @@ class ExploreRemoteDataSource {
     String? category,
     String? province,
     DateTime? selectedDate,
+    double? latitude,
+    double? longitude,
+    int? radiusKm,
+
   }) async {
     final queryParams = <String, String>{};
 
@@ -34,6 +38,15 @@ class ExploreRemoteDataSource {
 
     if (province != null && province.trim().isNotEmpty) {
       queryParams['province'] = province.trim();
+    }
+
+    if (latitude != null && longitude != null) {
+      queryParams['latitude'] = latitude.toString();
+      queryParams['longitude'] = longitude.toString();
+    }
+
+    if (radiusKm != null) {
+      queryParams['radius_km'] = radiusKm.toString();
     }
 
     final uri = Uri.parse(

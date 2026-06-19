@@ -11,6 +11,7 @@ import '../../../shared/widgets/customer_bottom_navigation.dart';
 import '../../data/models/customer_booking_model.dart';
 import '../controllers/customer_booking_controller.dart';
 import '../../../../auth/application/auth_controller.dart';
+import '../../data/datasources/customer_booking_remote_datasource.dart';
 
 class CustomerBookingsScreen extends StatefulWidget {
   const CustomerBookingsScreen({
@@ -73,9 +74,16 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   }
 
   List<CustomerBookingModel> get _visibleBookings {
-    return selectedTab == 0
-        ? _controller.upcomingBookings
-        : _controller.completedBookings;
+    switch (selectedTab) {
+      case 0:
+        return _controller.upcomingBookings;
+      case 1:
+        return _controller.completedBookings;
+      case 2:
+        return _controller.cancelledBookings;
+      default:
+        return _controller.upcomingBookings;
+    }
   }
 
   void _openBookingDetails(CustomerBookingModel booking) {
@@ -164,24 +172,40 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   }
 
   Future<void> _openPickupDirections(CustomerBookingModel booking) async {
-    final pickup = booking.pickupPoint?.trim();
+    Uri? uri;
 
-    if (pickup == null || pickup.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Esta reserva no tiene punto de recogida disponible.'),
-        ),
+    if (booking.includesTransport) {
+      final pickup = booking.pickupPoint?.trim();
+
+      if (pickup == null || pickup.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esta reserva no tiene punto de recogida disponible.'),
+          ),
+        );
+        return;
+      }
+
+      final query = Uri.encodeComponent(pickup);
+
+      uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$query',
       );
-      return;
+    } else {
+      if (booking.experienceLatitude == null ||
+          booking.experienceLongitude == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esta reserva no tiene ubicación disponible.'),
+          ),
+        );
+        return;
+      }
+
+      uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=${booking.experienceLatitude},${booking.experienceLongitude}',
+      );
     }
-
-    final query = Uri.encodeComponent(
-      '$pickup, ${booking.displayLocation}',
-    );
-
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$query',
-    );
 
     final canOpen = await canLaunchUrl(uri);
 
@@ -280,24 +304,28 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   }
 
   Future<void> _confirmCancelBooking(CustomerBookingModel booking) async {
+    final preview = await _controller.getCancellationPreview(booking.id);
+
+    if (!mounted) return;
+
+    if (preview == null || !preview.canCancel) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _controller.errorMessage ?? 'No se pudo calcular la cancelación.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Cancelar reserva'),
-          content: Text(
-            '¿Seguro que quieres cancelar la reserva ${booking.bookingCode}?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('No'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Sí, cancelar'),
-            ),
-          ],
+        return _CancellationPreviewDialog(
+          booking: booking,
+          preview: preview,
         );
       },
     );
@@ -368,6 +396,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     final allBookings = [
       ..._controller.upcomingBookings,
       ..._controller.completedBookings,
+      ..._controller.cancelledBookings,
     ];
 
     final matches = allBookings.where(
@@ -382,7 +411,11 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     final booking = matches.first;
 
     setState(() {
-      selectedTab = booking.isCompleted ? 1 : 0;
+      selectedTab = booking.isCancelled
+        ? 2
+        : booking.isCompleted
+            ? 1
+            : 0;
       _lastOpenedBookingCode = bookingCode;
     });
 
@@ -419,6 +452,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                       selectedTab: selectedTab,
                       upcomingCount: _controller.upcomingBookings.length,
                       completedCount: _controller.completedBookings.length,
+                      cancelledCount: _controller.cancelledBookings.length,
                       onChanged: (value) {
                         setState(() => selectedTab = value);
                       },
@@ -443,7 +477,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                   else if (_visibleBookings.isEmpty)
                     SliverFillRemaining(
                       child: _BookingEmptyState(
-                        isUpcomingTab: selectedTab == 0,
+                        selectedTab: selectedTab,
                       ),
                     )
                   else
@@ -457,7 +491,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
 
                           return _BookingCard(
                             booking: booking,
-                            isCompletedTab: selectedTab == 1,
+                            selectedTab: selectedTab,
                             onDetailsTap: () => _openBookingDetails(booking),
                             onReviewTap: () => _openReviewScreen(booking),
                             onDownloadReceiptTap: () => _downloadReceipt(booking),
@@ -526,12 +560,14 @@ class _BookingTabs extends StatelessWidget {
   final int upcomingCount;
   final int completedCount;
   final ValueChanged<int> onChanged;
+  final int cancelledCount;
 
   const _BookingTabs({
     required this.selectedTab,
     required this.upcomingCount,
     required this.completedCount,
     required this.onChanged,
+    required this.cancelledCount,
   });
 
   @override
@@ -562,6 +598,14 @@ class _BookingTabs extends StatelessWidget {
                 count: completedCount,
                 isSelected: selectedTab == 1,
                 onTap: () => onChanged(1),
+              ),
+            ),
+            Expanded(
+              child: _TabButton(
+                title: 'Canceladas',
+                count: cancelledCount,
+                isSelected: selectedTab == 2,
+                onTap: () => onChanged(2),
               ),
             ),
           ],
@@ -636,7 +680,7 @@ class _TabButton extends StatelessWidget {
 
 class _BookingCard extends StatelessWidget {
   final CustomerBookingModel booking;
-  final bool isCompletedTab;
+  final int selectedTab;
   final VoidCallback onDetailsTap;
   final VoidCallback onReviewTap;
   final VoidCallback onDownloadReceiptTap;
@@ -645,7 +689,7 @@ class _BookingCard extends StatelessWidget {
 
   const _BookingCard({
     required this.booking,
-    required this.isCompletedTab,
+    required this.selectedTab,
     required this.onDetailsTap,
     required this.onReviewTap,
     required this.onDownloadReceiptTap,
@@ -660,9 +704,12 @@ class _BookingCard extends StatelessWidget {
 
     final normalizedStatus = booking.status.toLowerCase();
 
-    final canClaim = normalizedStatus != 'cancelled';
+    final canClaim = !booking.isCancelled;
 
     final claimButtonLabel = booking.hasClaim ? 'Ver reclamo' : 'Reclamo';
+
+    final isCompletedTab = selectedTab == 1;
+    final isCancelledTab = selectedTab == 2;
 
     return Container(
       decoration: BoxDecoration(
@@ -766,10 +813,8 @@ class _BookingCard extends StatelessWidget {
                     Expanded(
                       child: _MiniInfo(
                         icon: Icons.place_outlined,
-                        label: 'Recogida',
-                        value: booking.pickupPoint?.trim().isNotEmpty == true
-                            ? booking.pickupPoint!
-                            : 'No especificada',
+                        label: booking.includesTransport ? 'Recogida' : 'Destino',
+                        value: booking.displayBookingLocationValue,
                       ),
                     ),
                   ],
@@ -1063,17 +1108,16 @@ class _BookingDetailsDialog extends StatelessWidget {
                                   : '${booking.guestsCount} personas',
                             ),
                             _DetailRow(
-                              label: 'Punto de recogida',
-                              value: booking.pickupPoint?.trim().isNotEmpty ==
-                                      true
-                                  ? booking.pickupPoint!
-                                  : 'No especificado',
+                              label: 'Provincia',
+                              value: booking.province?.trim().isNotEmpty == true
+                                  ? booking.province!
+                                  : booking.displayLocation,
                               isLast: true,
                             ),
                           ],
                         ),
                       ),
-                      if (booking.pickupPoint?.trim().isNotEmpty == true) ...[
+                      if (booking.hasDirectionsLocation) ...[
                         const SizedBox(height: 16),
                         Container(
                           width: double.infinity,
@@ -1088,7 +1132,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
                                   Icon(
                                     Icons.location_on_rounded,
@@ -1098,7 +1142,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                                   SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Punto de recogida',
+                                      booking.displayBookingLocationLabel,
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900,
@@ -1110,7 +1154,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                booking.pickupPoint!,
+                                booking.displayBookingLocationValue,
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w900,
@@ -1118,7 +1162,7 @@ class _BookingDetailsDialog extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              const Text(
+                              Text(
                                 'Llega 15 minutos antes del inicio de la experiencia.',
                                 style: TextStyle(
                                   fontSize: 13,
@@ -1268,6 +1312,229 @@ class _BookingDetailsDialog extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CancellationPreviewDialog extends StatelessWidget {
+  final CustomerBookingModel booking;
+  final CustomerCancellationPreview preview;
+
+  const _CancellationPreviewDialog({
+    required this.booking,
+    required this.preview,
+  });
+
+  String _formatMoney(double value) {
+    final rounded = value.round().toString();
+
+    if (booking.currency.toUpperCase() == 'DOP') {
+      return 'RD\$$rounded';
+    }
+
+    return '${booking.currency} $rounded';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNoRefund = preview.policyType == 'no_refund';
+    final isFreeRefund = preview.policyType == 'free_refund';
+
+    final icon = isNoRefund
+        ? Icons.warning_amber_rounded
+        : isFreeRefund
+            ? Icons.check_circle_outline_rounded
+            : Icons.payments_outlined;
+
+    final iconColor = isNoRefund
+        ? const Color(0xFFDC2626)
+        : isFreeRefund
+            ? const Color(0xFF16A34A)
+            : const Color(0xFF003B73);
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(26),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: iconColor,
+                  size: 36,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Cancelar reserva',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                booking.bookingCode,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Text(
+                  preview.message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    color: Color(0xFF475569),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              _CancellationAmountRow(
+                label: 'Monto de la reserva',
+                value: _formatMoney(preview.totalAmount),
+              ),
+              if (!isNoRefund) ...[
+                const SizedBox(height: 10),
+                _CancellationAmountRow(
+                  label: 'Cargo administrativo',
+                  value: _formatMoney(preview.administrativeFeeAmount),
+                  valueColor: preview.administrativeFeeAmount > 0
+                      ? const Color(0xFFDC2626)
+                      : const Color(0xFF16A34A),
+                ),
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                _CancellationAmountRow(
+                  label: 'Reembolso estimado',
+                  value: _formatMoney(preview.refundAmount),
+                  isTotal: true,
+                  valueColor: const Color(0xFF16A34A),
+                ),
+              ] else ...[
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                _CancellationAmountRow(
+                  label: 'Reembolso estimado',
+                  value: _formatMoney(0),
+                  isTotal: true,
+                  valueColor: const Color(0xFFDC2626),
+                ),
+              ],
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC2626),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  child: const Text('Sí, cancelar reserva'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text(
+                    'No cancelar',
+                    style: TextStyle(
+                      color: Color(0xFF111827),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CancellationAmountRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isTotal;
+  final Color? valueColor;
+
+  const _CancellationAmountRow({
+    required this.label,
+    required this.value,
+    this.isTotal = false,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 15 : 14,
+              color: const Color(0xFF64748B),
+              fontWeight: isTotal ? FontWeight.w900 : FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isTotal ? 18 : 15,
+            color: valueColor ?? const Color(0xFF111827),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2177,14 +2444,35 @@ class _BookingGuestState extends StatelessWidget {
 }
 
 class _BookingEmptyState extends StatelessWidget {
-  final bool isUpcomingTab;
+  final int selectedTab;
 
   const _BookingEmptyState({
-    required this.isUpcomingTab,
+    required this.selectedTab,
   });
 
   @override
   Widget build(BuildContext context) {
+    final icon = switch (selectedTab) {
+      0 => Icons.calendar_month_outlined,
+      1 => Icons.check_circle_outline_rounded,
+      2 => Icons.cancel_outlined,
+      _ => Icons.calendar_month_outlined,
+    };
+
+    final title = switch (selectedTab) {
+      0 => 'No tienes reservas próximas',
+      1 => 'No tienes reservas completadas',
+      2 => 'No tienes reservas canceladas',
+      _ => 'No tienes reservas',
+    };
+
+    final message = switch (selectedTab) {
+      0 => 'Cuando reserves una experiencia, aparecerá aquí.',
+      1 => 'Cuando completes experiencias, aparecerán aquí.',
+      2 => 'Cuando canceles una reserva, aparecerá aquí para tu historial.',
+      _ => 'Tus reservas aparecerán aquí.',
+    };
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -2192,17 +2480,13 @@ class _BookingEmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isUpcomingTab
-                  ? Icons.calendar_month_outlined
-                  : Icons.check_circle_outline_rounded,
+              icon,
               size: 58,
               color: const Color(0xFF9CA3AF),
             ),
             const SizedBox(height: 14),
             Text(
-              isUpcomingTab
-                  ? 'No tienes reservas próximas'
-                  : 'No tienes reservas completadas',
+              title,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 19,
@@ -2212,12 +2496,11 @@ class _BookingEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              isUpcomingTab
-                  ? 'Cuando reserves una experiencia, aparecerá aquí.'
-                  : 'Cuando completes experiencias, aparecerán aquí.',
+              message,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
+                height: 1.35,
                 color: Color(0xFF6B7280),
               ),
             ),
