@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\Provider;
 
+use App\Notifications\Admin\NewProviderPendingReviewNotification;
+use App\Notifications\Auth\WelcomeProviderNotification;
+
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Provider\ProviderLoginRequest;
 use App\Http\Requests\Provider\ProviderRegisterRequest;
@@ -114,6 +117,21 @@ class ProviderAuthController extends Controller
                     'token' => $token,
                 ];
             });
+
+            $result['user']->load('provider');
+
+            $result['user']->notify(
+                new WelcomeProviderNotification()
+            );
+
+            User::query()
+                ->where('type', 'admin')
+                ->get()
+                ->each(function (User $admin) use ($result) {
+                    $admin->notify(
+                        new NewProviderPendingReviewNotification($result['provider'])
+                    );
+                });
 
             return response()->json([
                 'message' => 'Solicitud de proveedor enviada correctamente.',

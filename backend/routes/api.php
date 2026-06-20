@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Auth\PasswordResetController;
+
 use App\Http\Controllers\Api\Client\ClientPasswordController;
 use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
 
@@ -134,6 +136,9 @@ Route::get('/public-files/{path}', function (string $path) {
 |--------------------------------------------------------------------------
 */
 Route::post('/auth/login', LoginController::class);
+
+Route::post('/forgot-password', [PasswordResetController::class, 'forgot']);
+Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/device-tokens', [DeviceTokenController::class, 'store']);

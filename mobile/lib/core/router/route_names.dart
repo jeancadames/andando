@@ -13,6 +13,10 @@ class RouteNames {
   /// Login general.
   static const String login = 'login';
 
+  /// Reinicio de contraseñas.
+  static const String forgotPassword = 'forgotPassword';
+  static const String resetPassword = 'resetPassword';
+
   /// Registro cliente.
   static const String register = 'register';
 

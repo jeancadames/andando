@@ -272,12 +272,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// Acción temporal para recuperación de contraseña.
-  void _showForgotPasswordMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Recuperación de contraseña pendiente de implementar.'),
-      ),
-    );
+  void _goToForgotPassword() {
+    context.goNamed(RouteNames.forgotPassword);
   }
 
   /// Navega al registro de cliente.
@@ -406,7 +402,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: _showForgotPasswordMessage,
+                              onPressed: _goToForgotPassword,
                               child: const Text(
                                 '¿Olvidaste tu contraseña?',
                                 style: TextStyle(

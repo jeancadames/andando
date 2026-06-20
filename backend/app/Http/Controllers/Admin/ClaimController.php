@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Notifications\Claim\ClaimUpdatedNotification;
+
 use App\Http\Controllers\Controller;
 use App\Models\BookingClaim;
 use Illuminate\Http\RedirectResponse;
@@ -78,6 +80,16 @@ class ClaimController extends Controller
             'resolved_at' => now(),
         ]);
 
+        $claim->loadMissing([
+            'user',
+            'booking.experience',
+            'booking.schedule',
+        ]);
+
+        $claim->user?->notify(
+            new ClaimUpdatedNotification($claim)
+        );
+
         return back()->with('success', 'Reclamo marcado como resuelto.');
     }
 
@@ -91,6 +103,16 @@ class ClaimController extends Controller
             'status' => 'rejected',
             'resolved_at' => now(),
         ]);
+
+        $claim->loadMissing([
+            'user',
+            'booking.experience',
+            'booking.schedule',
+        ]);
+
+        $claim->user?->notify(
+            new ClaimUpdatedNotification($claim)
+        );
 
         return back()->with('success', 'Reclamo rechazado.');
     }

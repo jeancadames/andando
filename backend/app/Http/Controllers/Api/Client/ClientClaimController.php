@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Models\User;
+use App\Notifications\Admin\NewClaimForReviewNotification;
+
+use App\Notifications\Claim\ClaimReceivedNotification;
+
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\BookingClaim;
@@ -81,6 +86,19 @@ class ClientClaimController extends Controller
             'booking.experience',
             'booking.schedule',
         ]);
+
+        $request->user()->notify(
+            new ClaimReceivedNotification($claim)
+        );
+
+        User::query()
+            ->where('type', 'admin')
+            ->get()
+            ->each(function (User $admin) use ($claim) {
+                $admin->notify(
+                    new NewClaimForReviewNotification($claim)
+                );
+            });
 
         return response()->json([
             'message' => 'Reclamo creado correctamente.',

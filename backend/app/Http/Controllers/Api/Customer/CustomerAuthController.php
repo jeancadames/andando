@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Customer;
 
+use App\Notifications\Auth\WelcomeCustomerNotification;
+
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\CustomerRegisterRequest;
 use App\Models\User;
@@ -79,6 +81,10 @@ class CustomerAuthController extends Controller
                 'token' => $token,
             ];
         });
+
+        $result['user']->notify(
+            new WelcomeCustomerNotification()
+        );
 
         /**
          * Respuesta estándar hacia Flutter

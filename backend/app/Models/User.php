@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Notifications\Auth\PasswordResetNotification;
+
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -100,5 +102,10 @@ class User extends Authenticatable
     public function deviceTokens(): HasMany
     {
         return $this->hasMany(DeviceToken::class);
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new PasswordResetNotification($token));
     }
 }

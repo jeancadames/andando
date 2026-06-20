@@ -84,6 +84,10 @@ class ProviderClaimController extends Controller
             'booking.schedule',
         ]);
 
+        $claim->user?->notify(
+            new ClaimRespondedNotification($claim)
+        );
+
         return response()->json([
             'message' => 'Respuesta enviada correctamente.',
             'data' => $this->formatClaim($claim),

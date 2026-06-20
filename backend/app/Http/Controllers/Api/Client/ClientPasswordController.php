@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Notifications\Auth\PasswordChangedNotification;
+
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +35,10 @@ class ClientPasswordController extends Controller
         $user->forceFill([
             'password' => Hash::make($validated['password']),
         ])->save();
+
+        $user->notify(
+            new PasswordChangedNotification()
+        );
 
         return response()->json([
             'message' => 'Contraseña actualizada correctamente.',

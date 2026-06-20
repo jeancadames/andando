@@ -59,3 +59,5 @@ Artisan::command('chat:close-inactive', function () {
 })->purpose('Cerrar conversaciones inactivas después del tiempo configurado.');
 
 Schedule::command('chat:close-inactive')->hourly();
+
+Schedule::command('trip:send-reminders')->hourly();

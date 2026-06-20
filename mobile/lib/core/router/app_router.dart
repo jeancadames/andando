@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
+import '../../features/auth/presentation/screens/reset_password_screen.dart';
+
 import '../../features/customer/profile/presentation/screens/customer_terms_conditions_screen.dart';
 import '../../features/customer/profile/presentation/screens/customer_help_center_screen.dart';
 import '../../features/customer/claims/presentation/screens/create_claim_screen.dart';
@@ -85,6 +88,26 @@ class AppRouter {
           );
         },
       ),
+
+      GoRoute(
+        path: '/forgot-password',
+        name: RouteNames.forgotPassword,
+        builder: (context, state) {
+          return const ForgotPasswordScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/reset-password',
+        name: RouteNames.resetPassword,
+        builder: (context, state) {
+          return ResetPasswordScreen(
+            email: state.uri.queryParameters['email'] ?? '',
+            token: state.uri.queryParameters['token'] ?? '',
+          );
+        },
+      ),
+
       GoRoute(
         path: '/register',
         name: RouteNames.register,
@@ -221,7 +244,9 @@ class AppRouter {
         path: '/customer/profile/change-password',
         name: 'customerChangePassword',
         builder: (context, state) {
-          return const CustomerChangePasswordScreen();
+          return CustomerChangePasswordScreen(
+            authController: _authController,
+          );
         },
       ),
 
@@ -578,7 +603,16 @@ class AppRouter {
 
   String? _redirect(BuildContext context, GoRouterState state) {
     final authStatus = _authController.status;
+
+    final currentPath = state.uri.path;
     final currentLocation = state.matchedLocation;
+
+    if (currentPath == '/forgot-password' ||
+        currentPath == '/reset-password' ||
+        currentLocation == '/forgot-password' ||
+        currentLocation == '/reset-password') {
+      return null;
+    }
 
     final isChecking = authStatus == AuthStatus.checking;
     final isAuthenticated = authStatus == AuthStatus.authenticated;
@@ -590,6 +624,8 @@ class AppRouter {
       '/',
       '/welcome',
       '/login',
+      '/forgot-password',
+      '/reset-password',
       '/register',
       '/client/explore',
       '/client/bookings',

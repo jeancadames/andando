@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Notifications\Booking\BookingCancelledNotification;
+use App\Notifications\Booking\NewBookingNotification;
+use App\Notifications\Booking\BookingCreatedNotification;
+
 use Barryvdh\DomPDF\Facade\Pdf;
 
 use App\Models\CustomerPaymentMethod;
@@ -15,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
+
 
 class ClientBookingController extends Controller
 {
@@ -208,6 +213,21 @@ class ClientBookingController extends Controller
             return $booking;
         });
 
+        $booking->loadMissing([
+            'user',
+            'experience',
+            'schedule',
+            'provider.user',
+        ]);
+
+        $booking->user?->notify(
+            new BookingCreatedNotification($booking)
+        );
+
+        $booking->provider?->user?->notify(
+            new NewBookingNotification($booking)
+        );
+
         return response()->json([
             'message' => 'Reserva creada correctamente.',
             'data' => [
@@ -285,6 +305,21 @@ class ClientBookingController extends Controller
             'administrative_fee_amount' => $preview['administrative_fee_amount'],
             'refund_percentage' => $preview['refund_percentage'],
         ]);
+
+        $booking->loadMissing([
+            'user',
+            'experience',
+            'schedule',
+            'provider.user',
+        ]);
+
+        $booking->user?->notify(
+            new BookingCancelledNotification($booking, 'customer')
+        );
+
+        $booking->provider?->user?->notify(
+            new BookingCancelledNotification($booking, 'provider')
+        );
 
         return response()->json([
             'message' => 'Reserva cancelada correctamente.',

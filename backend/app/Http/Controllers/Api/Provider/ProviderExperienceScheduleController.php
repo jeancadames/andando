@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\Provider;
 
 use App\Http\Controllers\Api\Provider\Concerns\ResolvesCurrentProvider;
 use App\Http\Controllers\Controller;
+use App\Models\CustomerFavoriteExperience;
 use App\Models\ProviderExperience;
 use App\Models\ProviderExperienceSchedule;
 use App\Models\ProviderExperienceScheduleSeries;
+use App\Notifications\Favorites\NewScheduleAvailableNotification;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,22 +47,6 @@ class ProviderExperienceScheduleController extends Controller
         ]);
     }
 
-    /**
-     * Crea fechas programadas.
-     *
-     * schedule_type=single:
-     * - date
-     * - time
-     *
-     * schedule_type=multiple:
-     * - start_date
-     * - end_date
-     * - time
-     * - frequency: daily, weekly, custom
-     * - days_of_week: requerido si frequency=custom
-     *
-     * Capacidad y precio se toman desde provider_experiences.
-     */
     public function store(Request $request, ProviderExperience $experience): JsonResponse
     {
         $this->authorizeProvider($request, $experience);
@@ -88,10 +74,7 @@ class ProviderExperienceScheduleController extends Controller
 
         $startsAt = isset($validated['starts_at'])
             ? CarbonImmutable::parse($validated['starts_at'], $timezone)
-            : CarbonImmutable::parse(
-                "{$validated['date']} {$validated['time']}",
-                $timezone
-            );
+            : CarbonImmutable::parse("{$validated['date']} {$validated['time']}", $timezone);
 
         if ($this->scheduleExists($experience, $startsAt)) {
             return response()->json([
@@ -112,6 +95,8 @@ class ProviderExperienceScheduleController extends Controller
             'status' => 'active',
             'notes' => $validated['notes'] ?? null,
         ]);
+
+        $this->notifyFavoriteCustomersAboutNewSchedule($schedule);
 
         return response()->json([
             'message' => 'Fecha programada creada correctamente.',
@@ -144,10 +129,7 @@ class ProviderExperienceScheduleController extends Controller
             ],
         ]);
 
-        if (
-            $validated['frequency'] === 'custom'
-            && empty($validated['days_of_week'])
-        ) {
+        if ($validated['frequency'] === 'custom' && empty($validated['days_of_week'])) {
             return response()->json([
                 'message' => 'Debes seleccionar al menos un día de la semana.',
             ], 422);
@@ -199,7 +181,7 @@ class ProviderExperienceScheduleController extends Controller
                     continue;
                 }
 
-                $created[] = ProviderExperienceSchedule::create([
+                $schedule = ProviderExperienceSchedule::create([
                     'provider_id' => $experience->provider_id,
                     'provider_experience_id' => $experience->id,
                     'series_id' => $series->id,
@@ -211,6 +193,10 @@ class ProviderExperienceScheduleController extends Controller
                     'currency' => $experience->currency ?? 'DOP',
                     'status' => 'active',
                 ]);
+
+                $created[] = $schedule;
+
+                $this->notifyFavoriteCustomersAboutNewSchedule($schedule);
             }
 
             return response()->json([
@@ -290,11 +276,7 @@ class ProviderExperienceScheduleController extends Controller
 
         $bookings = $schedule->bookings()
             ->with('user')
-            ->whereNotIn('status', [
-                'cancelled',
-                'canceled',
-                'rejected',
-            ])
+            ->whereNotIn('status', ['cancelled', 'canceled', 'rejected'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -337,6 +319,21 @@ class ProviderExperienceScheduleController extends Controller
             'total_bookings' => $formattedBookings->count(),
             'total_travelers' => (int) $formattedBookings->sum('guests_count'),
         ]);
+    }
+
+    private function notifyFavoriteCustomersAboutNewSchedule(
+        ProviderExperienceSchedule $schedule
+    ): void {
+        CustomerFavoriteExperience::query()
+            ->with('user')
+            ->where('provider_experience_id', $schedule->provider_experience_id)
+            ->chunkById(100, function ($favorites) use ($schedule) {
+                foreach ($favorites as $favorite) {
+                    $favorite->user?->notify(
+                        new NewScheduleAvailableNotification($schedule)
+                    );
+                }
+            });
     }
 
     private function generateStartDates(

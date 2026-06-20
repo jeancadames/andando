@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Notifications\Security\PaymentMethodUpdatedNotification;
+
 use App\Http\Controllers\Controller;
 use App\Models\CustomerPaymentMethod;
 use App\Services\Payments\AzulPaymentService;
@@ -108,6 +110,10 @@ class ClientPaymentMethodController extends Controller
             ]);
         });
 
+        $user->notify(
+            new PaymentMethodUpdatedNotification('created', $method)
+        );
+
         return response()->json([
             'message' => 'Tarjeta tokenizada y guardada correctamente.',
             'data' => [
@@ -135,6 +141,10 @@ class ClientPaymentMethodController extends Controller
             ]);
         });
 
+        $request->user()->notify(
+            new PaymentMethodUpdatedNotification('default_updated', $paymentMethod->fresh())
+        );
+
         return response()->json([
             'message' => 'Tarjeta principal actualizada correctamente.',
             'data' => [
@@ -152,6 +162,8 @@ class ClientPaymentMethodController extends Controller
     public function destroy(Request $request, CustomerPaymentMethod $paymentMethod): JsonResponse
     {
         $this->ensureOwner($request, $paymentMethod);
+
+        $deletedPaymentMethod = $paymentMethod->replicate();
 
         DB::transaction(function () use ($request, $paymentMethod) {
             $wasDefault = $paymentMethod->is_default;
@@ -175,6 +187,10 @@ class ClientPaymentMethodController extends Controller
                 }
             }
         });
+
+        $request->user()->notify(
+            new PaymentMethodUpdatedNotification('deleted', $deletedPaymentMethod)
+        );
 
         return response()->json([
             'message' => 'Tarjeta eliminada correctamente.',

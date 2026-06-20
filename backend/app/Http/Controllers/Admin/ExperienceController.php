@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Notifications\Provider\ExperiencePausedNotification;
+
 use App\Http\Controllers\Controller;
 use App\Models\ProviderExperience;
 use Illuminate\Http\RedirectResponse;
@@ -78,9 +80,21 @@ class ExperienceController extends Controller
 
     public function toggleActive(ProviderExperience $experience): RedirectResponse
     {
+        $wasActive = (bool) $experience->is_active;
+
         $experience->update([
             'is_active' => ! $experience->is_active,
         ]);
+
+        $experience->loadMissing([
+            'provider.user',
+        ]);
+
+        if ($wasActive && ! $experience->is_active) {
+            $experience->provider?->user?->notify(
+                new ExperiencePausedNotification($experience)
+            );
+        }
 
         $msg = $experience->is_active
             ? 'Experiencia activada.'

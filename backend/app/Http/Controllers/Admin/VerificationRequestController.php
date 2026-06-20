@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Notifications\Auth\ProviderApprovedNotification;
+use App\Notifications\Auth\ProviderRejectedNotification;
+
 use App\Http\Controllers\Controller;
 use App\Models\ProviderVerificationRequest;
 use Illuminate\Http\RedirectResponse;
@@ -96,6 +99,15 @@ class VerificationRequestController extends Controller
             ]);
         });
 
+        $verificationRequest->loadMissing([
+            'provider.user',
+            'provider.businessType',
+        ]);
+
+        $verificationRequest->provider?->user?->notify(
+            new ProviderApprovedNotification($verificationRequest)
+        );
+
         return redirect()
             ->route('admin.affiliates.show', $verificationRequest)
             ->with('success', 'Afiliado aprobado correctamente.');
@@ -125,6 +137,15 @@ class VerificationRequestController extends Controller
                 'rejection_reason' => $data['reason'],
             ]);
         });
+
+        $verificationRequest->loadMissing([
+            'provider.user',
+            'provider.businessType',
+        ]);
+
+        $verificationRequest->provider?->user?->notify(
+            new ProviderRejectedNotification($verificationRequest)
+        );
 
         return redirect()
             ->route('admin.affiliates.show', $verificationRequest)

@@ -30,6 +30,7 @@ class ProviderBooking extends Model
         'refund_amount',
         'administrative_fee_amount',
         'refund_percentage',
+        'trip_reminder_sent_at',
     ];
 
     protected $casts = [
@@ -42,6 +43,7 @@ class ProviderBooking extends Model
         'refund_amount' => 'decimal:2',
         'administrative_fee_amount' => 'decimal:2',
         'refund_percentage' => 'integer',
+        'trip_reminder_sent_at' => 'datetime',
     ];
 
     /**
