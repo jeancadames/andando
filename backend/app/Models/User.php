@@ -49,6 +49,10 @@ class User extends Authenticatable
         'preferred_currency',
         'language',
         'country',
+
+        //firebase google auth
+        'firebase_uid',
+        'avatar_url',
     ];
 
     /**

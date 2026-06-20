@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import '../../../../../core/config/environment.dart';
 import '../models/customer_auth_response.dart';
 
@@ -41,6 +43,29 @@ class CustomerAuthApi {
     return _handleResponse(response);
   }
 
+  /// Login/registro de cliente con Google.
+  ///
+  /// El idToken viene de Firebase Auth.
+  /// Laravel lo valida con Firebase Admin SDK y devuelve token Sanctum.
+  Future<CustomerAuthResponse> loginWithGoogle({
+    required String idToken,
+  }) async {
+    final uri = Uri.parse('${Environment.apiBaseUrl}/auth/google');
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'id_token': idToken,
+      }),
+    );
+
+    return _handleResponse(response);
+  }
+
   /// Manejo de respuesta del backend
   CustomerAuthResponse _handleResponse(http.Response response) {
     final body = jsonDecode(response.body);
@@ -50,7 +75,7 @@ class CustomerAuthApi {
     }
 
     // Manejo de errores Laravel
-    if (body['errors'] != null) {
+    if (body is Map<String, dynamic> && body['errors'] != null) {
       final errors = body['errors'] as Map<String, dynamic>;
       final firstError = errors.values.first;
 
@@ -59,6 +84,10 @@ class CustomerAuthApi {
       }
     }
 
-    throw Exception(body['message'] ?? 'Error desconocido');
+    if (body is Map<String, dynamic>) {
+      throw Exception(body['message'] ?? 'Error desconocido');
+    }
+
+    throw Exception('Error desconocido');
   }
 }

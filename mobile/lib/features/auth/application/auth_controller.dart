@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/auth/firebase_google_auth_service.dart';
 import '../../../core/constants/storage_keys.dart';
 import '../../../core/notifications/device_token_api_service.dart';
 import '../../../core/notifications/firebase_push_service.dart';
 import '../../../core/storage/secure_storage.dart';
+import '../../customer/auth/data/datasources/customer_auth_api.dart';
 
 /// Representa el estado actual de autenticación de la aplicación.
 ///
@@ -40,15 +42,21 @@ enum AuthStatus {
 /// - datos mínimos del usuario autenticado.
 /// - estado del proveedor.
 /// - registro del FCM token en backend.
+/// - login de cliente con Google.
 class AuthController extends ChangeNotifier {
   AuthController({
     required SecureStorage secureStorage,
     FirebasePushService? firebasePushService,
     DeviceTokenApiService? deviceTokenApiService,
+    FirebaseGoogleAuthService? firebaseGoogleAuthService,
+    CustomerAuthApi? customerAuthApi,
   })  : _secureStorage = secureStorage,
         _firebasePushService = firebasePushService ?? FirebasePushService(),
         _deviceTokenApiService =
-            deviceTokenApiService ?? const DeviceTokenApiService();
+            deviceTokenApiService ?? const DeviceTokenApiService(),
+        _firebaseGoogleAuthService =
+            firebaseGoogleAuthService ?? FirebaseGoogleAuthService(),
+        _customerAuthApi = customerAuthApi ?? const CustomerAuthApi();
 
   /// Servicio encargado de leer/escribir datos sensibles.
   final SecureStorage _secureStorage;
@@ -58,6 +66,12 @@ class AuthController extends ChangeNotifier {
 
   /// Servicio encargado de guardar/borrar el FCM token en Laravel.
   final DeviceTokenApiService _deviceTokenApiService;
+
+  /// Servicio encargado de autenticar con Google usando Firebase Auth.
+  final FirebaseGoogleAuthService _firebaseGoogleAuthService;
+
+  /// Servicio encargado de comunicarse con endpoints de cliente.
+  final CustomerAuthApi _customerAuthApi;
 
   /// Estado interno de autenticación.
   AuthStatus _status = AuthStatus.checking;
@@ -134,6 +148,34 @@ class AuthController extends ChangeNotifier {
     unawaited(_registerDeviceTokenForSession(savedToken));
   }
 
+  /// Login/registro de cliente usando Google.
+  ///
+  /// Flujo:
+  /// 1. Firebase Auth abre Google.
+  /// 2. Firebase devuelve un ID token.
+  /// 3. Laravel valida ese ID token.
+  /// 4. Laravel devuelve token Sanctum.
+  /// 5. Guardamos sesión igual que login/register normal.
+  Future<void> loginWithGoogle() async {
+    try {
+      final googleResult = await _firebaseGoogleAuthService.signInWithGoogle();
+
+      final response = await _customerAuthApi.loginWithGoogle(
+        idToken: googleResult.idToken,
+      );
+
+      await saveSession(
+        token: response.token,
+        userType: response.userType,
+        name: response.userName,
+        email: response.userEmail,
+      );
+    } catch (_) {
+      await _firebaseGoogleAuthService.signOutFromFirebase();
+      rethrow;
+    }
+  }
+
   /// Guarda la sesión del usuario después de login o registro.
   Future<void> saveSession({
     required String token,
@@ -202,6 +244,8 @@ class AuthController extends ChangeNotifier {
     if (currentApiToken != null && currentApiToken.trim().isNotEmpty) {
       await _deleteDeviceTokenForSession(currentApiToken);
     }
+
+    await _firebaseGoogleAuthService.signOutFromFirebase();
 
     await _secureStorage.clear();
 

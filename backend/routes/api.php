@@ -4,8 +4,9 @@ use App\Http\Controllers\Api\Auth\PasswordResetController;
 
 use App\Http\Controllers\Api\Client\ClientPasswordController;
 use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
-
+use App\Http\Controllers\Api\Auth\GoogleAuthController;
 use App\Http\Controllers\Api\Auth\LoginController;
+
 use App\Http\Controllers\Api\Client\ClientReviewCommentController;
 use App\Http\Controllers\Api\Client\ClientReviewController;
 use App\Http\Controllers\Api\Client\ClientProfileController;
@@ -137,8 +138,12 @@ Route::get('/public-files/{path}', function (string $path) {
 */
 Route::post('/auth/login', LoginController::class);
 
+<<<<<<< HEAD
 Route::post('/forgot-password', [PasswordResetController::class, 'forgot']);
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
+=======
+Route::post('/auth/google', GoogleAuthController::class);
+>>>>>>> 245c78399b7b14f63a668e366607aa71db0ddb05
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
