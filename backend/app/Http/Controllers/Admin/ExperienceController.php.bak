@@ -2,14 +2,10 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Notifications\Provider\ExperiencePausedNotification;
-
 use App\Http\Controllers\Controller;
 use App\Models\ProviderExperience;
-use App\Services\ProviderSuspensionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,8 +14,7 @@ use Inertia\Response;
  *
  * El admin no crea experiencias (eso lo hace el afiliado desde la app).
  * Aquí puede desactivarlas (is_active = false) cuando hay un problema,
- * volverlas a activar, o rechazarlas. Rechazar dispara la MISMA cascada
- * que la suspensión, pero acotada a esa experiencia.
+ * volverlas a activar, o rechazarlas (status = 'rejected').
  */
 class ExperienceController extends Controller
 {
@@ -83,21 +78,9 @@ class ExperienceController extends Controller
 
     public function toggleActive(ProviderExperience $experience): RedirectResponse
     {
-        $wasActive = (bool) $experience->is_active;
-
         $experience->update([
             'is_active' => ! $experience->is_active,
         ]);
-
-        $experience->loadMissing([
-            'provider.user',
-        ]);
-
-        if ($wasActive && ! $experience->is_active) {
-            $experience->provider?->user?->notify(
-                new ExperiencePausedNotification($experience)
-            );
-        }
 
         $msg = $experience->is_active
             ? 'Experiencia activada.'
@@ -106,24 +89,13 @@ class ExperienceController extends Controller
         return back()->with('success', $msg);
     }
 
-    /**
-     * Rechaza/cancela la experiencia y arrastra en cascada:
-     *  - la experiencia -> rejected + is_active false
-     *  - sus salidas active|paused -> cancelled
-     *  - sus reservas pending|confirmed -> cancelled
-     */
-    public function reject(
-        Request $request,
-        ProviderExperience $experience,
-        ProviderSuspensionService $service
-    ): RedirectResponse {
-        DB::transaction(function () use ($experience, $service) {
-            $service->cancelExperienceOperations($experience);
-        });
+    public function reject(Request $request, ProviderExperience $experience): RedirectResponse
+    {
+        $experience->update([
+            'status' => 'rejected',
+            'is_active' => false,
+        ]);
 
-        return back()->with(
-            'success',
-            'Experiencia rechazada. Se cancelaron sus salidas y reservas pendientes.'
-        );
+        return back()->with('success', 'Experiencia rechazada y desactivada.');
     }
 }

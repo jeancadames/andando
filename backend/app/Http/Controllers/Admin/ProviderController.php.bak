@@ -1,0 +1,54 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Provider;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Gestión del estado de cuenta de un proveedor (afiliado).
+ *
+ * Maneja los cambios de estado que NO son parte de la revisión inicial:
+ *  - suspend:    approved -> suspended  (bloquea app + creación de experiencias)
+ *  - reactivate: suspended -> approved
+ *
+ * Al suspender, además de cambiar el estado, se revocan los tokens de Sanctum
+ * del usuario para cerrar su sesión en la app de inmediato.
+ */
+class ProviderController extends Controller
+{
+    public function suspend(Provider $provider): RedirectResponse
+    {
+        if ($provider->status !== 'approved') {
+            return back()->with('error', 'Solo se puede suspender a un afiliado aprobado.');
+        }
+
+        DB::transaction(function () use ($provider) {
+            $provider->update([
+                'status' => 'suspended',
+                'suspended_at' => now(),
+            ]);
+
+            // Cierra la sesión en la app: invalida todos sus tokens de acceso.
+            $provider->user?->tokens()->delete();
+        });
+
+        return back()->with('success', 'Afiliado suspendido. Su acceso a la app fue revocado.');
+    }
+
+    public function reactivate(Provider $provider): RedirectResponse
+    {
+        if ($provider->status !== 'suspended') {
+            return back()->with('error', 'Solo se puede reactivar a un afiliado suspendido.');
+        }
+
+        $provider->update([
+            'status' => 'approved',
+            'suspended_at' => null,
+        ]);
+
+        return back()->with('success', 'Afiliado reactivado. Ya puede iniciar sesión y operar.');
+    }
+}

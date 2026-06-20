@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CheckProviderActive;
 use App\Http\Middleware\CorsForStorage;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -53,6 +54,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'storage.cors' => CorsForStorage::class,
+            'provider.active' => CheckProviderActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

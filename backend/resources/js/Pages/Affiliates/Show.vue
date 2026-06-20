@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
@@ -14,20 +14,19 @@ const props = defineProps<{
 const processing = ref(false);
 const showApprove = ref(false);
 const showReject = ref(false);
+const showSuspend = ref(false);
+const showReactivate = ref(false);
 
-const isPending = props.request.status === 'pending';
+const isPending = computed(() => props.request.status === 'pending');
+const providerId = computed(() => props.request.provider?.id);
+const providerStatus = computed(() => props.request.provider?.status);
 
 function approve() {
     processing.value = true;
     router.post(
         `/admin/afiliados/${props.request.id}/aprobar`,
         {},
-        {
-            onFinish: () => {
-                processing.value = false;
-                showApprove.value = false;
-            },
-        },
+        { onFinish: () => { processing.value = false; showApprove.value = false; } },
     );
 }
 
@@ -36,12 +35,25 @@ function reject(reason: string) {
     router.post(
         `/admin/afiliados/${props.request.id}/rechazar`,
         { reason },
-        {
-            onFinish: () => {
-                processing.value = false;
-                showReject.value = false;
-            },
-        },
+        { onFinish: () => { processing.value = false; showReject.value = false; } },
+    );
+}
+
+function suspend() {
+    processing.value = true;
+    router.post(
+        `/admin/proveedores/${providerId.value}/suspender`,
+        {},
+        { onFinish: () => { processing.value = false; showSuspend.value = false; } },
+    );
+}
+
+function reactivate() {
+    processing.value = true;
+    router.post(
+        `/admin/proveedores/${providerId.value}/reactivar`,
+        {},
+        { onFinish: () => { processing.value = false; showReactivate.value = false; } },
     );
 }
 
@@ -59,6 +71,15 @@ function isImage(mime?: string | null): boolean {
             ← Volver a afiliados
         </Link>
 
+        <!-- Banner de suspensión -->
+        <div
+            v-if="providerStatus === 'suspended'"
+            class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+        >
+            Esta cuenta está <strong>suspendida</strong>. El afiliado no puede iniciar sesión
+            en la app ni crear experiencias hasta que se reactive.
+        </div>
+
         <div class="grid gap-6 lg:grid-cols-3">
             <!-- Columna principal -->
             <div class="space-y-6 lg:col-span-2">
@@ -73,7 +94,7 @@ function isImage(mime?: string | null): boolean {
                                 {{ request.provider?.business_type?.name }}
                             </p>
                         </div>
-                        <StatusBadge :status="request.status" />
+                        <StatusBadge :status="providerStatus ?? request.status" />
                     </div>
 
                     <dl class="grid grid-cols-2 gap-4 text-sm">
@@ -208,9 +229,9 @@ function isImage(mime?: string | null): boolean {
                     </dl>
                 </section>
 
-                <!-- Acciones -->
+                <!-- Revisión inicial (solo pendientes) -->
                 <section v-if="isPending" class="rounded-xl bg-white p-6 shadow-sm">
-                    <h3 class="mb-3 font-semibold text-slate-800">Acciones</h3>
+                    <h3 class="mb-3 font-semibold text-slate-800">Revisión</h3>
                     <div class="space-y-2">
                         <button
                             class="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
@@ -226,8 +247,46 @@ function isImage(mime?: string | null): boolean {
                         </button>
                     </div>
                 </section>
-                <section v-else class="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
-                    Esta solicitud ya fue revisada.
+
+                <!-- Gestión de cuenta (según estado del proveedor) -->
+                <section
+                    v-if="providerStatus === 'approved'"
+                    class="rounded-xl bg-white p-6 shadow-sm"
+                >
+                    <h3 class="mb-3 font-semibold text-slate-800">Gestión de cuenta</h3>
+                    <button
+                        class="w-full rounded-lg bg-amber-600 py-2.5 text-sm font-medium text-white hover:bg-amber-700"
+                        @click="showSuspend = true"
+                    >
+                        Suspender cuenta
+                    </button>
+                    <p class="mt-3 text-xs text-slate-400">
+                        Cierra su sesión en la app y le impide crear experiencias o volver a
+                        iniciar sesión hasta reactivarla.
+                    </p>
+                </section>
+
+                <section
+                    v-else-if="providerStatus === 'suspended'"
+                    class="rounded-xl bg-white p-6 shadow-sm"
+                >
+                    <h3 class="mb-3 font-semibold text-slate-800">Gestión de cuenta</h3>
+                    <button
+                        class="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
+                        @click="showReactivate = true"
+                    >
+                        Reactivar cuenta
+                    </button>
+                    <p class="mt-3 text-xs text-slate-400">
+                        Restaura el acceso del afiliado a la app y a la creación de experiencias.
+                    </p>
+                </section>
+
+                <section
+                    v-else-if="providerStatus === 'rejected'"
+                    class="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500"
+                >
+                    Esta solicitud fue rechazada.
                 </section>
             </div>
         </div>
@@ -253,6 +312,26 @@ function isImage(mime?: string | null): boolean {
             :processing="processing"
             @confirm="reject"
             @cancel="showReject = false"
+        />
+        <ConfirmModal
+            :show="showSuspend"
+            title="Suspender cuenta"
+            message="Se cerrará su sesión en la app de inmediato y no podrá operar ni volver a entrar hasta reactivarla. ¿Confirmas?"
+            confirm-text="Suspender"
+            confirm-color="danger"
+            :processing="processing"
+            @confirm="suspend"
+            @cancel="showSuspend = false"
+        />
+        <ConfirmModal
+            :show="showReactivate"
+            title="Reactivar cuenta"
+            message="El afiliado recuperará el acceso a la app y a la creación de experiencias. ¿Confirmas?"
+            confirm-text="Reactivar"
+            confirm-color="success"
+            :processing="processing"
+            @confirm="reactivate"
+            @cancel="showReactivate = false"
         />
     </AdminLayout>
 </template>
