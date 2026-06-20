@@ -96,9 +96,3 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('experiencias/{experience}/rechazar', [\App\Http\Controllers\Admin\ExperienceController::class, 'reject'])->name('experiences.reject');
     });
 });
-
-// === AndanDO Admin - Proveedores (suspender/reactivar) ===
-Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
-    Route::post('proveedores/{provider}/suspender', [\App\Http\Controllers\Admin\ProviderController::class, 'suspend'])->name('providers.suspend');
-    Route::post('proveedores/{provider}/reactivar', [\App\Http\Controllers\Admin\ProviderController::class, 'reactivate'])->name('providers.reactivate');
-});

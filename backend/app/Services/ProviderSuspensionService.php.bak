@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Provider;
+use App\Models\ProviderBooking;
+use App\Models\ProviderExperience;
+use App\Models\ProviderExperienceSchedule;
+
+/**
+ * Centraliza la cancelación en cascada cuando se suspende un afiliado
+ * o cuando se rechaza/cancela una experiencia desde el panel admin.
+ *
+ * Estas reglas son la fuente única de verdad: si cambian, se cambian aquí
+ * y aplican tanto a la suspensión de cuenta como al rechazo de una experiencia.
+ *
+ * IMPORTANTE: estos métodos NO abren transacción propia. El controlador que
+ * los llama es el dueño de la transacción, para que el cambio de estado del
+ * proveedor/experiencia y la cascada sean atómicos (todo o nada).
+ */
+class ProviderSuspensionService
+{
+    /**
+     * Cancela TODA la operación de un proveedor (al suspender la cuenta):
+     *  - experiencias                -> rejected + is_active = false
+     *  - schedules active|paused     -> cancelled
+     *  - bookings pending|confirmed  -> cancelled
+     *
+     * No toca schedules/bookings completed (ya ocurrieron).
+     */
+    public function cancelProviderOperations(Provider $provider): void
+    {
+        // Experiencias: todas pasan a rechazadas e inactivas.
+        ProviderExperience::where('provider_id', $provider->id)
+            ->update(['status' => 'rejected', 'is_active' => false]);
+
+        // Salidas/horarios disponibles o pausados -> cancelados.
+        ProviderExperienceSchedule::where('provider_id', $provider->id)
+            ->whereIn('status', ['active', 'paused'])
+            ->update(['status' => 'cancelled']);
+
+        // Reservas pendientes o confirmadas -> canceladas.
+        $bookings = ProviderBooking::where('provider_id', $provider->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->get();
+
+        if ($bookings->isNotEmpty()) {
+            ProviderBooking::whereIn('id', $bookings->pluck('id'))
+                ->update(['status' => 'cancelled']);
+
+            // TODO: notificar por correo a los clientes afectados.
+            // Cada booking de $bookings tiene user_id y/o customer_email.
+        }
+    }
+
+    /**
+     * Cancela una experiencia concreta y su operación asociada
+     * (al rechazar/cancelar la experiencia desde el panel):
+     *  - la experiencia              -> rejected + is_active = false
+     *  - sus schedules active|paused -> cancelled
+     *  - sus bookings pending|confirmed -> cancelled
+     */
+    public function cancelExperienceOperations(ProviderExperience $experience): void
+    {
+        $experience->update(['status' => 'rejected', 'is_active' => false]);
+
+        ProviderExperienceSchedule::where('provider_experience_id', $experience->id)
+            ->whereIn('status', ['active', 'paused'])
+            ->update(['status' => 'cancelled']);
+
+        $bookings = ProviderBooking::where('provider_experience_id', $experience->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->get();
+
+        if ($bookings->isNotEmpty()) {
+            ProviderBooking::whereIn('id', $bookings->pluck('id'))
+                ->update(['status' => 'cancelled']);
+
+            // TODO: notificar por correo a los clientes afectados.
+            // Cada booking de $bookings tiene user_id y/o customer_email.
+        }
+    }
+
+    /**
+     * Al reactivar la cuenta: las experiencias rechazadas vuelven a borrador
+     * para que el afiliado decida si las publica de nuevo.
+     *
+     * Los schedules y bookings cancelados NO se revierten (siguen cancelados).
+     */
+    public function restoreProviderExperiencesToDraft(Provider $provider): void
+    {
+        ProviderExperience::where('provider_id', $provider->id)
+            ->where('status', 'rejected')
+            ->update(['status' => 'draft', 'published_at' => null]);
+    }
+}

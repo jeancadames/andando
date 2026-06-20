@@ -420,7 +420,15 @@ class ProviderAuthApi {
     try {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (_) {
-      throw Exception('El servidor respondió con un formato inválido.');
+      final preview = response.body.length > 500
+          ? response.body.substring(0, 500)
+          : response.body;
+
+      throw Exception(
+        'El servidor respondió con un formato inválido. '
+        'Status: ${response.statusCode}. '
+        'Body: $preview',
+      );
     }
   }
 }

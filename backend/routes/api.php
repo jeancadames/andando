@@ -156,7 +156,7 @@ Route::prefix('provider')->group(function () {
     Route::post('/register', [ProviderAuthController::class, 'register']);
     Route::post('/login', [ProviderAuthController::class, 'login']);
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'provider.active'])->group(function () {
         Route::get('/me', [ProviderAuthController::class, 'me']);
         Route::post('/logout', [ProviderAuthController::class, 'logout']);
 
