@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Auth\PasswordResetController;
 use App\Http\Controllers\Api\Client\ClientPasswordController;
 use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
 use App\Http\Controllers\Api\Auth\GoogleAuthController;
+use App\Http\Controllers\Api\Auth\AppleAuthController;
 use App\Http\Controllers\Api\Auth\LoginController;
 
 use App\Http\Controllers\Api\Client\ClientReviewCommentController;
@@ -141,6 +142,7 @@ Route::post('/auth/login', LoginController::class);
 Route::post('/forgot-password', [PasswordResetController::class, 'forgot']);
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 Route::post('/auth/google', GoogleAuthController::class);
+Route::post('/auth/apple', AppleAuthController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
