@@ -8,9 +8,14 @@ import '../../data/models/customer_payment_transaction_model.dart';
 ///
 /// Maneja:
 /// - cargar tarjetas tokenizadas
-/// - solicitar tokenización/guardado de tarjeta
+/// - iniciar tokenización segura con Azul Payment Page
 /// - establecer tarjeta principal
 /// - eliminar tarjeta/token
+///
+/// IMPORTANTE:
+/// Flutter NO captura número de tarjeta, CVV ni vencimiento.
+/// La tarjeta se registra directamente en Azul.
+/// AndanDO solo guarda el token y datos visuales seguros.
 class CustomerPaymentMethodsController extends ChangeNotifier {
   CustomerPaymentMethodsController({
     CustomerPaymentMethodsRemoteDataSource? dataSource,
@@ -25,7 +30,6 @@ class CustomerPaymentMethodsController extends ChangeNotifier {
   String? errorMessage;
 
   List<CustomerPaymentMethodModel> paymentMethods = [];
-
   List<CustomerPaymentTransactionModel> transactions = [];
 
   int selectedIndex = 0;
@@ -69,54 +73,11 @@ class CustomerPaymentMethodsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Solicita tokenización y guardado de una tarjeta.
+  /// Solicita al backend una URL segura para abrir Azul Payment Page.
   ///
-  /// IMPORTANTE:
-  /// Flutter envía número y CVV temporalmente a Laravel.
-  /// Laravel debe enviarlo a Azul y guardar solo token + datos seguros.
-  Future<bool> createPaymentMethod({
-    required String type,
-    required String cardNumber,
-    required String holderName,
-    required String expiry,
-    required String cvv,
-  }) async {
-    isSaving = true;
-    errorMessage = null;
-    notifyListeners();
-
-    try {
-      final expiryParts = expiry.split('/');
-
-      if (expiryParts.length != 2) {
-        throw Exception('Fecha de vencimiento inválida.');
-      }
-
-      final expiryMonth = int.tryParse(expiryParts[0]) ?? 0;
-      final expiryYearShort = int.tryParse(expiryParts[1]) ?? 0;
-      final expiryYear = 2000 + expiryYearShort;
-
-      await _dataSource.createPaymentMethod(
-        type: type,
-        cardNumber: cardNumber,
-        holderName: holderName.trim().toUpperCase(),
-        expiryMonth: expiryMonth,
-        expiryYear: expiryYear,
-        cvv: cvv,
-      );
-
-      await loadPaymentMethods();
-
-      selectedIndex = paymentMethods.isEmpty ? 0 : paymentMethods.length - 1;
-
-      return true;
-    } catch (error) {
-      errorMessage = error.toString();
-      return false;
-    } finally {
-      isSaving = false;
-      notifyListeners();
-    }
+  /// Este flujo NO envía datos de tarjeta a Laravel.
+  Future<Map<String, dynamic>> getAzulTokenizationWebViewRequest() {
+    return _dataSource.getAzulTokenizationWebViewRequest();
   }
 
   /// Establece tarjeta seleccionada como principal.
@@ -149,7 +110,7 @@ class CustomerPaymentMethodsController extends ChangeNotifier {
   /// Elimina tarjeta seleccionada.
   ///
   /// Backend:
-  /// - elimina token en Azul si existe.
+  /// - elimina/desactiva el token en Azul si aplica.
   /// - hace soft delete local.
   Future<bool> deleteSelectedPaymentMethod() async {
     final selected = selectedPaymentMethod;

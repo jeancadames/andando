@@ -12,16 +12,19 @@ import '../models/customer_payment_transaction_model.dart';
 ///
 /// Consume:
 /// - GET    /api/client/payment-methods
-/// - POST   /api/client/payment-methods
+/// - POST   /api/payments/azul/payment-page/session
 /// - PATCH  /api/client/payment-methods/{id}/default
 /// - DELETE /api/client/payment-methods/{id}
 ///
 /// IMPORTANTE:
-/// Para tokenización con Azul:
-/// - Flutter envía la tarjeta temporalmente a Laravel.
-/// - Laravel la envía a Azul Datavault.
-/// - Laravel solo guarda token + datos seguros.
-/// - AndanDO no guarda número completo ni CVV.
+/// Flutter NO captura ni envía:
+/// - número de tarjeta
+/// - CVV
+/// - fecha de vencimiento digitada
+/// - titular
+///
+/// El cliente registra la tarjeta directamente en Azul Payment Page.
+/// AndanDO guarda solo DataVaultToken y datos visuales seguros.
 class CustomerPaymentMethodsRemoteDataSource {
   CustomerPaymentMethodsRemoteDataSource({
     SecureStorage? secureStorage,
@@ -85,50 +88,42 @@ class CustomerPaymentMethodsRemoteDataSource {
     return list.map(CustomerPaymentTransactionModel.fromJson).toList();
   }
 
-  /// Tokeniza y guarda una tarjeta.
+  /// Crea una sesión segura de tokenización en backend.
   ///
-  /// Este método envía temporalmente:
-  /// - card_number
-  /// - cvv
-  ///
-  /// Laravel NO los guarda.
-  /// Laravel los usa únicamente para solicitar el token a Azul.
-  Future<CustomerPaymentMethodModel> createPaymentMethod({
-    required String type,
-    required String cardNumber,
-    required String holderName,
-    required int expiryMonth,
-    required int expiryYear,
-    required String cvv,
-  }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/client/payment-methods');
+  /// Backend responde una redirect_url pública.
+  /// Flutter abre esa URL en WebView o navegador.
+  Future<Map<String, dynamic>> getAzulTokenizationWebViewRequest() async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/payments/azul/payment-page/session',
+    );
 
     final response = await _client.post(
       uri,
       headers: await _headers(),
-      body: jsonEncode({
-        'type': type,
-        'card_number': cardNumber.replaceAll(RegExp(r'\D'), ''),
-        'holder_name': holderName,
-        'expiry_month': expiryMonth,
-        'expiry_year': expiryYear,
-        'cvv': cvv.replaceAll(RegExp(r'\D'), ''),
-      }),
     );
 
     final body = _decodeResponse(response);
 
-    if (response.statusCode != 201) {
+    if (response.statusCode != 200) {
       throw Exception(
-        body['message'] ?? 'No se pudo guardar la tarjeta.',
+        body['message'] ?? 'No se pudo iniciar la tokenización.',
       );
     }
 
     final data = Map<String, dynamic>.from(body['data'] ?? {});
 
-    return CustomerPaymentMethodModel.fromJson(
-      Map<String, dynamic>.from(data['payment_method'] ?? {}),
-    );
+    final redirectUrl = data['redirect_url']?.toString();
+
+    if (redirectUrl == null || redirectUrl.trim().isEmpty) {
+      throw Exception('El backend no devolvió la URL de tokenización.');
+    }
+
+    return {
+      'url': redirectUrl,
+      'headers': <String, String>{
+        'Accept': 'text/html',
+      },
+    };
   }
 
   /// Establece una tarjeta como principal.

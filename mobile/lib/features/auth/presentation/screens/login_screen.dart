@@ -269,25 +269,44 @@ class _LoginScreenState extends State<LoginScreen> {
   /// Por ahora NO llama backend.
   /// Solo dejamos el botón visualmente listo para conectar después.
   Future<void> _handleAppleLogin() async {
+    if (_isAppleLoading || _isLoading || _isGoogleLoading) {
+      return;
+    }
+
     setState(() {
       _isAppleLoading = true;
     });
 
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    try {
+      await widget.authController.loginWithApple();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isAppleLoading = false;
-    });
+      final normalizedUserType = _normalizeUserType(
+        widget.authController.userType ?? 'customer',
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Inicio de sesión con Apple pendiente de conectar.',
+      _redirectAfterLogin(
+        userType: normalizedUserType,
+        providerStatus: widget.authController.providerStatus,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAppleLoading = false;
+        });
+      }
+    }
   }
 
   /// Acción temporal para recuperación de contraseña.

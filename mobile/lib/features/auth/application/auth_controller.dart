@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/auth/firebase_apple_auth_service.dart';
 import '../../../core/auth/firebase_google_auth_service.dart';
 import '../../../core/constants/storage_keys.dart';
 import '../../../core/notifications/device_token_api_service.dart';
@@ -49,6 +50,7 @@ class AuthController extends ChangeNotifier {
     FirebasePushService? firebasePushService,
     DeviceTokenApiService? deviceTokenApiService,
     FirebaseGoogleAuthService? firebaseGoogleAuthService,
+    FirebaseAppleAuthService? firebaseAppleAuthService,
     CustomerAuthApi? customerAuthApi,
   })  : _secureStorage = secureStorage,
         _firebasePushService = firebasePushService ?? FirebasePushService(),
@@ -56,6 +58,8 @@ class AuthController extends ChangeNotifier {
             deviceTokenApiService ?? const DeviceTokenApiService(),
         _firebaseGoogleAuthService =
             firebaseGoogleAuthService ?? FirebaseGoogleAuthService(),
+        _firebaseAppleAuthService =
+            firebaseAppleAuthService ?? FirebaseAppleAuthService(),    
         _customerAuthApi = customerAuthApi ?? const CustomerAuthApi();
 
   /// Servicio encargado de leer/escribir datos sensibles.
@@ -69,6 +73,9 @@ class AuthController extends ChangeNotifier {
 
   /// Servicio encargado de autenticar con Google usando Firebase Auth.
   final FirebaseGoogleAuthService _firebaseGoogleAuthService;
+
+  /// Servicio encargado de autenticar con Apple usando Firebase Auth.
+  final FirebaseAppleAuthService _firebaseAppleAuthService;
 
   /// Servicio encargado de comunicarse con endpoints de cliente.
   final CustomerAuthApi _customerAuthApi;
@@ -176,6 +183,26 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  Future<void> loginWithApple() async {
+    try {
+      final appleResult = await _firebaseAppleAuthService.signInWithApple();
+
+      final response = await _customerAuthApi.loginWithApple(
+        idToken: appleResult.idToken,
+      );
+
+      await saveSession(
+        token: response.token,
+        userType: response.userType,
+        name: response.userName,
+        email: response.userEmail,
+      );
+    } catch (_) {
+      await _firebaseAppleAuthService.signOutFromFirebase();
+      rethrow;
+    }
+  }
+
   /// Guarda la sesión del usuario después de login o registro.
   Future<void> saveSession({
     required String token,
@@ -246,6 +273,7 @@ class AuthController extends ChangeNotifier {
     }
 
     await _firebaseGoogleAuthService.signOutFromFirebase();
+    await _firebaseAppleAuthService.signOutFromFirebase();
 
     await _secureStorage.clear();
 

@@ -4,6 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Notifications\Claim\ClaimUpdatedNotification;
 
+use App\Services\Payments\SchedulePayoutHoldService;
+use App\Services\Payments\CancelBookingPaymentService;
+use App\Services\Payments\BookingCancellationDecisionService;
+use App\Models\ProviderBooking;
+
 use App\Http\Controllers\Controller;
 use App\Models\BookingClaim;
 use Illuminate\Http\RedirectResponse;
@@ -69,7 +74,12 @@ class ClaimController extends Controller
         ]);
     }
 
-    public function resolve(Request $request, BookingClaim $claim): RedirectResponse
+    public function resolve(
+        Request $request,
+        BookingClaim $claim,
+        SchedulePayoutHoldService $payoutHoldService,
+        CancelBookingPaymentService $cancelBookingPaymentService,
+    ): RedirectResponse
     {
         if (in_array($claim->status, ['resolved', 'rejected'], true)) {
             return back()->with('error', 'Este reclamo ya fue cerrado.');
@@ -80,11 +90,29 @@ class ClaimController extends Controller
             'resolved_at' => now(),
         ]);
 
+        $claim->loadMissing('booking.schedule');
+
+        if ($claim->booking) {
+            $cancelBookingPaymentService->cancel(
+                booking: $claim->booking,
+                reason: BookingCancellationDecisionService::REASON_CLAIM,
+                cancelledBy: ProviderBooking::CANCELLED_BY_ADMIN,
+            );
+
+            if ($claim->booking->schedule) {
+                $payoutHoldService->cancelSchedule(
+                    $claim->booking->schedule,
+                    'claim_resolved_against_provider'
+                );
+            }
+        }
+
         $claim->loadMissing([
             'user',
             'booking.experience',
             'booking.schedule',
         ]);
+
 
         $claim->user?->notify(
             new ClaimUpdatedNotification($claim)
@@ -93,7 +121,11 @@ class ClaimController extends Controller
         return back()->with('success', 'Reclamo marcado como resuelto.');
     }
 
-    public function reject(Request $request, BookingClaim $claim): RedirectResponse
+    public function reject(
+        Request $request,
+        BookingClaim $claim,
+        SchedulePayoutHoldService $payoutHoldService,
+    ): RedirectResponse
     {
         if (in_array($claim->status, ['resolved', 'rejected'], true)) {
             return back()->with('error', 'Este reclamo ya fue cerrado.');
@@ -103,6 +135,12 @@ class ClaimController extends Controller
             'status' => 'rejected',
             'resolved_at' => now(),
         ]);
+
+        $claim->loadMissing('booking.schedule');
+
+        if ($claim->booking?->schedule) {
+            $payoutHoldService->releaseSchedule($claim->booking->schedule);
+        }
 
         $claim->loadMissing([
             'user',

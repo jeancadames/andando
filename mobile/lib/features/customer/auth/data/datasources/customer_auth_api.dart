@@ -66,6 +66,30 @@ class CustomerAuthApi {
     return _handleResponse(response);
   }
 
+  /// Login/registro de cliente con Apple.
+  ///
+  /// El idToken viene de Firebase Auth.
+  /// Laravel lo valida con Firebase Admin SDK y devuelve token Sanctum.
+  /// 
+  Future<CustomerAuthResponse> loginWithApple({
+    required String idToken,
+  }) async {
+    final uri = Uri.parse('${Environment.apiBaseUrl}/auth/apple');
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'id_token': idToken,
+      }),
+    );
+
+    return _handleResponse(response);
+  }
+
   /// Manejo de respuesta del backend
   CustomerAuthResponse _handleResponse(http.Response response) {
     final body = jsonDecode(response.body);

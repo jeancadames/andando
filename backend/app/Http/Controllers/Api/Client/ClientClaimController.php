@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Services\Payments\SchedulePayoutHoldService;
+
 use App\Models\User;
 use App\Notifications\Admin\NewClaimForReviewNotification;
 
@@ -35,7 +37,10 @@ class ClientClaimController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(
+        Request $request,
+        SchedulePayoutHoldService $payoutHoldService,
+    ): JsonResponse
     {
         $data = $request->validate([
             'provider_booking_id' => [
@@ -81,6 +86,8 @@ class ClientClaimController extends Controller
             'description' => $data['description'] ?? '',
             'status' => 'pending',
         ]);
+
+        $payoutHoldService->holdByClaim($claim);
 
         $claim->load([
             'booking.experience',

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Services\Payments\CancelBookingPaymentService;
+use App\Services\Payments\CreateBookingPaymentTransactionService;
+
 use App\Notifications\Booking\BookingCancelledNotification;
 use App\Notifications\Booking\NewBookingNotification;
 use App\Notifications\Booking\BookingCreatedNotification;
@@ -96,7 +99,10 @@ class ClientBookingController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(
+        Request $request,
+        CreateBookingPaymentTransactionService $paymentTransactionService,
+    ): JsonResponse
     {
         $data = $request->validate([
             'provider_experience_schedule_id' => [
@@ -130,7 +136,7 @@ class ClientBookingController extends Controller
             ], 422);
         }
 
-        $booking = DB::transaction(function () use ($data, $user) {
+        $booking = DB::transaction(function () use ($data, $user, $defaultPaymentMethod, $paymentTransactionService) {
             $schedule = ProviderExperienceSchedule::query()
                 ->with('experience.provider')
                 ->where('id', $data['provider_experience_schedule_id'])
@@ -197,9 +203,13 @@ class ClientBookingController extends Controller
                 'guests_count' => $data['guests_count'],
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
-                'provider_earning' => $totalAmount,
-                'status' => 'pending',
+                'provider_earning' => round($totalAmount * (1 - (float) config('payments.rules.andando_commission_rate', 0.15)), 2),
+                'status' => ProviderBooking::STATUS_PENDING,
+                'customer_payment_method_id' => $defaultPaymentMethod->id,
+                'payment_status' => ProviderBooking::PAYMENT_STATUS_SCHEDULED,
             ]);
+
+            $paymentTransactionService->createForBooking($booking);
 
             Conversation::query()
                 ->where('customer_user_id', $user->id)
@@ -273,7 +283,11 @@ class ClientBookingController extends Controller
         ]);
     }
 
-    public function cancel(Request $request, ProviderBooking $booking): JsonResponse
+    public function cancel(
+        Request $request,
+        ProviderBooking $booking,
+        CancelBookingPaymentService $cancelBookingPaymentService,
+    ): JsonResponse
     {
         if ($booking->user_id !== $request->user()->id) {
             abort(403, 'No tienes permiso para cancelar esta reserva.');
@@ -297,9 +311,15 @@ class ClientBookingController extends Controller
 
         $preview = $this->buildCancellationPreviewData($booking);
 
+        $cancelBookingPaymentService->cancel(
+            booking: $booking,
+            reason: 'customer',
+            cancelledBy: ProviderBooking::CANCELLED_BY_CUSTOMER,
+        );
+
+        $booking->refresh();
+
         $booking->update([
-            'status' => 'cancelled',
-            'cancelled_at' => now(),
             'cancellation_policy_type' => $preview['policy_type'],
             'refund_amount' => $preview['refund_amount'],
             'administrative_fee_amount' => $preview['administrative_fee_amount'],
@@ -431,7 +451,7 @@ class ClientBookingController extends Controller
 
             if ($endsAt->lte(now())) {
                 $booking->update([
-                    'status' => 'completed',
+                    'status' => ProviderBooking::STATUS_COMPLETED,
                 ]);
             }
         }
