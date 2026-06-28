@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\Auth\PasswordResetController;
 
+use App\Http\Controllers\Api\Payments\AzulPaymentPageController;
+
 use App\Http\Controllers\Api\Client\ClientPasswordController;
 use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
 use App\Http\Controllers\Api\Auth\GoogleAuthController;
@@ -148,6 +150,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
     Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy']);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Ruta de tokenización azul
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/payments/azul/payment-page/session', [AzulPaymentPageController::class, 'createTokenizationSession']);
+});
+
+Route::get('/payments/azul/payment-page/redirect/{tokenizationRequest}', [AzulPaymentPageController::class, 'redirectTokenization'])
+    ->name('payments.azul.payment-page.redirect');
+
+Route::match(['get', 'post'], '/payments/azul/payment-page/approved', [AzulPaymentPageController::class, 'approved']);
+Route::match(['get', 'post'], '/payments/azul/payment-page/declined', [AzulPaymentPageController::class, 'declined']);
+Route::match(['get', 'post'], '/payments/azul/payment-page/cancelled', [AzulPaymentPageController::class, 'cancelled']);
 
 /*
 |--------------------------------------------------------------------------
@@ -317,4 +336,3 @@ Route::prefix('client/explore')->group(function () {
             '/client/explore/reviews/{review}/comments',
             [ClientReviewCommentController::class, 'index']
         );
-        

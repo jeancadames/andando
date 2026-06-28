@@ -61,3 +61,7 @@ Artisan::command('chat:close-inactive', function () {
 Schedule::command('chat:close-inactive')->hourly();
 
 Schedule::command('trip:send-reminders')->hourly();
+
+Schedule::command('payments:process-scheduled-charges')->hourly();
+
+Schedule::command('payments:release-provider-payouts')->hourly();

@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import 'azul_payment_page_webview_screen.dart';
+
 import 'dart:math' as math;
+
 
 import '../../../customer/shared/widgets/customer_bottom_navigation.dart';
 import '../controllers/customer_payment_methods_controller.dart';
@@ -50,49 +56,60 @@ class _CustomerPaymentMethodsScreenState
   }
 
   Future<void> _openAddCardSheet() async {
-    final added = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) {
-        return _AddCardSheet(
-          onSubmit: ({
-            required type,
-            required cardNumber,
-            required holderName,
-            required expiry,
-            required cvv,
-          }) {
-            return _controller.createPaymentMethod(
-              type: type,
-              cardNumber: cardNumber,
-              holderName: holderName,
-              expiry: expiry,
-              cvv: cvv,
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted) return;
-
-    if (added == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tarjeta agregada correctamente. Ya puedes continuar con tu reserva.'),
-        ),
-      );
-
-      await Future.delayed(const Duration(milliseconds: 650));
+    try {
+      final request = await _controller.getAzulTokenizationWebViewRequest();
 
       if (!mounted) return;
 
-      context.pop(true);
-    } else if (_controller.errorMessage != null) {
+      final url = request['url'] as String;
+      final headers = Map<String, String>.from(request['headers'] as Map);
+
+      if (kIsWeb) {
+        final launched = await launchUrl(
+          Uri.parse(url),
+          webOnlyWindowName: '_blank',
+        );
+
+        if (!launched && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudo abrir la página segura de Azul.'),
+            ),
+          );
+        }
+
+        return;
+      }
+
+      final added = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AzulPaymentPageWebViewScreen(
+            url: url,
+            headers: headers,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+
+      await _controller.loadPaymentMethods();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_controller.errorMessage!),
+          content: Text(
+            added == true
+                ? 'Tarjeta agregada correctamente.'
+                : 'No se agregó ninguna tarjeta.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
         ),
       );
     }
@@ -458,7 +475,7 @@ class _SecurityBanner extends StatelessWidget {
                 ),
                 SizedBox(height: 3),
                 Text(
-                  'Encriptación SSL · Integración segura futura',
+                  'Tus tarjetas se registran directamente en la plataforma Azul. AndanDO solo guarda un token seguro.',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -1509,776 +1526,6 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
-}
-
-class _AddCardSheet extends StatefulWidget {
-  const _AddCardSheet({
-    required this.onSubmit,
-  });
-
-  final Future<bool> Function({
-    required String type,
-    required String cardNumber,
-    required String holderName,
-    required String expiry,
-    required String cvv,
-  }) onSubmit;
-
-  @override
-  State<_AddCardSheet> createState() =>
-      _AddCardSheetState();
-}
-
-class _AddCardSheetState extends State<_AddCardSheet> {
-  final _formKey = GlobalKey<FormState>();
-
-  final _numberController = TextEditingController();
-  final _holderController = TextEditingController();
-  final _expiryController = TextEditingController();
-  final _cvvController = TextEditingController();
-
-  String _type = 'credit';
-  bool _showCvv = false;
-  bool _isSaving = false;
-
-  String get _digits => _numberController.text.replaceAll(RegExp(r'\D'), '');
-
-  String get _brand => _detectCardBrand(_digits);
-
-  int get _maxDigits => _maxCardDigits(_brand);
-
-  int get _maxCvv => _maxCvvDigits(_brand);
-
-  @override
-  void dispose() {
-    _numberController.dispose();
-    _holderController.dispose();
-    _expiryController.dispose();
-    _cvvController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isSaving = true);
-
-    final success = await widget.onSubmit(
-      type: _type,
-      cardNumber: _numberController.text,
-      holderName: _holderController.text,
-      expiry: _expiryController.text,
-      cvv: _cvvController.text,
-    );
-
-    if (!mounted) return;
-
-    setState(() => _isSaving = false);
-
-    Navigator.pop(context, success);
-  }
-
-  String _formatCardNumber(String value) {
-    final cleanDigits = value.replaceAll(RegExp(r'\D'), '');
-    final brand = _detectCardBrand(cleanDigits);
-    final maxDigits = _maxCardDigits(brand);
-    final digits = cleanDigits.substring(
-      0,
-      cleanDigits.length > maxDigits ? maxDigits : cleanDigits.length,
-    );
-
-    if (brand == 'amex') {
-      final buffer = StringBuffer();
-
-      for (var i = 0; i < digits.length; i++) {
-        if (i == 4 || i == 10) {
-          buffer.write(' ');
-        }
-
-        buffer.write(digits[i]);
-      }
-
-      return buffer.toString();
-    }
-
-    final buffer = StringBuffer();
-
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && i % 4 == 0) {
-        buffer.write(' ');
-      }
-
-      buffer.write(digits[i]);
-    }
-
-    return buffer.toString();
-  }
-
-  String _formatExpiry(String value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-
-    if (digits.length <= 2) return digits;
-
-    return '${digits.substring(0, 2)}/${digits.substring(2, digits.length.clamp(2, 4))}';
-  }
-
-  void _formatCvv(String value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-
-    final limited = digits.substring(
-      0,
-      digits.length > _maxCvv ? _maxCvv : digits.length,
-    );
-
-    if (limited != value) {
-      _cvvController.value = TextEditingValue(
-        text: limited,
-        selection: TextSelection.collapsed(
-          offset: limited.length,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.92,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(28),
-          ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Agregar tarjeta',
-                          style: TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _LiveCardPreview(
-                    number: _numberController.text,
-                    holder: _holderController.text,
-                    expiry: _expiryController.text,
-                    type: _type,
-                    brand: _brand,
-                  ),
-                  const SizedBox(height: 14),
-                  _DetectedBrandPill(
-                    brand: _brand,
-                    maxDigits: _maxDigits,
-                    maxCvv: _maxCvv,
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _TypeButton(
-                          title: 'Crédito',
-                          selected: _type == 'credit',
-                          onTap: () => setState(() => _type = 'credit'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _TypeButton(
-                          title: 'Débito',
-                          selected: _type == 'debit',
-                          onTap: () => setState(() => _type = 'debit'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _CardInput(
-                    label: 'Número de tarjeta',
-                    controller: _numberController,
-                    keyboardType: TextInputType.number,
-                    hint: _brand == 'amex'
-                        ? '0000 000000 00000'
-                        : '0000 0000 0000 0000',
-                    suffixIcon: Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Center(
-                        widthFactor: 1,
-                        child: _CardBrandLogo(brand: _brand),
-                      ),
-                    ),
-                    onChanged: (value) {
-                      final formatted = _formatCardNumber(value);
-
-                      if (formatted != value) {
-                        _numberController.value = TextEditingValue(
-                          text: formatted,
-                          selection: TextSelection.collapsed(
-                            offset: formatted.length,
-                          ),
-                        );
-                      }
-
-                      final cleanCvv =
-                          _cvvController.text.replaceAll(RegExp(r'\D'), '');
-
-                      if (cleanCvv.length > _maxCvv) {
-                        _formatCvv(cleanCvv);
-                      }
-
-                      setState(() {});
-                    },
-                    validator: (value) {
-                      final digits =
-                          value?.replaceAll(RegExp(r'\D'), '') ?? '';
-
-                      if (digits.length != _maxDigits) {
-                        return 'Debe tener $_maxDigits dígitos para ${_brand.toUpperCase()}.';
-                      }
-
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _CardInput(
-                    label: 'Nombre del titular',
-                    controller: _holderController,
-                    hint: 'Como aparece en la tarjeta',
-                    textCapitalization: TextCapitalization.characters,
-                    onChanged: (_) => setState(() {}),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'El titular es obligatorio.';
-                      }
-
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _CardInput(
-                          label: 'Vencimiento',
-                          controller: _expiryController,
-                          keyboardType: TextInputType.number,
-                          hint: 'MM/AA',
-                          onChanged: (value) {
-                            final formatted = _formatExpiry(value);
-
-                            if (formatted != value) {
-                              _expiryController.value = TextEditingValue(
-                                text: formatted,
-                                selection: TextSelection.collapsed(
-                                  offset: formatted.length,
-                                ),
-                              );
-                            }
-
-                            setState(() {});
-                          },
-                          validator: (value) {
-                            if (value == null ||
-                                !RegExp(r'^\d{2}/\d{2}$').hasMatch(value)) {
-                              return 'MM/AA';
-                            }
-
-                            final month =
-                                int.tryParse(value.substring(0, 2)) ?? 0;
-
-                            if (month < 1 || month > 12) {
-                              return 'Mes inválido';
-                            }
-
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _CardInput(
-                          label: 'CVV',
-                          controller: _cvvController,
-                          keyboardType: TextInputType.number,
-                          hint: _brand == 'amex' ? '••••' : '•••',
-                          obscureText: !_showCvv,
-                          suffixIcon: IconButton(
-                            onPressed: () {
-                              setState(() => _showCvv = !_showCvv);
-                            },
-                            icon: Icon(
-                              _showCvv
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                            ),
-                          ),
-                          onChanged: (value) {
-                            _formatCvv(value);
-                            setState(() {});
-                          },
-                          validator: (value) {
-                            final digits =
-                                value?.replaceAll(RegExp(r'\D'), '') ?? '';
-
-                            if (digits.length != _maxCvv) {
-                              return 'CVV de $_maxCvv dígitos';
-                            }
-
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFDCFCE7),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(
-                          Icons.shield_outlined,
-                          color: Color(0xFF166534),
-                          size: 19,
-                        ),
-                        SizedBox(width: 9),
-                        Expanded(
-                          child: Text(
-                            'Tus datos están protegidos. No guardamos CVV ni número completo.',
-                            style: TextStyle(
-                              color: Color(0xFF166534),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSaving ? null : _submit,
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.check_rounded),
-                      label: Text(
-                        _isSaving ? 'Guardando...' : 'Guardar Tarjeta',
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF003B73),
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: const Color(0xFF7EA0C4),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        textStyle: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LiveCardPreview extends StatelessWidget {
-  const _LiveCardPreview({
-    required this.number,
-    required this.holder,
-    required this.expiry,
-    required this.type,
-    required this.brand,
-  });
-
-  final String number;
-  final String holder;
-  final String expiry;
-  final String type;
-  final String brand;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = _cardColorsByBrand(brand);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      height: 158,
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(colors),
-      child: Stack(
-        children: [
-          const _CardDecorations(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const _ChipIcon(),
-                  const Spacer(),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _CardBrandLogo(brand: brand),
-                      const SizedBox(height: 4),
-                      Text(
-                        type == 'credit' ? 'CRÉDITO' : 'DÉBITO',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                number.isEmpty
-                    ? _emptyCardMask(brand)
-                    : _liveFormattedNumber(number),
-                style: const TextStyle(
-                  color: Colors.white,
-                  letterSpacing: 2,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _CardSmallLabel(
-                      label: 'Titular',
-                      value:
-                          holder.trim().isEmpty ? 'TITULAR' : holder.toUpperCase(),
-                    ),
-                  ),
-                  _CardSmallLabel(
-                    label: 'Vence',
-                    value: expiry.isEmpty ? 'MM/AA' : expiry,
-                    alignEnd: true,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _emptyCardMask(String brand) {
-    if (brand == 'amex') {
-      return '•••• •••••• •••••';
-    }
-
-    return '•••• •••• •••• ••••';
-  }
-
-  static String _liveFormattedNumber(String value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-
-    if (digits.isEmpty) {
-      return '•••• •••• •••• ••••';
-    }
-
-    final brand = _detectCardBrand(digits);
-    final maxDigits = _maxCardDigits(brand);
-
-    final limited = digits.substring(
-      0,
-      digits.length > maxDigits ? maxDigits : digits.length,
-    );
-
-    if (brand == 'amex') {
-      final buffer = StringBuffer();
-
-      for (var i = 0; i < limited.length; i++) {
-        if (i == 4 || i == 10) {
-          buffer.write(' ');
-        }
-
-        buffer.write(limited[i]);
-      }
-
-      return buffer.toString();
-    }
-
-    final buffer = StringBuffer();
-
-    for (var i = 0; i < limited.length; i++) {
-      if (i > 0 && i % 4 == 0) {
-        buffer.write(' ');
-      }
-
-      buffer.write(limited[i]);
-    }
-
-    return buffer.toString();
-  }
-}
-
-class _DetectedBrandPill extends StatelessWidget {
-  const _DetectedBrandPill({
-    required this.brand,
-    required this.maxDigits,
-    required this.maxCvv,
-  });
-
-  final String brand;
-  final int maxDigits;
-  final int maxCvv;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 13,
-        vertical: 10,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: const Color(0xFFD9E8FF),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.auto_awesome_rounded,
-            size: 18,
-            color: Color(0xFF003B73),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Detectado: ${brand.toUpperCase()} · $maxDigits dígitos · CVV $maxCvv',
-              style: const TextStyle(
-                color: Color(0xFF003B73),
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TypeButton extends StatelessWidget {
-  const _TypeButton({
-    required this.title,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        backgroundColor:
-            selected ? const Color(0xFFEFF6FF) : const Color(0xFFF9FAFB),
-        side: BorderSide(
-          color: selected ? const Color(0xFF003B73) : const Color(0xFFE5E7EB),
-          width: selected ? 1.4 : 1,
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-      ),
-      child: Text(
-        title,
-        style: TextStyle(
-          color: selected ? const Color(0xFF003B73) : const Color(0xFF6B7280),
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _CardInput extends StatelessWidget {
-  const _CardInput({
-    required this.label,
-    required this.controller,
-    this.hint,
-    this.keyboardType,
-    this.textCapitalization = TextCapitalization.none,
-    this.onChanged,
-    this.validator,
-    this.obscureText = false,
-    this.suffixIcon,
-  });
-
-  final String label;
-  final String? hint;
-  final TextEditingController controller;
-  final TextInputType? keyboardType;
-  final TextCapitalization textCapitalization;
-  final ValueChanged<String>? onChanged;
-  final String? Function(String?)? validator;
-  final bool obscureText;
-  final Widget? suffixIcon;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      textCapitalization: textCapitalization,
-      onChanged: onChanged,
-      validator: validator,
-      obscureText: obscureText,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        suffixIcon: suffixIcon,
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFFE5E7EB),
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFFE5E7EB),
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFF003B73),
-            width: 1.4,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _detectCardBrand(String digits) {
-  if (digits.startsWith('4')) {
-    return 'visa';
-  }
-
-  if (digits.startsWith('34') || digits.startsWith('37')) {
-    return 'amex';
-  }
-
-  if (digits.length >= 2) {
-    final firstTwo = int.tryParse(digits.substring(0, 2)) ?? 0;
-
-    if (firstTwo >= 51 && firstTwo <= 55) {
-      return 'mastercard';
-    }
-  }
-
-  if (digits.length >= 4) {
-    final firstFour = int.tryParse(digits.substring(0, 4)) ?? 0;
-
-    if (firstFour >= 2221 && firstFour <= 2720) {
-      return 'mastercard';
-    }
-
-    if (firstFour == 6011) {
-      return 'discover';
-    }
-  }
-
-  if (digits.length >= 3) {
-    final firstThree = int.tryParse(digits.substring(0, 3)) ?? 0;
-
-    if (firstThree >= 644 && firstThree <= 649) {
-      return 'discover';
-    }
-  }
-
-  if (digits.startsWith('65')) {
-    return 'discover';
-  }
-
-  return 'visa';
-}
-
-int _maxCardDigits(String brand) {
-  if (brand == 'amex') {
-    return 15;
-  }
-
-  return 16;
-}
-
-int _maxCvvDigits(String brand) {
-  if (brand == 'amex') {
-    return 4;
-  }
-
-  return 3;
 }
 
 List<Color> _cardColorsByBrand(String brand) {
