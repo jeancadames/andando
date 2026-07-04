@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import 'azul_payment_page_webview_screen.dart';
 
 import 'dart:math' as math;
-
 
 import '../../../customer/shared/widgets/customer_bottom_navigation.dart';
 import '../controllers/customer_payment_methods_controller.dart';
@@ -56,62 +52,44 @@ class _CustomerPaymentMethodsScreenState
   }
 
   Future<void> _openAddCardSheet() async {
-    try {
-      final request = await _controller.getAzulTokenizationWebViewRequest();
-
-      if (!mounted) return;
-
-      final url = request['url'] as String;
-      final headers = Map<String, String>.from(request['headers'] as Map);
-
-      if (kIsWeb) {
-        final launched = await launchUrl(
-          Uri.parse(url),
-          webOnlyWindowName: '_blank',
+    final added = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return _AddCardSheet(
+          onSubmit:
+              ({
+                required type,
+                required cardNumber,
+                required holderName,
+                required expiryMonth,
+                required expiryYear,
+                required cvv,
+              }) {
+                return _controller.createPaymentMethod(
+                  type: type,
+                  cardNumber: cardNumber,
+                  holderName: holderName,
+                  expiryMonth: expiryMonth,
+                  expiryYear: expiryYear,
+                  cvv: cvv,
+                );
+              },
         );
+      },
+    );
 
-        if (!launched && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No se pudo abrir la página segura de Azul.'),
-            ),
-          );
-        }
+    if (!mounted) return;
 
-        return;
-      }
-
-      final added = await Navigator.push<bool>(
+    if (added == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tarjeta guardada correctamente.')),
+      );
+    } else if (_controller.errorMessage != null) {
+      ScaffoldMessenger.of(
         context,
-        MaterialPageRoute(
-          builder: (_) => AzulPaymentPageWebViewScreen(
-            url: url,
-            headers: headers,
-          ),
-        ),
-      );
-
-      if (!mounted) return;
-
-      await _controller.loadPaymentMethods();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            added == true
-                ? 'Tarjeta agregada correctamente.'
-                : 'No se agregó ninguna tarjeta.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
-      );
+      ).showSnackBar(SnackBar(content: Text(_controller.errorMessage!)));
     }
   }
 
@@ -142,7 +120,7 @@ class _CustomerPaymentMethodsScreenState
           success
               ? 'Tarjeta principal actualizada.'
               : _controller.errorMessage ??
-                  'No se pudo actualizar la tarjeta principal.',
+                    'No se pudo actualizar la tarjeta principal.',
         ),
       ),
     );
@@ -197,9 +175,7 @@ class _CustomerPaymentMethodsScreenState
             padding: const EdgeInsets.fromLTRB(22, 14, 22, 22),
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -220,11 +196,7 @@ class _CustomerPaymentMethodsScreenState
                     color: iconColor.withOpacity(0.10),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 30,
-                  ),
+                  child: Icon(icon, color: iconColor, size: 30),
                 ),
                 const SizedBox(height: 14),
                 Text(
@@ -262,9 +234,7 @@ class _CustomerPaymentMethodsScreenState
                     ),
                     child: Text(
                       confirmText,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
                 ),
@@ -276,9 +246,7 @@ class _CustomerPaymentMethodsScreenState
                     onPressed: () => Navigator.pop(context, false),
                     child: const Text(
                       'Cancelar',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
                 ),
@@ -348,9 +316,7 @@ class _CustomerPaymentMethodsScreenState
                 if (_controller.isLoading)
                   const Padding(
                     padding: EdgeInsets.only(top: 80),
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: Center(child: CircularProgressIndicator()),
                   )
                 else if (_controller.errorMessage != null &&
                     _controller.paymentMethods.isEmpty)
@@ -361,23 +327,20 @@ class _CustomerPaymentMethodsScreenState
                 else if (_controller.paymentMethods.isEmpty)
                   const _EmptyCardsState()
                 else ...[
-                  ...List.generate(
-                    _controller.paymentMethods.length,
-                    (index) {
-                      final method = _controller.paymentMethods[index];
+                  ...List.generate(_controller.paymentMethods.length, (index) {
+                    final method = _controller.paymentMethods[index];
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: _CreditCardPreview(
-                          method: method,
-                          isSelected: index == _controller.selectedIndex,
-                          onTap: () {
-                            _controller.selectPaymentMethod(index);
-                          },
-                        ),
-                      );
-                    },
-                  ),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _CreditCardPreview(
+                        method: method,
+                        isSelected: index == _controller.selectedIndex,
+                        onTap: () {
+                          _controller.selectPaymentMethod(index);
+                        },
+                      ),
+                    );
+                  }),
                   const SizedBox(height: 6),
                   _CardDots(
                     count: _controller.paymentMethods.length,
@@ -398,8 +361,7 @@ class _CustomerPaymentMethodsScreenState
                 SizedBox(
                   height: 54,
                   child: ElevatedButton.icon(
-                    onPressed:
-                        _controller.isSaving ? null : _openAddCardSheet,
+                    onPressed: _controller.isSaving ? null : _openAddCardSheet,
                     icon: const Icon(Icons.add_rounded),
                     label: const Text('Agregar Nueva Tarjeta'),
                     style: ElevatedButton.styleFrom(
@@ -410,9 +372,7 @@ class _CustomerPaymentMethodsScreenState
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      textStyle: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                      ),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
                 ),
@@ -443,10 +403,7 @@ class _SecurityBanner extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF002D62),
-            Color(0xFF1A4A8A),
-          ],
+          colors: [Color(0xFF002D62), Color(0xFF1A4A8A)],
         ),
         borderRadius: BorderRadius.circular(22),
       ),
@@ -455,10 +412,7 @@ class _SecurityBanner extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: Color(0x22FFFFFF),
-            child: Icon(
-              Icons.shield_outlined,
-              color: Colors.white,
-            ),
+            child: Icon(Icons.shield_outlined, color: Colors.white),
           ),
           SizedBox(width: 14),
           Expanded(
@@ -476,18 +430,12 @@ class _SecurityBanner extends StatelessWidget {
                 SizedBox(height: 3),
                 Text(
                   'Tus tarjetas se registran directamente en la plataforma Azul. AndanDO solo guarda un token seguro.',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
             ),
           ),
-          Icon(
-            Icons.lock_outline_rounded,
-            color: Colors.white38,
-          ),
+          Icon(Icons.lock_outline_rounded, color: Colors.white38),
         ],
       ),
     );
@@ -495,10 +443,7 @@ class _SecurityBanner extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    this.trailing,
-  });
+  const _SectionHeader({required this.title, this.trailing});
 
   final String title;
   final String? trailing;
@@ -571,10 +516,7 @@ class _CreditCardPreviewState extends State<_CreditCardPreview> {
             GestureDetector(
               onTap: _handleTap,
               child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(
-                  begin: 0,
-                  end: _isFlipped ? math.pi : 0,
-                ),
+                tween: Tween<double>(begin: 0, end: _isFlipped ? math.pi : 0),
                 duration: const Duration(milliseconds: 420),
                 curve: Curves.easeInOut,
                 builder: (context, value, child) {
@@ -594,10 +536,7 @@ class _CreditCardPreviewState extends State<_CreditCardPreview> {
                               colors: colors,
                             ),
                           )
-                        : _CardFront(
-                            method: widget.method,
-                            colors: colors,
-                          ),
+                        : _CardFront(method: widget.method, colors: colors),
                   );
                 },
               ),
@@ -656,10 +595,7 @@ class _CreditCardPreviewState extends State<_CreditCardPreview> {
 }
 
 class _CardFront extends StatelessWidget {
-  const _CardFront({
-    required this.method,
-    required this.colors,
-  });
+  const _CardFront({required this.method, required this.colors});
 
   final CustomerPaymentMethodModel method;
   final List<Color> colors;
@@ -728,10 +664,7 @@ class _CardFront extends StatelessWidget {
 }
 
 class _CardBack extends StatelessWidget {
-  const _CardBack({
-    required this.method,
-    required this.colors,
-  });
+  const _CardBack({required this.method, required this.colors});
 
   final CustomerPaymentMethodModel method;
   final List<Color> colors;
@@ -749,10 +682,7 @@ class _CardBack extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 34),
-              Container(
-                height: 42,
-                color: Colors.black.withOpacity(0.45),
-              ),
+              Container(height: 42, color: Colors.black.withOpacity(0.45)),
               const SizedBox(height: 22),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -810,11 +740,7 @@ class _MaskedBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Text(
       '••••',
-      style: TextStyle(
-        color: Colors.white54,
-        fontSize: 18,
-        letterSpacing: 3,
-      ),
+      style: TextStyle(color: Colors.white54, fontSize: 18, letterSpacing: 3),
     );
   }
 }
@@ -865,10 +791,7 @@ class _ChipIcon extends StatelessWidget {
       height: 30,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFFFDE68A),
-            Color(0xFFF59E0B),
-          ],
+          colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)],
         ),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -894,9 +817,7 @@ class _ChipIcon extends StatelessWidget {
 }
 
 class _CardBrandLogo extends StatelessWidget {
-  const _CardBrandLogo({
-    required this.brand,
-  });
+  const _CardBrandLogo({required this.brand});
 
   final String brand;
 
@@ -988,8 +909,9 @@ class _CardSmallLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Text(
           label.toUpperCase(),
@@ -1031,27 +953,25 @@ class _CardDots extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(
-        count,
-        (index) {
-          final selected = index == selectedIndex;
+      children: List.generate(count, (index) {
+        final selected = index == selectedIndex;
 
-          return GestureDetector(
-            onTap: () => onTap(index),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: selected ? 22 : 8,
-              height: 8,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(
-                color:
-                    selected ? const Color(0xFF003B73) : const Color(0xFFD1D5DB),
-                borderRadius: BorderRadius.circular(999),
-              ),
+        return GestureDetector(
+          onTap: () => onTap(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: selected ? 22 : 8,
+            height: 8,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFF003B73)
+                  : const Color(0xFFD1D5DB),
+              borderRadius: BorderRadius.circular(999),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      }),
     );
   }
 }
@@ -1170,20 +1090,14 @@ class _ActionTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: const BoxDecoration(
-            border: Border(
-              top: BorderSide(color: Color(0xFFF3F4F6)),
-            ),
+            border: Border(top: BorderSide(color: Color(0xFFF3F4F6))),
           ),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 18,
                 backgroundColor: iconColor.withOpacity(0.08),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: iconColor,
-                ),
+                child: Icon(icon, size: 20, color: iconColor),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1195,10 +1109,7 @@ class _ActionTile extends StatelessWidget {
                   ),
                 ),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFFD1D5DB),
-              ),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFFD1D5DB)),
             ],
           ),
         ),
@@ -1213,10 +1124,7 @@ class _EmptyCardsState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: 34,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 34),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -1266,25 +1174,18 @@ class _AcceptedNetworks extends StatelessWidget {
 }
 
 class _NetworkBadge extends StatelessWidget {
-  const _NetworkBadge({
-    required this.label,
-  });
+  const _NetworkBadge({required this.label});
 
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 13,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Text(
         label,
@@ -1299,9 +1200,7 @@ class _NetworkBadge extends StatelessWidget {
 }
 
 class _RecentTransactionsSection extends StatelessWidget {
-  const _RecentTransactionsSection({
-    required this.transactions,
-  });
+  const _RecentTransactionsSection({required this.transactions});
 
   final List<CustomerPaymentTransactionModel> transactions;
 
@@ -1310,9 +1209,7 @@ class _RecentTransactionsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(
-          title: 'Transacciones Recientes',
-        ),
+        const _SectionHeader(title: 'Transacciones Recientes'),
         const SizedBox(height: 12),
 
         if (transactions.isEmpty)
@@ -1401,9 +1298,7 @@ class _TransactionItem {
 }
 
 class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({
-    required this.item,
-  });
+  const _TransactionTile({required this.item});
 
   final _TransactionItem item;
 
@@ -1415,20 +1310,20 @@ class _TransactionTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFF3F4F6)),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 21,
-            backgroundColor:
-                isPositive ? const Color(0xFFDCFCE7) : const Color(0xFFFFEEF2),
+            backgroundColor: isPositive
+                ? const Color(0xFFDCFCE7)
+                : const Color(0xFFFFEEF2),
             child: Icon(
               Icons.credit_card_rounded,
-              color:
-                  isPositive ? const Color(0xFF16A34A) : const Color(0xFFCE1126),
+              color: isPositive
+                  ? const Color(0xFF16A34A)
+                  : const Color(0xFFCE1126),
               size: 20,
             ),
           ),
@@ -1489,10 +1384,7 @@ class _TransactionTile extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final Future<void> Function() onRetry;
@@ -1513,15 +1405,9 @@ class _ErrorState extends StatelessWidget {
             size: 42,
           ),
           const SizedBox(height: 10),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-          ),
+          Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: onRetry,
-            child: const Text('Reintentar'),
-          ),
+          ElevatedButton(onPressed: onRetry, child: const Text('Reintentar')),
         ],
       ),
     );
@@ -1559,4 +1445,433 @@ BoxDecoration _cardDecoration(List<Color> colors) {
       ),
     ],
   );
+}
+
+class _AddCardSheet extends StatefulWidget {
+  const _AddCardSheet({required this.onSubmit});
+
+  final Future<bool> Function({
+    required String type,
+    required String cardNumber,
+    required String holderName,
+    required int expiryMonth,
+    required int expiryYear,
+    required String cvv,
+  })
+  onSubmit;
+
+  @override
+  State<_AddCardSheet> createState() => _AddCardSheetState();
+}
+
+class _AddCardSheetState extends State<_AddCardSheet> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _numberController = TextEditingController();
+  final _holderController = TextEditingController();
+  final _expiryController = TextEditingController();
+  final _cvvController = TextEditingController();
+
+  String _type = 'credit';
+  bool _isSaving = false;
+  bool _showCvv = false;
+
+  @override
+  void dispose() {
+    _numberController.dispose();
+    _holderController.dispose();
+    _expiryController.dispose();
+    _cvvController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final expiryParts = _expiryController.text.split('/');
+    final expiryMonth = int.parse(expiryParts[0]);
+    final expiryYear = 2000 + int.parse(expiryParts[1]);
+
+    setState(() => _isSaving = true);
+
+    final success = await widget.onSubmit(
+      type: _type,
+      cardNumber: _numberController.text,
+      holderName: _holderController.text,
+      expiryMonth: expiryMonth,
+      expiryYear: expiryYear,
+      cvv: _cvvController.text,
+    );
+
+    if (!mounted) return;
+
+    setState(() => _isSaving = false);
+
+    if (success) {
+      _numberController.clear();
+      _holderController.clear();
+      _expiryController.clear();
+      _cvvController.clear();
+    }
+
+    Navigator.pop(context, success);
+  }
+
+  String _onlyDigits(String value) {
+    return value.replaceAll(RegExp(r'\D'), '');
+  }
+
+  String _formatCardNumber(String value) {
+    final digits = _onlyDigits(value);
+    final limited = digits.substring(
+      0,
+      digits.length > 16 ? 16 : digits.length,
+    );
+
+    final buffer = StringBuffer();
+
+    for (var i = 0; i < limited.length; i++) {
+      if (i > 0 && i % 4 == 0) {
+        buffer.write(' ');
+      }
+
+      buffer.write(limited[i]);
+    }
+
+    return buffer.toString();
+  }
+
+  String _formatExpiry(String value) {
+    final digits = _onlyDigits(value);
+    final limited = digits.substring(0, digits.length > 4 ? 4 : digits.length);
+
+    if (limited.length <= 2) {
+      return limited;
+    }
+
+    return '${limited.substring(0, 2)}/${limited.substring(2)}';
+  }
+
+  void _setFormattedValue(TextEditingController controller, String formatted) {
+    controller.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Agregar tarjeta',
+                          style: TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setState(() => _type = 'credit'),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: _type == 'credit'
+                                ? const Color(0xFFEFF6FF)
+                                : const Color(0xFFF9FAFB),
+                            side: BorderSide(
+                              color: _type == 'credit'
+                                  ? const Color(0xFF003B73)
+                                  : const Color(0xFFE5E7EB),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Credito',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setState(() => _type = 'debit'),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: _type == 'debit'
+                                ? const Color(0xFFEFF6FF)
+                                : const Color(0xFFF9FAFB),
+                            side: BorderSide(
+                              color: _type == 'debit'
+                                  ? const Color(0xFF003B73)
+                                  : const Color(0xFFE5E7EB),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Debito',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _numberController,
+                    keyboardType: TextInputType.number,
+                    decoration: _inputDecoration(
+                      label: 'Numero de tarjeta',
+                      hint: '0000 0000 0000 0000',
+                    ),
+                    onChanged: (value) {
+                      final formatted = _formatCardNumber(value);
+
+                      if (formatted != value) {
+                        _setFormattedValue(_numberController, formatted);
+                      }
+                    },
+                    validator: (value) {
+                      final digits = _onlyDigits(value ?? '');
+
+                      if (digits.length != 16) {
+                        return 'Debe tener 16 digitos.';
+                      }
+
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _holderController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: _inputDecoration(
+                      label: 'Nombre del titular',
+                      hint: 'Como aparece en la tarjeta',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'El titular es obligatorio.';
+                      }
+
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _expiryController,
+                          keyboardType: TextInputType.number,
+                          decoration: _inputDecoration(
+                            label: 'Vencimiento',
+                            hint: 'MM/AA',
+                          ),
+                          onChanged: (value) {
+                            final formatted = _formatExpiry(value);
+
+                            if (formatted != value) {
+                              _setFormattedValue(_expiryController, formatted);
+                            }
+                          },
+                          validator: (value) {
+                            if (value == null ||
+                                !RegExp(r'^\d{2}/\d{2}$').hasMatch(value)) {
+                              return 'MM/AA';
+                            }
+
+                            final month =
+                                int.tryParse(value.substring(0, 2)) ?? 0;
+
+                            if (month < 1 || month > 12) {
+                              return 'Mes invalido.';
+                            }
+
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _cvvController,
+                          keyboardType: TextInputType.number,
+                          obscureText: !_showCvv,
+                          decoration: _inputDecoration(
+                            label: 'CVV',
+                            hint: '***',
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() => _showCvv = !_showCvv);
+                              },
+                              icon: Icon(
+                                _showCvv
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            final digits = _onlyDigits(value);
+                            final limited = digits.substring(
+                              0,
+                              digits.length > 3 ? 3 : digits.length,
+                            );
+
+                            if (limited != value) {
+                              _setFormattedValue(_cvvController, limited);
+                            }
+                          },
+                          validator: (value) {
+                            final digits = _onlyDigits(value ?? '');
+
+                            if (digits.length != 3) {
+                              return 'CVV invalido.';
+                            }
+
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.shield_outlined,
+                          color: Color(0xFF166534),
+                          size: 19,
+                        ),
+                        SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            'Tus datos estan protegidos. No guardamos CVV ni numero completo.',
+                            style: TextStyle(
+                              color: Color(0xFF166534),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: _isSaving ? null : _submit,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded),
+                      label: Text(
+                        _isSaving ? 'Guardando...' : 'Guardar tarjeta',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF003B73),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFF7EA0C4),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String label,
+    String? hint,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF003B73), width: 1.4),
+      ),
+    );
+  }
 }

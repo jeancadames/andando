@@ -73,11 +73,38 @@ class CustomerPaymentMethodsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Solicita al backend una URL segura para abrir Azul Payment Page.
-  ///
-  /// Este flujo NO envía datos de tarjeta a Laravel.
-  Future<Map<String, dynamic>> getAzulTokenizationWebViewRequest() {
-    return _dataSource.getAzulTokenizationWebViewRequest();
+  Future<bool> createPaymentMethod({
+    required String type,
+    required String cardNumber,
+    required String holderName,
+    required int expiryMonth,
+    required int expiryYear,
+    required String cvv,
+  }) async {
+    isSaving = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _dataSource.createPaymentMethod(
+        type: type,
+        cardNumber: cardNumber,
+        holderName: holderName,
+        expiryMonth: expiryMonth,
+        expiryYear: expiryYear,
+        cvv: cvv,
+      );
+
+      await loadPaymentMethods();
+
+      return true;
+    } catch (error) {
+      errorMessage = error.toString();
+      return false;
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
   }
 
   /// Establece tarjeta seleccionada como principal.

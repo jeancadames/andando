@@ -88,42 +88,43 @@ class CustomerPaymentMethodsRemoteDataSource {
     return list.map(CustomerPaymentTransactionModel.fromJson).toList();
   }
 
-  /// Crea una sesión segura de tokenización en backend.
-  ///
-  /// Backend responde una redirect_url pública.
-  /// Flutter abre esa URL en WebView o navegador.
-  Future<Map<String, dynamic>> getAzulTokenizationWebViewRequest() async {
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/payments/azul/payment-page/session',
-    );
+  // Reintegracion de captura de datos de tarjeta
+  Future<CustomerPaymentMethodModel> createPaymentMethod({
+    required String type,
+    required String cardNumber,
+    required String holderName,
+    required int expiryMonth,
+    required int expiryYear,
+    required String cvv,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/client/payment-methods');
 
     final response = await _client.post(
       uri,
       headers: await _headers(),
+      body: jsonEncode({
+        'type': type,
+        'card_number': cardNumber.replaceAll(RegExp(r'\D'), ''),
+        'holder_name': holderName.trim(),
+        'expiry_month': expiryMonth,
+        'expiry_year': expiryYear,
+        'cvv': cvv.trim(),
+      }),
     );
 
     final body = _decodeResponse(response);
 
-    if (response.statusCode != 200) {
+    if (response.statusCode != 201) {
       throw Exception(
-        body['message'] ?? 'No se pudo iniciar la tokenización.',
+        body['message'] ?? 'No se pudo guardar la tarjeta.',
       );
     }
 
     final data = Map<String, dynamic>.from(body['data'] ?? {});
 
-    final redirectUrl = data['redirect_url']?.toString();
-
-    if (redirectUrl == null || redirectUrl.trim().isEmpty) {
-      throw Exception('El backend no devolvió la URL de tokenización.');
-    }
-
-    return {
-      'url': redirectUrl,
-      'headers': <String, String>{
-        'Accept': 'text/html',
-      },
-    };
+    return CustomerPaymentMethodModel.fromJson(
+      Map<String, dynamic>.from(data['payment_method'] ?? {}),
+    );
   }
 
   /// Establece una tarjeta como principal.
