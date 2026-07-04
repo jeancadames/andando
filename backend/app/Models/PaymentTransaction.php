@@ -13,6 +13,7 @@ class PaymentTransaction extends Model
 
     public const STATUS_SCHEDULED = 'scheduled';
     public const STATUS_PROCESSING = 'processing';
+    public const STATUS_PENDING_VERIFICATION = 'pending_verification';
     public const STATUS_PAID = 'paid';
     public const STATUS_FAILED = 'failed';
     public const STATUS_CANCELLED = 'cancelled';
@@ -121,5 +122,5 @@ class PaymentTransaction extends Model
     public function isPartiallyRefunded(): bool
     {
         return $this->status === self::STATUS_PARTIALLY_REFUNDED;
-    }
+    }  
 }

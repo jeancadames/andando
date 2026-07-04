@@ -95,18 +95,13 @@ class ProcessPaymentTransactionService
                 $transaction->refresh();
 
                 $transaction->update([
-                    'status' => PaymentTransaction::STATUS_FAILED,
-                    'processed_at' => now(),
-                    'gateway_error_description' => $e->getMessage(),
-                    'failure_reason' => $e->getMessage(),
+                    'status' => PaymentTransaction::STATUS_PENDING_VERIFICATION,
+                    'gateway_error_description' => 'payment_status_unknown_after_gateway_exception',
+                    'failure_reason' => 'pending_verification_required',
                 ]);
 
                 $transaction->booking->update([
-                    'status' => ProviderBooking::STATUS_CANCELLED,
-                    'payment_status' => PaymentTransaction::STATUS_FAILED,
-                    'cancelled_by' => ProviderBooking::CANCELLED_BY_SYSTEM,
-                    'cancellation_reason' => 'payment_exception',
-                    'cancelled_at' => now(),
+                    'payment_status' => ProviderBooking::PAYMENT_STATUS_PENDING_VERIFICATION,
                 ]);
             });
         }

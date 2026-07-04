@@ -21,6 +21,7 @@ class ProviderBooking extends Model
 
     public const PAYMENT_STATUS_SCHEDULED = 'scheduled';
     public const PAYMENT_STATUS_PROCESSING = 'processing';
+    public const PAYMENT_STATUS_PENDING_VERIFICATION = 'pending_verification';
     public const PAYMENT_STATUS_PAID = 'paid';
     public const PAYMENT_STATUS_FAILED = 'failed';
     public const PAYMENT_STATUS_CANCELLED = 'cancelled';
