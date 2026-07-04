@@ -52,7 +52,12 @@ class CustomerPaymentMethodsController extends ChangeNotifier {
 
     try {
       paymentMethods = await _dataSource.getPaymentMethods();
-      transactions = await _dataSource.getPaymentTransactions();
+
+      try {
+        transactions = await _dataSource.getPaymentTransactions();
+      } catch (_) {
+        transactions = [];
+      }
 
       if (selectedIndex >= paymentMethods.length) {
         selectedIndex = 0;

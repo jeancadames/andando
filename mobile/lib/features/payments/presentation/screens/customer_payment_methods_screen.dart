@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:flutter/foundation.dart';
@@ -52,6 +52,8 @@ class _CustomerPaymentMethodsScreenState
   }
 
   Future<void> _openAddCardSheet() async {
+    _controller.errorMessage = null;
+
     final added = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -86,10 +88,10 @@ class _CustomerPaymentMethodsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tarjeta guardada correctamente.')),
       );
-    } else if (_controller.errorMessage != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_controller.errorMessage!)));
+    } else if (added == false && _controller.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_controller.errorMessage!)),
+      );
     }
   }
 
@@ -363,7 +365,7 @@ class _CustomerPaymentMethodsScreenState
                   child: ElevatedButton.icon(
                     onPressed: _controller.isSaving ? null : _openAddCardSheet,
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('Agregar Nueva Tarjeta'),
+                    label: const Text('Agregar Tarjeta'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF003B73),
                       foregroundColor: Colors.white,
