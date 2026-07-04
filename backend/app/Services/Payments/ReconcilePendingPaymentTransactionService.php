@@ -4,6 +4,7 @@ namespace App\Services\Payments;
 
 use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
+use App\Services\Payments\Azul\AzulClient;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -12,6 +13,7 @@ class ReconcilePendingPaymentTransactionService
     public function __construct(
         private readonly PaymentGatewayManager $gatewayManager,
         private readonly ProviderPayoutService $providerPayoutService,
+        private readonly AzulClient $azulClient,
     ) {}
 
     public function reconcile(PaymentTransaction $transaction): void
@@ -31,7 +33,9 @@ class ReconcilePendingPaymentTransactionService
             return;
         }
 
-        DB::transaction(function () use ($transaction, $response) {
+        $safeResponse = $this->azulClient->sanitizeForStorage($response);
+
+        DB::transaction(function () use ($transaction, $response, $safeResponse) {
             $transaction->refresh();
 
             if (($response['Found'] ?? false) === true
@@ -50,7 +54,7 @@ class ReconcilePendingPaymentTransactionService
                     'gateway_response_message' => $response['ResponseMessage'] ?? null,
                     'gateway_error_description' => null,
 
-                    'raw_response' => $response,
+                    'raw_response' => $safeResponse,
                     'failure_reason' => null,
                 ]);
 
@@ -73,7 +77,7 @@ class ReconcilePendingPaymentTransactionService
                     'gateway_iso_code' => $response['IsoCode'] ?? null,
                     'gateway_response_message' => $response['ResponseMessage'] ?? null,
                     'gateway_error_description' => 'payment_not_found_during_verification',
-                    'raw_response' => $response,
+                    'raw_response' => $safeResponse,
                     'failure_reason' => 'still_pending_verification',
                 ]);
 
@@ -85,7 +89,7 @@ class ReconcilePendingPaymentTransactionService
                 'gateway_iso_code' => $response['IsoCode'] ?? null,
                 'gateway_response_message' => $response['ResponseMessage'] ?? null,
                 'gateway_error_description' => $response['ErrorDescription'] ?? 'verification_not_approved',
-                'raw_response' => $response,
+                'raw_response' => $safeResponse,
                 'failure_reason' => 'verification_not_approved',
             ]);
         });
