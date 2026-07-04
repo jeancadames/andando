@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Api\Client;
 
-use App\Notifications\Security\PaymentMethodUpdatedNotification;
-
 use App\Http\Controllers\Controller;
 use App\Models\CustomerPaymentMethod;
+use App\Notifications\Security\PaymentMethodUpdatedNotification;
 use App\Services\Payments\AzulPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 /**
  * Controlador de métodos de pago del cliente.
@@ -31,9 +31,6 @@ class ClientPaymentMethodController extends Controller
     ) {
     }
 
-    /**
-     * Lista métodos de pago del cliente autenticado.
-     */
     public function index(Request $request): JsonResponse
     {
         $paymentMethods = CustomerPaymentMethod::query()
@@ -52,34 +49,34 @@ class ClientPaymentMethodController extends Controller
         ]);
     }
 
-    /**
-     * Tokeniza y guarda una tarjeta.
-     *
-     * Recibe tarjeta temporalmente, la envía a Azul Datavault
-     * y solo guarda datos seguros.
-     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'type' => ['required', Rule::in(['credit', 'debit'])],
-            'card_number' => ['required', 'string', 'min:13', 'max:25'],
+            'card_number' => ['required', 'string', 'regex:/^[0-9\s\-]{13,25}$/'],
             'holder_name' => ['required', 'string', 'max:120'],
             'expiry_month' => ['required', 'integer', 'between:1,12'],
             'expiry_year' => ['required', 'integer', 'between:2024,2100'],
-            'cvv' => ['required', 'string', 'min:3', 'max:4'],
+            'cvv' => ['required', 'string', 'regex:/^\d{3,4}$/'],
         ]);
 
         $user = $request->user();
 
-        $tokenization = $this->azulPaymentService->tokenizeCard([
-            'card_number' => $validated['card_number'],
-            'holder_name' => $validated['holder_name'],
-            'expiry_month' => $validated['expiry_month'],
-            'expiry_year' => $validated['expiry_year'],
-            'cvv' => $validated['cvv'],
-            'type' => $validated['type'],
-            'user_id' => $user->id,
-        ]);
+        try {
+            $tokenization = $this->azulPaymentService->tokenizeCard([
+                'card_number' => $validated['card_number'],
+                'holder_name' => $validated['holder_name'],
+                'expiry_month' => $validated['expiry_month'],
+                'expiry_year' => $validated['expiry_year'],
+                'cvv' => $validated['cvv'],
+                'type' => $validated['type'],
+                'user_id' => $user->id,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'No se pudo procesar la tarjeta en este momento.',
+            ], 422);
+        }
 
         if (($tokenization['success'] ?? false) !== true) {
             return response()->json([
@@ -122,9 +119,6 @@ class ClientPaymentMethodController extends Controller
         ], 201);
     }
 
-    /**
-     * Establece una tarjeta como principal.
-     */
     public function setDefault(Request $request, CustomerPaymentMethod $paymentMethod): JsonResponse
     {
         $this->ensureOwner($request, $paymentMethod);
@@ -153,24 +147,18 @@ class ClientPaymentMethodController extends Controller
         ]);
     }
 
-    /**
-     * Elimina una tarjeta.
-     *
-     * Primero intenta eliminar/desactivar el token en Azul.
-     * Luego hace soft delete local.
-     */
     public function destroy(Request $request, CustomerPaymentMethod $paymentMethod): JsonResponse
     {
         $this->ensureOwner($request, $paymentMethod);
 
         $deletedPaymentMethod = $paymentMethod->replicate();
 
+        if ($paymentMethod->hasGatewayToken()) {
+            $this->azulPaymentService->deleteToken($paymentMethod->payment_token);
+        }
+
         DB::transaction(function () use ($request, $paymentMethod) {
             $wasDefault = $paymentMethod->is_default;
-
-            if ($paymentMethod->hasGatewayToken()) {
-                $this->azulPaymentService->deleteToken($paymentMethod->payment_token);
-            }
 
             $paymentMethod->delete();
 
@@ -197,9 +185,6 @@ class ClientPaymentMethodController extends Controller
         ]);
     }
 
-    /**
-     * Valida que el método pertenezca al usuario autenticado.
-     */
     private function ensureOwner(Request $request, CustomerPaymentMethod $paymentMethod): void
     {
         abort_if(
@@ -209,9 +194,6 @@ class ClientPaymentMethodController extends Controller
         );
     }
 
-    /**
-     * Formatea el método de pago para Flutter.
-     */
     private function formatPaymentMethod(CustomerPaymentMethod $method): array
     {
         return [
