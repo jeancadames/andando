@@ -36,13 +36,17 @@ class ProcessPaymentTransactionService
                     $transaction->update([
                         'status' => PaymentTransaction::STATUS_PAID,
                         'processed_at' => now(),
+
                         'gateway_order_id' => $response['AzulOrderId'] ?? null,
                         'gateway_authorization_code' => $response['AuthorizationCode'] ?? null,
                         'gateway_rrn' => $response['RRN'] ?? null,
                         'gateway_response_code' => $response['ResponseCode'] ?? null,
                         'gateway_iso_code' => $response['IsoCode'] ?? null,
                         'gateway_response_message' => $response['ResponseMessage'] ?? null,
-                        'raw_response' => $response,
+                        'gateway_error_description' => $response['ErrorDescription'] ?? null,
+
+                        'raw_request' => $response['raw_request'] ?? null,
+                        'raw_response' => $response['raw_response'] ?? $response,
                     ]);
 
                     $transaction->booking->update([
@@ -61,11 +65,18 @@ class ProcessPaymentTransactionService
                 $transaction->update([
                     'status' => PaymentTransaction::STATUS_FAILED,
                     'processed_at' => now(),
+
+                    'gateway_order_id' => $response['AzulOrderId'] ?? null,
+                    'gateway_authorization_code' => $response['AuthorizationCode'] ?? null,
+                    'gateway_rrn' => $response['RRN'] ?? null,
                     'gateway_response_code' => $response['ResponseCode'] ?? null,
                     'gateway_iso_code' => $response['IsoCode'] ?? null,
                     'gateway_response_message' => $response['ResponseMessage'] ?? null,
                     'gateway_error_description' => $response['ErrorDescription'] ?? null,
-                    'raw_response' => $response,
+
+                    'raw_request' => $response['raw_request'] ?? null,
+                    'raw_response' => $response['raw_response'] ?? $response,
+
                     'failure_reason' => $response['ResponseMessage']
                         ?? $response['ErrorDescription']
                         ?? 'payment_failed',

@@ -6,6 +6,7 @@ use App\Models\PaymentRefund;
 use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class PaymentRefundService
 {
@@ -55,17 +56,36 @@ class PaymentRefundService
             'status' => PaymentRefund::STATUS_PROCESSING,
         ]);
 
-        $response = $this->gatewayManager->gateway()->refund($refund);
+        try {
+            $response = $this->gatewayManager->gateway()->refund($refund);
+        } catch (Throwable $e) {
+            $refund->update([
+                'status' => PaymentRefund::STATUS_FAILED,
+                'gateway_error_description' => $e->getMessage(),
+                'processed_at' => now(),
+            ]);
+
+            $booking->update([
+                'refund_status' => PaymentRefund::STATUS_FAILED,
+            ]);
+
+            return $refund;
+        }
 
         return DB::transaction(function () use ($refund, $transaction, $booking, $response) {
             if ($response['success'] ?? false) {
                 $refund->update([
                     'status' => PaymentRefund::STATUS_SUCCEEDED,
+
                     'gateway_refund_id' => $response['AzulOrderId'] ?? null,
                     'gateway_response_code' => $response['ResponseCode'] ?? null,
                     'gateway_iso_code' => $response['IsoCode'] ?? null,
                     'gateway_response_message' => $response['ResponseMessage'] ?? null,
-                    'raw_response' => $response,
+                    'gateway_error_description' => $response['ErrorDescription'] ?? null,
+
+                    'raw_request' => $response['raw_request'] ?? null,
+                    'raw_response' => $response['raw_response'] ?? $response,
+
                     'processed_at' => now(),
                 ]);
 
@@ -85,11 +105,16 @@ class PaymentRefundService
 
             $refund->update([
                 'status' => PaymentRefund::STATUS_FAILED,
+
+                'gateway_refund_id' => $response['AzulOrderId'] ?? null,
                 'gateway_response_code' => $response['ResponseCode'] ?? null,
                 'gateway_iso_code' => $response['IsoCode'] ?? null,
                 'gateway_response_message' => $response['ResponseMessage'] ?? null,
                 'gateway_error_description' => $response['ErrorDescription'] ?? null,
-                'raw_response' => $response,
+
+                'raw_request' => $response['raw_request'] ?? null,
+                'raw_response' => $response['raw_response'] ?? $response,
+
                 'processed_at' => now(),
             ]);
 

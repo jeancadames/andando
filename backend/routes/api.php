@@ -2,8 +2,6 @@
 
 use App\Http\Controllers\Api\Auth\PasswordResetController;
 
-use App\Http\Controllers\Api\Payments\AzulPaymentPageController;
-
 use App\Http\Controllers\Api\Client\ClientPasswordController;
 use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
 use App\Http\Controllers\Api\Auth\GoogleAuthController;
@@ -157,16 +155,8 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/payments/azul/payment-page/session', [AzulPaymentPageController::class, 'createTokenizationSession']);
-});
 
-Route::get('/payments/azul/payment-page/redirect/{tokenizationRequest}', [AzulPaymentPageController::class, 'redirectTokenization'])
-    ->name('payments.azul.payment-page.redirect');
 
-Route::match(['get', 'post'], '/payments/azul/payment-page/approved', [AzulPaymentPageController::class, 'approved']);
-Route::match(['get', 'post'], '/payments/azul/payment-page/declined', [AzulPaymentPageController::class, 'declined']);
-Route::match(['get', 'post'], '/payments/azul/payment-page/cancelled', [AzulPaymentPageController::class, 'cancelled']);
 
 /*
 |--------------------------------------------------------------------------

@@ -2,39 +2,20 @@
 
 namespace App\Services\Payments;
 
+use App\Services\Payments\Azul\AzulClient;
 use RuntimeException;
 
-/**
- * Servicio base para integración con AZUL Datavault.
- *
- * Este servicio centraliza:
- * - tokenización de tarjetas.
- * - eliminación de tokens.
- * - detección de marca.
- * - extracción de últimos 4 dígitos.
- *
- * IMPORTANTE:
- * Mientras AZUL_ENABLED=false, trabaja en modo simulado.
- * Cuando tengas credenciales reales de AZUL, aquí se conectan los Webservices.
- */
 class AzulPaymentService
 {
-    /**
-     * Indica si la integración real con AZUL está activa.
-     */
+    public function __construct(
+        private readonly AzulClient $client,
+    ) {}
+
     public function isEnabled(): bool
     {
         return (bool) config('azul.enabled');
     }
 
-    /**
-     * Tokeniza una tarjeta usando AZUL Datavault.
-     *
-     * En modo real:
-     * - Laravel enviará los datos temporalmente a AZUL.
-     * - AZUL devolverá un DataVaultToken.
-     * - AndanDO guardará solo el token y datos seguros.
-     */
     public function tokenizeCard(array $cardData): array
     {
         $cardNumber = preg_replace('/\D/', '', $cardData['card_number'] ?? '');
@@ -47,10 +28,6 @@ class AzulPaymentService
         $brand = $this->detectBrand($cardNumber);
         $last4 = substr($cardNumber, -4);
 
-        /**
-         * MODO SIMULADO:
-         * Permite seguir desarrollando sin credenciales reales de AZUL.
-         */
         if (! $this->isEnabled()) {
             return [
                 'success' => true,
@@ -72,20 +49,57 @@ class AzulPaymentService
 
         $this->ensureConfigured();
 
-        /**
-         * AQUÍ irá la llamada real a AZUL Datavault Create.
-         *
-         * Cuando AZUL entregue credenciales/endpoints finales,
-         * este bloque se reemplaza por la petición HTTP real.
-         */
-        throw new RuntimeException(
-            'Tokenización real con AZUL pendiente de configurar.'
+        $expiration = sprintf(
+            '%04d%02d',
+            (int) $cardData['expiry_year'],
+            (int) $cardData['expiry_month']
         );
+
+        $response = $this->client->post('ProcessDatavault', [
+            'Channel' => config('azul.channel'),
+            'Store' => config('azul.merchant_id'),
+            'CardNumber' => $cardNumber,
+            'Expiration' => $expiration,
+            'CVC' => $cvv,
+            'TrxType' => 'CREATE',
+        ]);
+
+        $safeResponse = $this->client->sanitizeForStorage($response);
+
+        $success = ($response['IsoCode'] ?? null) === '00'
+            && ! blank($response['DataVaultToken'] ?? null);
+
+        if (! $success) {
+            return [
+                'success' => false,
+                'response_code' => $response['ResponseCode'] ?? null,
+                'iso_code' => $response['IsoCode'] ?? null,
+                'response_message' => $response['ResponseMessage'] ?? null,
+                'error_description' => $response['ErrorDescription'] ?? 'No se pudo tokenizar la tarjeta.',
+                'raw_response' => $safeResponse,
+            ];
+        }
+
+        $maskedCard = $this->isMaskedCardNumber($response['CardNumber'] ?? null)
+            ? $response['CardNumber']
+            : $this->maskCardNumber($cardNumber);
+
+        $expirationFromAzul = $response['Expiration'] ?? $expiration;
+
+        return [
+            'success' => true,
+            'token' => $response['DataVaultToken'],
+            'brand' => strtolower($response['Brand'] ?? $brand),
+            'last4' => $last4,
+            'masked_card_number' => $maskedCard,
+            'token_expires_at' => $this->expirationToDate($expirationFromAzul),
+            'response_code' => $response['ResponseCode'] ?? null,
+            'iso_code' => $response['IsoCode'] ?? null,
+            'response_message' => $response['ResponseMessage'] ?? null,
+            'raw_response' => $safeResponse,
+        ];
     }
 
-    /**
-     * Elimina/desactiva un token en AZUL Datavault.
-     */
     public function deleteToken(string $token): array
     {
         if ($token === '') {
@@ -107,29 +121,32 @@ class AzulPaymentService
 
         $this->ensureConfigured();
 
-        /**
-         * AQUÍ irá la llamada real a AZUL Datavault Delete.
-         */
-        throw new RuntimeException(
-            'Eliminación real de token AZUL pendiente de configurar.'
-        );
+        $response = $this->client->post('ProcessDatavault', [
+            'Channel' => config('azul.channel'),
+            'Store' => config('azul.merchant_id'),
+            'DataVaultToken' => $token,
+            'TrxType' => 'DELETE',
+        ]);
+
+        return [
+            'success' => ($response['IsoCode'] ?? null) === '00',
+            'response_code' => $response['ResponseCode'] ?? null,
+            'iso_code' => $response['IsoCode'] ?? null,
+            'response_message' => $response['ResponseMessage'] ?? null,
+            'error_description' => $response['ErrorDescription'] ?? null,
+            'raw_response' => $this->client->sanitizeForStorage($response),
+        ];
     }
 
-    /**
-     * Valida que las credenciales mínimas existan.
-     */
     private function ensureConfigured(): void
     {
-        foreach (['merchant_id', 'auth_key', 'terminal_id', 'base_url'] as $key) {
+        foreach (['merchant_id', 'auth1', 'auth2', 'base_url', 'cert_path', 'key_path'] as $key) {
             if (blank(config("azul.$key"))) {
                 throw new RuntimeException("Falta configurar AZUL: {$key}.");
             }
         }
     }
 
-    /**
-     * Detecta marca de tarjeta por prefijo.
-     */
     public function detectBrand(string $cardNumber): string
     {
         if (str_starts_with($cardNumber, '4')) {
@@ -155,13 +172,24 @@ class AzulPaymentService
         return 'unknown';
     }
 
-    /**
-     * Devuelve tarjeta enmascarada.
-     */
     private function maskCardNumber(string $cardNumber): string
     {
-        $last4 = substr($cardNumber, -4);
+        return '•••• •••• •••• ' . substr($cardNumber, -4);
+    }
 
-        return '•••• •••• •••• ' . $last4;
+    private function expirationToDate(?string $expiration): ?string
+    {
+        if (! is_string($expiration) || ! preg_match('/^\d{6}$/', $expiration)) {
+            return null;
+        }
+
+        return substr($expiration, 0, 4) . '-' . substr($expiration, 4, 2) . '-01 00:00:00';
+    }
+
+    private function isMaskedCardNumber(mixed $value): bool
+    {
+        return is_string($value)
+            && str_contains($value, '*')
+            && strlen($value) <= 25;
     }
 }
