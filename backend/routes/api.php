@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\NotificationPreferenceController;
+
 use App\Http\Controllers\Api\Auth\PasswordResetController;
 
 use App\Http\Controllers\Api\Client\ClientPasswordController;
@@ -147,7 +149,11 @@ Route::post('/auth/apple', AppleAuthController::class);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
     Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy']);
-});
+
+    Route::get('/notification-preferences', [NotificationPreferenceController::class, 'show']);
+    Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
+
+    });
 
 /*
 |--------------------------------------------------------------------------

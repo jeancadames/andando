@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../auth/application/auth_controller.dart';
 
 import '../../data/services/customer_settings_preferences_service.dart';
 
 class CustomerNotificationSettingsScreen extends StatefulWidget {
-  const CustomerNotificationSettingsScreen({super.key});
+  const CustomerNotificationSettingsScreen({
+    super.key,
+    required this.authController,
+  });
+
+  final AuthController authController;
 
   @override
   State<CustomerNotificationSettingsScreen> createState() =>
@@ -23,7 +29,9 @@ class _CustomerNotificationSettingsScreenState
   bool _bookingsEnabled = true;
   bool _messagesEnabled = true;
   bool _paymentsEnabled = true;
-  bool _reviewsEnabled = true;
+  bool _claimsEnabled = true;
+  bool _payoutsEnabled = true;
+  bool _remindersEnabled = true;
 
   @override
   void initState() {
@@ -32,26 +40,52 @@ class _CustomerNotificationSettingsScreenState
   }
 
   Future<void> _loadPreferences() async {
-    final pushEnabled = await _preferencesService.getPushEnabled();
-    final bookingsEnabled =
-        await _preferencesService.getBookingNotificationsEnabled();
-    final messagesEnabled =
-        await _preferencesService.getMessageNotificationsEnabled();
-    final paymentsEnabled =
-        await _preferencesService.getPaymentNotificationsEnabled();
-    final reviewsEnabled =
-        await _preferencesService.getReviewNotificationsEnabled();
+    try {
+      final token = widget.authController.token;
 
-    if (!mounted) return;
+      final preferences = token == null || token.trim().isEmpty
+          ? await _preferencesService.getCachedNotificationPreferences()
+          : await _preferencesService.fetchNotificationPreferences(
+              token: token,
+            );
 
-    setState(() {
-      _pushEnabled = pushEnabled;
-      _bookingsEnabled = bookingsEnabled;
-      _messagesEnabled = messagesEnabled;
-      _paymentsEnabled = paymentsEnabled;
-      _reviewsEnabled = reviewsEnabled;
-      _isLoading = false;
-    });
+      if (!mounted) return;
+
+      setState(() {
+        _pushEnabled = preferences.pushEnabled;
+        _bookingsEnabled = preferences.bookingNotificationsEnabled;
+        _messagesEnabled = preferences.messageNotificationsEnabled;
+        _paymentsEnabled = preferences.paymentNotificationsEnabled;
+        _claimsEnabled = preferences.claimNotificationsEnabled;
+        _payoutsEnabled = preferences.payoutNotificationsEnabled;
+        _remindersEnabled = preferences.reminderNotificationsEnabled;
+        _isLoading = false;
+      });
+    } catch (_) {
+      final cachedPreferences =
+          await _preferencesService.getCachedNotificationPreferences();
+
+      if (!mounted) return;
+
+      setState(() {
+        _pushEnabled = cachedPreferences.pushEnabled;
+        _bookingsEnabled = cachedPreferences.bookingNotificationsEnabled;
+        _messagesEnabled = cachedPreferences.messageNotificationsEnabled;
+        _paymentsEnabled = cachedPreferences.paymentNotificationsEnabled;
+        _claimsEnabled = cachedPreferences.claimNotificationsEnabled;
+        _payoutsEnabled = cachedPreferences.payoutNotificationsEnabled;
+        _remindersEnabled = cachedPreferences.reminderNotificationsEnabled;
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudieron sincronizar las preferencias. Mostrando datos guardados localmente.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _save() async {
@@ -59,13 +93,34 @@ class _CustomerNotificationSettingsScreenState
       _isSaving = true;
     });
 
-    await _preferencesService.saveNotificationPreferences(
+    final preferences = CustomerNotificationPreferences(
       pushEnabled: _pushEnabled,
       bookingNotificationsEnabled: _bookingsEnabled,
       messageNotificationsEnabled: _messagesEnabled,
       paymentNotificationsEnabled: _paymentsEnabled,
-      reviewNotificationsEnabled: _reviewsEnabled,
+      claimNotificationsEnabled: _claimsEnabled,
+      payoutNotificationsEnabled: _payoutsEnabled,
+      reminderNotificationsEnabled: _remindersEnabled,
     );
+
+    final token = widget.authController.token;
+
+    if (token == null || token.trim().isEmpty) {
+      await _preferencesService.saveNotificationPreferences(
+        pushEnabled: preferences.pushEnabled,
+        bookingNotificationsEnabled: preferences.bookingNotificationsEnabled,
+        messageNotificationsEnabled: preferences.messageNotificationsEnabled,
+        paymentNotificationsEnabled: preferences.paymentNotificationsEnabled,
+        claimNotificationsEnabled: preferences.claimNotificationsEnabled,
+        payoutNotificationsEnabled: preferences.payoutNotificationsEnabled,
+        reminderNotificationsEnabled: preferences.reminderNotificationsEnabled,
+      );
+    } else {
+      await _preferencesService.updateNotificationPreferences(
+        token: token,
+        preferences: preferences,
+      );
+    }
 
     if (!mounted) return;
 
@@ -90,12 +145,16 @@ class _CustomerNotificationSettingsScreenState
         _bookingsEnabled = false;
         _messagesEnabled = false;
         _paymentsEnabled = false;
-        _reviewsEnabled = false;
+        _claimsEnabled = false;
+        _payoutsEnabled = false;
+        _remindersEnabled = false;
       } else {
         _bookingsEnabled = true;
         _messagesEnabled = true;
         _paymentsEnabled = true;
-        _reviewsEnabled = true;
+        _claimsEnabled = true;
+        _payoutsEnabled = true;
+        _remindersEnabled = true;
       }
     });
   }
@@ -216,14 +275,40 @@ class _CustomerNotificationSettingsScreenState
                     ),
                     const Divider(height: 1, color: Color(0xFFE5E7EB)),
                     _NotificationRow(
-                      icon: Icons.star_border_rounded,
-                      title: 'Calificaciones y Reseñas',
-                      subtitle: 'Solicitudes de valoración y respuestas',
-                      value: _reviewsEnabled,
+                      icon: Icons.report_problem_outlined,
+                      title: 'Reclamos',
+                      subtitle: 'Actualizaciones de solicitudes y decisiones',
+                      value: _claimsEnabled,
                       onChanged: (value) {
                         _toggleCategory(
                           value: value,
-                          update: (v) => _reviewsEnabled = v,
+                          update: (v) => _claimsEnabled = v,
+                        );
+                      },
+                    ),
+                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    _NotificationRow(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Pagos de viaje',
+                      subtitle: 'Liberación de payouts y pagos asociados',
+                      value: _payoutsEnabled,
+                      onChanged: (value) {
+                        _toggleCategory(
+                          value: value,
+                          update: (v) => _payoutsEnabled = v,
+                        );
+                      },
+                    ),
+                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    _NotificationRow(
+                      icon: Icons.alarm_outlined,
+                      title: 'Recordatorios',
+                      subtitle: 'Avisos antes de una salida programada',
+                      value: _remindersEnabled,
+                      onChanged: (value) {
+                        _toggleCategory(
+                          value: value,
+                          update: (v) => _remindersEnabled = v,
                         );
                       },
                     ),

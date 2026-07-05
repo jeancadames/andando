@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Client;
 
 use App\Services\Payments\SchedulePayoutHoldService;
+use App\Services\PushNotificationService;
 
 use App\Models\User;
 use App\Notifications\Admin\NewClaimForReviewNotification;
@@ -40,6 +41,7 @@ class ClientClaimController extends Controller
     public function store(
         Request $request,
         SchedulePayoutHoldService $payoutHoldService,
+        PushNotificationService $pushNotificationService,
     ): JsonResponse
     {
         $data = $request->validate([
@@ -92,6 +94,7 @@ class ClientClaimController extends Controller
         $claim->load([
             'booking.experience',
             'booking.schedule',
+            'provider.user',
         ]);
 
         $request->user()->notify(
@@ -106,6 +109,26 @@ class ClientClaimController extends Controller
                     new NewClaimForReviewNotification($claim)
                 );
             });
+
+        if ($claim->provider?->user) {
+            $experienceName = $claim->booking?->experience?->title
+                ?? 'una experiencia';
+
+            $customerName = $request->user()->name ?? 'Un cliente';
+
+            $pushNotificationService->sendToUser(
+                user: $claim->provider->user,
+                title: 'Nuevo reclamo recibido',
+                body: "{$customerName} abrió un reclamo sobre {$experienceName}.",
+                data: [
+                    'type' => 'claim_opened',
+                    'claim_id' => (string) $claim->id,
+                    'booking_id' => (string) $claim->provider_booking_id,
+                    'role' => 'provider',
+                ],
+                category: PushNotificationService::CATEGORY_CLAIM,
+            );
+        }
 
         return response()->json([
             'message' => 'Reclamo creado correctamente.',
@@ -122,6 +145,7 @@ class ClientClaimController extends Controller
         $claim->load([
             'booking.experience',
             'booking.schedule',
+            'provider.user',
         ]);
 
         return response()->json([

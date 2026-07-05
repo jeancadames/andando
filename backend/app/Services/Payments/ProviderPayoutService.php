@@ -6,9 +6,15 @@ use App\Models\PaymentTransaction;
 use App\Models\ProviderExperienceSchedule;
 use App\Models\ProviderPayout;
 use App\Notifications\Payment\CommissionPaidNotification;
+use App\Services\PushNotificationService;
 
 class ProviderPayoutService
 {
+
+    public function __construct(
+        private readonly PushNotificationService $pushNotificationService,
+    ) {}
+
     public function ensurePayoutForSchedule(ProviderExperienceSchedule $schedule): ProviderPayout
     {
         return ProviderPayout::firstOrCreate(
@@ -72,6 +78,30 @@ class ProviderPayoutService
         if ($payout->provider?->user) {
             $payout->provider->user->notify(
                 new CommissionPaidNotification($payout)
+            );
+
+            $payout->loadMissing([
+                'schedule.experience',
+            ]);
+
+            $experienceName = $payout->schedule?->experience?->title
+                ?? 'una experiencia';
+
+            $formattedAmount = number_format((float) $payout->net_amount, 2);
+
+            $this->pushNotificationService->sendToUser(
+                user: $payout->provider->user,
+                title: 'Pago de viaje procesado',
+                body: "Tu pago de {$formattedAmount} {$payout->currency} por {$experienceName} fue procesado.",
+                data: [
+                    'type' => 'payout_paid',
+                    'payout_id' => (string) $payout->id,
+                    'schedule_id' => (string) $payout->provider_experience_schedule_id,
+                    'amount' => (string) $payout->net_amount,
+                    'currency' => (string) $payout->currency,
+                    'role' => 'provider',
+                ],
+                category: PushNotificationService::CATEGORY_PAYOUT,
             );
         }
     }

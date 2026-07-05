@@ -5,6 +5,7 @@ namespace App\Services\Payments;
 use App\Models\PaymentRefund;
 use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
+use App\Services\PushNotificationService;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -13,6 +14,7 @@ class PaymentRefundService
     public function __construct(
         private readonly PaymentGatewayManager $gatewayManager,
         private readonly PaymentCalculator $calculator,
+        private readonly PushNotificationService $pushNotificationService,
     ) {}
 
     public function refundBooking(
@@ -99,6 +101,34 @@ class PaymentRefundService
                     'refund_status' => $refund->status,
                     'refunded_at' => now(),
                 ]);
+
+                $refund->loadMissing([
+                    'booking.user',
+                    'booking.experience',
+                ]);
+
+                if ($refund->amount > 0 && $refund->booking?->user) {
+                    $experienceName = $refund->booking->experience?->title
+                        ?? 'tu experiencia';
+
+                    $formattedAmount = number_format((float) $refund->amount, 2);
+
+                    $this->pushNotificationService->sendToUser(
+                        user: $refund->booking->user,
+                        title: 'Reembolso procesado',
+                        body: "Tu reembolso de {$formattedAmount} {$refund->currency} para {$experienceName} fue procesado correctamente.",
+                        data: [
+                            'type' => 'refund_processed',
+                            'booking_id' => (string) $refund->provider_booking_id,
+                            'refund_id' => (string) $refund->id,
+                            'transaction_id' => (string) $refund->payment_transaction_id,
+                            'amount' => (string) $refund->amount,
+                            'currency' => (string) $refund->currency,
+                            'role' => 'customer',
+                        ],
+                        category: PushNotificationService::CATEGORY_PAYMENT,
+                    );
+                }
 
                 return $refund;
             }

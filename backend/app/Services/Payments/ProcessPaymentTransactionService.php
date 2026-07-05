@@ -6,6 +6,7 @@ use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
 use App\Notifications\Payment\PaymentConfirmedNotification;
 use App\Notifications\Payment\PaymentFailedNotification;
+use App\Services\PushNotificationService;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -14,6 +15,7 @@ class ProcessPaymentTransactionService
     public function __construct(
         private readonly PaymentGatewayManager $gatewayManager,
         private readonly ProviderPayoutService $providerPayoutService,
+        private readonly PushNotificationService $pushNotificationService,
     ) {}
 
     public function process(PaymentTransaction $transaction): void
@@ -123,11 +125,56 @@ class ProcessPaymentTransactionService
         }
 
         $transaction->refresh();
-        $transaction->loadMissing('booking.user');
+        $transaction->loadMissing([
+            'booking.user',
+            'booking.provider.user',
+            'booking.experience',
+            'schedule',
+        ]);
 
         if ($paymentConfirmed && $transaction->booking?->user) {
             $transaction->booking->user->notify(
                 new PaymentConfirmedNotification($transaction)
+            );
+
+            $experienceName = $transaction->booking->experience?->title
+                ?? 'tu experiencia';
+
+            $this->pushNotificationService->sendToUser(
+                user: $transaction->booking->user,
+                title: 'Reserva confirmada',
+                body: "Tu reserva para {$experienceName} fue confirmada correctamente.",
+                data: [
+                    'type' => 'booking_confirmed',
+                    'booking_id' => (string) $transaction->booking->id,
+                    'transaction_id' => (string) $transaction->id,
+                    'schedule_id' => (string) $transaction->provider_experience_schedule_id,
+                    'role' => 'customer',
+                ],
+                category: PushNotificationService::CATEGORY_BOOKING,
+            );
+        }
+
+        if ($paymentConfirmed && $transaction->booking?->provider?->user) {
+            $experienceName = $transaction->booking->experience?->title
+                ?? 'una experiencia';
+
+            $customerName = $transaction->booking->customer_name
+                ?: $transaction->booking->user?->name
+                ?: 'Un cliente';
+
+            $this->pushNotificationService->sendToUser(
+                user: $transaction->booking->provider->user,
+                title: 'Nueva reserva recibida',
+                body: "{$customerName} reservó {$experienceName}.",
+                data: [
+                    'type' => 'provider_booking_received',
+                    'booking_id' => (string) $transaction->booking->id,
+                    'transaction_id' => (string) $transaction->id,
+                    'schedule_id' => (string) $transaction->provider_experience_schedule_id,
+                    'role' => 'provider',
+                ],
+                category: PushNotificationService::CATEGORY_BOOKING,
             );
         }
 

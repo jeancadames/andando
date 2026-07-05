@@ -228,7 +228,9 @@ class AppRouter {
         path: '/customer/profile/notifications',
         name: 'customerNotificationSettings',
         builder: (context, state) {
-          return const CustomerNotificationSettingsScreen();
+          return CustomerNotificationSettingsScreen(
+            authController: _authController,
+          );
         },
       ),
 

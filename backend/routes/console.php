@@ -62,6 +62,8 @@ Schedule::command('chat:close-inactive')->hourly();
 
 Schedule::command('trip:send-reminders')->hourly();
 
+Schedule::command('provider:send-trip-reminders')->hourly();
+
 Schedule::command('payments:process-scheduled-charges')->hourly();
 
 Schedule::command('payments:release-provider-payouts')->hourly();

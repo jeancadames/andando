@@ -7,6 +7,7 @@ use App\Models\ProviderBooking;
 use App\Models\ProviderPayout;
 use Illuminate\Support\Facades\DB;
 use App\Notifications\Booking\BookingCancelledNotification;
+use App\Services\PushNotificationService;
 
 class CancelBookingPaymentService
 {
@@ -14,13 +15,15 @@ class CancelBookingPaymentService
         private readonly BookingCancellationDecisionService $decisionService,
         private readonly PaymentRefundService $refundService,
         private readonly ProviderPayoutService $providerPayoutService,
+        private readonly PushNotificationService $pushNotificationService,
     ) {}
 
     public function cancel(ProviderBooking $booking, string $reason, string $cancelledBy): void
     {
         $shouldNotify = false;
+        $shouldNotifyProvider = false;
 
-        DB::transaction(function () use ($booking, $reason, $cancelledBy, &$shouldNotify) {
+        DB::transaction(function () use ($booking, $reason, $cancelledBy, &$shouldNotify, &$shouldNotifyProvider) {
             $decision = $this->decisionService->decide($booking, $reason);
 
             $paidTransaction = $booking->paymentTransactions()
@@ -64,6 +67,15 @@ class CancelBookingPaymentService
                 );
             }
 
+            if (
+                $paidTransaction
+                && $cancelledBy === ProviderBooking::CANCELLED_BY_CUSTOMER
+                && ($decision['should_refund'] ?? false)
+                && ((float) ($decision['refund_percent'] ?? 0) > 0)
+            ) {
+                $shouldNotifyProvider = true;
+            }
+
             $shouldNotify = true;
         });
 
@@ -74,6 +86,39 @@ class CancelBookingPaymentService
             if ($booking->user) {
                 $booking->user->notify(
                     new BookingCancelledNotification($booking)
+                );
+            }
+        }
+
+        if ($shouldNotifyProvider) {
+            $booking->refresh();
+            $booking->loadMissing([
+                'provider.user',
+                'experience',
+                'schedule',
+                'user',
+            ]);
+
+            if ($booking->provider?->user) {
+                $experienceName = $booking->experience?->title
+                    ?? 'una experiencia';
+
+                $customerName = $booking->customer_name
+                    ?: $booking->user?->name
+                    ?: 'Un cliente';
+
+                $this->pushNotificationService->sendToUser(
+                    user: $booking->provider->user,
+                    title: 'Reserva cancelada por cliente',
+                    body: "{$customerName} canceló una reserva de {$experienceName}.",
+                    data: [
+                        'type' => 'customer_booking_cancelled',
+                        'booking_id' => (string) $booking->id,
+                        'schedule_id' => (string) $booking->provider_experience_schedule_id,
+                        'experience_id' => (string) $booking->provider_experience_id,
+                        'role' => 'provider',
+                    ],
+                    category: PushNotificationService::CATEGORY_BOOKING,
                 );
             }
         }

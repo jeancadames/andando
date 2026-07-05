@@ -108,6 +108,11 @@ class User extends Authenticatable
         return $this->hasMany(DeviceToken::class);
     }
 
+    public function notificationPreference(): HasOne
+    {
+        return $this->hasOne(UserNotificationPreference::class);
+    }
+
     public function sendPasswordResetNotification($token): void
     {
         $this->notify(new PasswordResetNotification($token));

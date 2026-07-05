@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Notifications\Claim\ClaimUpdatedNotification;
+use App\Services\PushNotificationService;
 
 use App\Services\Payments\SchedulePayoutHoldService;
 use App\Services\Payments\CancelBookingPaymentService;
@@ -79,6 +80,7 @@ class ClaimController extends Controller
         BookingClaim $claim,
         SchedulePayoutHoldService $payoutHoldService,
         CancelBookingPaymentService $cancelBookingPaymentService,
+        PushNotificationService $pushNotificationService,
     ): RedirectResponse
     {
         if (in_array($claim->status, ['resolved', 'rejected'], true)) {
@@ -109,6 +111,7 @@ class ClaimController extends Controller
 
         $claim->loadMissing([
             'user',
+            'provider.user',
             'booking.experience',
             'booking.schedule',
         ]);
@@ -118,6 +121,41 @@ class ClaimController extends Controller
             new ClaimUpdatedNotification($claim)
         );
 
+        $experienceName = $claim->booking?->experience?->title
+            ?? 'tu experiencia';
+
+        if ($claim->user) {
+            $pushNotificationService->sendToUser(
+                user: $claim->user,
+                title: 'Reclamo aprobado',
+                body: "Tu reclamo sobre {$experienceName} fue aprobado.",
+                data: [
+                    'type' => 'claim_resolved',
+                    'claim_id' => (string) $claim->id,
+                    'booking_id' => (string) $claim->provider_booking_id,
+                    'status' => 'resolved',
+                    'role' => 'customer',
+                ],
+                category: PushNotificationService::CATEGORY_CLAIM,
+            );
+        }
+
+        if ($claim->provider?->user) {
+            $pushNotificationService->sendToUser(
+                user: $claim->provider->user,
+                title: 'Reclamo cerrado',
+                body: "Un reclamo sobre {$experienceName} fue aprobado por administración.",
+                data: [
+                    'type' => 'claim_closed',
+                    'claim_id' => (string) $claim->id,
+                    'booking_id' => (string) $claim->provider_booking_id,
+                    'status' => 'resolved',
+                    'role' => 'provider',
+                ],
+                category: PushNotificationService::CATEGORY_CLAIM,
+            );
+        }
+
         return back()->with('success', 'Reclamo marcado como resuelto.');
     }
 
@@ -125,6 +163,7 @@ class ClaimController extends Controller
         Request $request,
         BookingClaim $claim,
         SchedulePayoutHoldService $payoutHoldService,
+        PushNotificationService $pushNotificationService,
     ): RedirectResponse
     {
         if (in_array($claim->status, ['resolved', 'rejected'], true)) {
@@ -144,6 +183,7 @@ class ClaimController extends Controller
 
         $claim->loadMissing([
             'user',
+            'provider.user',
             'booking.experience',
             'booking.schedule',
         ]);
@@ -151,6 +191,41 @@ class ClaimController extends Controller
         $claim->user?->notify(
             new ClaimUpdatedNotification($claim)
         );
+
+        $experienceName = $claim->booking?->experience?->title
+            ?? 'tu experiencia';
+
+        if ($claim->user) {
+            $pushNotificationService->sendToUser(
+                user: $claim->user,
+                title: 'Reclamo aprobado',
+                body: "Tu reclamo sobre {$experienceName} fue aprobado.",
+                data: [
+                    'type' => 'claim_resolved',
+                    'claim_id' => (string) $claim->id,
+                    'booking_id' => (string) $claim->provider_booking_id,
+                    'status' => 'resolved',
+                    'role' => 'customer',
+                ],
+                category: PushNotificationService::CATEGORY_CLAIM,
+            );
+        }
+
+        if ($claim->provider?->user) {
+            $pushNotificationService->sendToUser(
+                user: $claim->provider->user,
+                title: 'Reclamo cerrado',
+                body: "Un reclamo sobre {$experienceName} fue aprobado por administración.",
+                data: [
+                    'type' => 'claim_closed',
+                    'claim_id' => (string) $claim->id,
+                    'booking_id' => (string) $claim->provider_booking_id,
+                    'status' => 'resolved',
+                    'role' => 'provider',
+                ],
+                category: PushNotificationService::CATEGORY_CLAIM,
+            );
+        }
 
         return back()->with('success', 'Reclamo rechazado.');
     }

@@ -36,6 +36,7 @@ class ProviderExperienceSchedule extends Model
         'status',
         'notes',
         'cancellation_reason',
+        'provider_reminder_sent_at',
     ];
 
     /**
@@ -46,6 +47,7 @@ class ProviderExperienceSchedule extends Model
         'ends_at' => 'datetime',
         'capacity' => 'integer',
         'price' => 'decimal:2',
+        'provider_reminder_sent_at' => 'datetime',
     ];
 
     /**
