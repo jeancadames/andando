@@ -365,7 +365,7 @@ class _CustomerPaymentMethodsScreenState
                   child: ElevatedButton.icon(
                     onPressed: _controller.isSaving ? null : _openAddCardSheet,
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('Agregar Tarjeta'),
+                    label: const Text('Agregar Nueva Tarjeta'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF003B73),
                       foregroundColor: Colors.white,

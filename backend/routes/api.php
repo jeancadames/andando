@@ -269,11 +269,17 @@ Route::prefix('client/explore')->group(function () {
         Route::put('/profile/password', [ClientPasswordController::class, 'update']);
         
         Route::get('/bookings', [ClientBookingController::class, 'index']);
-        Route::post('/bookings', [ClientBookingController::class, 'store']);
+        
+        Route::post('/bookings', [ClientBookingController::class, 'store'])
+            ->middleware('throttle:10,1');
+
         Route::get('/bookings/{booking}/receipt', [ClientBookingController::class, 'receipt']);
-        Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
-        Route::get('/bookings/{booking}/cancellation-preview', [ClientBookingController::class, 'cancellationPreview']);
-        Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel']);
+
+        Route::patch('/bookings/{booking}/cancel', [ClientBookingController::class, 'cancel'])
+            ->middleware('throttle:10,1');
+
+        Route::get('/bookings/{booking}/cancellation-preview', [ClientBookingController::class, 'cancellationPreview'])
+            ->middleware('throttle:30,1');
 
         Route::get('/claims', [ClientClaimController::class, 'index']);
         Route::post('/claims', [ClientClaimController::class, 'store']);
@@ -302,9 +308,15 @@ Route::prefix('client/explore')->group(function () {
         Route::post('/conversations/{conversation}/read', [ClientConversationController::class, 'markAsRead']);
         
         Route::get('/payment-methods', [ClientPaymentMethodController::class, 'index']);
-        Route::post('/payment-methods', [ClientPaymentMethodController::class, 'store']);
-        Route::patch('/payment-methods/{paymentMethod}/default', [ClientPaymentMethodController::class, 'setDefault']);
-        Route::delete('/payment-methods/{paymentMethod}', [ClientPaymentMethodController::class, 'destroy']);
+
+        Route::post('/payment-methods', [ClientPaymentMethodController::class, 'store'])
+            ->middleware('throttle:5,1');
+
+        Route::patch('/payment-methods/{paymentMethod}/default', [ClientPaymentMethodController::class, 'setDefault'])
+            ->middleware('throttle:20,1');
+
+        Route::delete('/payment-methods/{paymentMethod}', [ClientPaymentMethodController::class, 'destroy'])
+            ->middleware('throttle:10,1');
 
         Route::get('/payment-transactions', [ClientPaymentTransactionController::class, 'index']);
 

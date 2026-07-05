@@ -13,8 +13,8 @@ import '../../data/models/customer_payment_transaction_model.dart';
 /// - eliminar tarjeta/token
 ///
 /// IMPORTANTE:
-/// Flutter NO captura número de tarjeta, CVV ni vencimiento.
-/// La tarjeta se registra directamente en Azul.
+/// Flutter captura  temporalmente número de tarjeta y CVV pero no los guarda.
+/// Azul genera Token con el cual se realizan las transacciones.
 /// AndanDO solo guarda el token y datos visuales seguros.
 class CustomerPaymentMethodsController extends ChangeNotifier {
   CustomerPaymentMethodsController({

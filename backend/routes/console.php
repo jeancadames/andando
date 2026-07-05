@@ -65,3 +65,5 @@ Schedule::command('trip:send-reminders')->hourly();
 Schedule::command('payments:process-scheduled-charges')->hourly();
 
 Schedule::command('payments:release-provider-payouts')->hourly();
+
+Schedule::command('payments:reconcile-pending-verifications')->hourly();

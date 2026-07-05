@@ -33,6 +33,21 @@ class BookingCancellationDecisionService
             ];
         }
 
+        if (
+            $reason === self::REASON_CUSTOMER
+            && $this->isWithinInitialFreeCancellationWindow($booking)
+        ) {
+            return [
+                'should_refund' => true,
+                'refund_percent' => 100,
+                'refund_reason' => 'customer_free_cancellation_window',
+                'should_cancel_payment_transaction' => false,
+                'should_cancel_payout' => true,
+                'should_hold_schedule_payout' => false,
+                'notes' => 'Cliente cancela dentro de las primeras 24 horas. Si el cobro ya fue ejecutado, aplica devolución completa.',
+            ];
+        }
+
         if (in_array($reason, [
             self::REASON_PROVIDER,
             self::REASON_WEATHER,
@@ -88,5 +103,22 @@ class BookingCancellationDecisionService
         };
 
         return now()->lessThan($nonRefundableStartsAt);
+    }
+
+    private function isWithinInitialFreeCancellationWindow(ProviderBooking $booking): bool
+    {
+        if (! $booking->created_at) {
+            return false;
+        }
+
+        $freeCancellationHours = (int) config(
+            'payments.rules.booking_min_free_cancel_hours',
+            24
+        );
+
+        return $booking->created_at
+            ->copy()
+            ->addHours($freeCancellationHours)
+            ->gt(now());
     }
 }
