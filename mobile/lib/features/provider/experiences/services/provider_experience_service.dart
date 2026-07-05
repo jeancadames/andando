@@ -127,6 +127,42 @@ class ProviderExperienceForm {
   }
 }
 
+class ProviderScheduleCancellationResult {
+  final String message;
+  final String? scheduleStatus;
+  final bool requiresSupportTicket;
+  final bool supportTicketPlaceholder;
+
+  const ProviderScheduleCancellationResult({
+    required this.message,
+    required this.scheduleStatus,
+    required this.requiresSupportTicket,
+    required this.supportTicketPlaceholder,
+  });
+
+  factory ProviderScheduleCancellationResult.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return ProviderScheduleCancellationResult(
+      message: json['message']?.toString() ?? 'Solicitud procesada.',
+      scheduleStatus: json['schedule_status']?.toString(),
+      requiresSupportTicket: _readBool(json['requires_support_ticket']),
+      supportTicketPlaceholder: _readBool(json['support_ticket_placeholder']),
+    );
+  }
+
+  static bool _readBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value == 1;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+
+    return false;
+  }
+}
+
 class ProviderExperienceService {
   /// Para Chrome local:
   /// http://127.0.0.1:8000/api
@@ -157,6 +193,16 @@ class ProviderExperienceService {
     return {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      if (cleanToken.isNotEmpty) 'Authorization': 'Bearer $cleanToken',
+    };
+  }
+
+  Map<String, String> _formHeaders(String? token) {
+    final cleanToken = _cleanToken(token);
+
+    return {
+      'Accept': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
       if (cleanToken.isNotEmpty) 'Authorization': 'Bearer $cleanToken',
     };
   }
@@ -561,6 +607,44 @@ class ProviderExperienceService {
         body['message'] ?? 'No se pudieron crear las fechas.',
       );
     }
+  }
+
+  Future<ProviderScheduleCancellationResult> cancelSchedule({
+    required int experienceId,
+    required int scheduleId,
+    required String? token,
+    required String reasonType,
+    required String reasonDescription,
+  }) async {
+    _ensureAuthenticated(token);
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId/cancel',
+      ),
+      headers: _formHeaders(token),
+      body: {
+        'reason_type': reasonType,
+        'reason_description': reasonDescription,
+      },
+    );
+
+    final body = _decode(response);
+
+    if (response.statusCode == 409 &&
+        ProviderScheduleCancellationResult._readBool(
+          body['requires_support_ticket'],
+        )) {
+      return ProviderScheduleCancellationResult.fromJson(body);
+    }
+
+    if (!_isSuccessStatus(response.statusCode)) {
+      throw Exception(
+        body['message'] ?? 'No se pudo cancelar la fecha.',
+      );
+    }
+
+    return ProviderScheduleCancellationResult.fromJson(body);
   }
 
   Future<void> deleteSchedule({
