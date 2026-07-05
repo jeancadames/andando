@@ -15,7 +15,7 @@
                 <!-- Header -->
                 <tr>
                     <td style="background:#003b88; padding:28px 40px;">
-                        <img src="{{ asset('images/andando_logo.png') }}" alt="AndanDO" style="height:70px; display:block;">
+                        <img src="{{ config('mail.logo_url') }}" alt="AndanDO" style="height:70px; display:block;">
                     </td>
                 </tr>
 
@@ -52,7 +52,7 @@
                         <table width="100%">
                             <tr>
                                 <td>
-                                    <img src="{{ asset('images/andando_logo.png') }}" alt="AndanDO" style="height:52px; display:block;">
+                                    <img src="{{ config('mail.logo_url') }}" alt="AndanDO" style="height:52px; display:block;">
                                 </td>
                                 <td style="text-align:right; font-size:13px;">
                                     © {{ date('Y') }} AndanDO. Todos los derechos reservados.
