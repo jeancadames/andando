@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Provider;
 
+use App\Services\PushNotificationService;
 use App\Http\Controllers\Controller;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
@@ -18,7 +19,8 @@ class ProviderScheduleCancellationController extends Controller
     public function __invoke(
         Request $request,
         ProviderExperience $experience,
-        ProviderExperienceSchedule $schedule
+        ProviderExperienceSchedule $schedule,
+        PushNotificationService $pushNotificationService
     ): JsonResponse {
         $user = $request->user();
         $provider = $user?->provider;
@@ -101,6 +103,7 @@ class ProviderScheduleCancellationController extends Controller
         }
 
         $now = now();
+        $affectedBookings = collect();
 
         DB::transaction(function () use (
             $provider,
@@ -110,7 +113,8 @@ class ProviderScheduleCancellationController extends Controller
             $validated,
             $policyDeadlineAt,
             $cancellationPenaltyHours,
-            $now
+            $now,
+            &$affectedBookings
         ): void {
             $bookingsQuery = ProviderBooking::query()
                 ->where('provider_id', $provider->id)
@@ -121,7 +125,15 @@ class ProviderScheduleCancellationController extends Controller
                     ProviderBooking::STATUS_CONFIRMED,
                 ]);
 
-            $bookingsCancelledCount = (clone $bookingsQuery)->count();
+            $affectedBookings = (clone $bookingsQuery)
+                ->with([
+                    'user',
+                    'experience',
+                    'schedule',
+                ])
+                ->get();
+
+            $bookingsCancelledCount = $affectedBookings->count();
 
             $cancellationReason = Str::limit(
                 $validated['reason_type'] . ': ' . $validated['reason_description'],
@@ -164,6 +176,32 @@ class ProviderScheduleCancellationController extends Controller
              * - Crear flujo real de ticket para cancelaciones fuera de política.
              */
         });
+
+                foreach ($affectedBookings as $booking) {
+                    if (! $booking->user) {
+                        continue;
+                    }
+
+                    $experienceName = $booking->experience?->title
+                        ?? $experience->title
+                        ?? 'tu experiencia';
+
+                    $pushNotificationService->sendToUser(
+                        user: $booking->user,
+                        title: 'Salida cancelada',
+                        body: "La salida de {$experienceName} fue cancelada por el afiliado.",
+                        data: [
+                            'type' => 'schedule_cancelled',
+                            'booking_id' => (string) $booking->id,
+                            'schedule_id' => (string) $schedule->id,
+                            'experience_id' => (string) $experience->id,
+                            'cancelled_by' => 'provider',
+                            'reason_type' => (string) $validated['reason_type'],
+                            'role' => 'customer',
+                        ],
+                        category: PushNotificationService::CATEGORY_BOOKING,
+                    );
+                }
 
         return response()->json([
             'message' => 'Horario cancelado correctamente.',

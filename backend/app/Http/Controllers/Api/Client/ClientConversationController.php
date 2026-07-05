@@ -242,6 +242,7 @@ class ClientConversationController extends Controller
                     'conversation_id' => (string) $conversation->id,
                     'role' => 'provider',
                 ],
+                category: PushNotificationService::CATEGORY_MESSAGE,
             );
         }
 

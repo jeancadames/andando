@@ -127,13 +127,13 @@ class ClaimController extends Controller
         if ($claim->user) {
             $pushNotificationService->sendToUser(
                 user: $claim->user,
-                title: 'Reclamo aprobado',
-                body: "Tu reclamo sobre {$experienceName} fue aprobado.",
+                title: 'Reclamo rechazado',
+                body: "Tu reclamo sobre {$experienceName} fue rechazado.",
                 data: [
-                    'type' => 'claim_resolved',
+                    'type' => 'claim_rejected',
                     'claim_id' => (string) $claim->id,
                     'booking_id' => (string) $claim->provider_booking_id,
-                    'status' => 'resolved',
+                    'status' => 'rejected',
                     'role' => 'customer',
                 ],
                 category: PushNotificationService::CATEGORY_CLAIM,
@@ -144,12 +144,12 @@ class ClaimController extends Controller
             $pushNotificationService->sendToUser(
                 user: $claim->provider->user,
                 title: 'Reclamo cerrado',
-                body: "Un reclamo sobre {$experienceName} fue aprobado por administración.",
+                body: "Un reclamo sobre {$experienceName} fue rechazado por administración.",
                 data: [
                     'type' => 'claim_closed',
                     'claim_id' => (string) $claim->id,
                     'booking_id' => (string) $claim->provider_booking_id,
-                    'status' => 'resolved',
+                    'status' => 'rejected',
                     'role' => 'provider',
                 ],
                 category: PushNotificationService::CATEGORY_CLAIM,

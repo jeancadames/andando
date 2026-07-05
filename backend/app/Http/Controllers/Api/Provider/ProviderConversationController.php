@@ -177,6 +177,7 @@ class ProviderConversationController extends Controller
                     'conversation_id' => (string) $conversation->id,
                     'role' => 'customer',
                 ],
+                category: PushNotificationService::CATEGORY_MESSAGE,
             );
         }
 
