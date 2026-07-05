@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-
 import 'package:geolocator/geolocator.dart';
+
 import '../../data/datasources/explore_remote_datasource.dart';
 import '../../data/models/customer_experience_model.dart';
 import '../../../profile/data/services/customer_location_preferences_service.dart';
@@ -9,50 +9,43 @@ class ExploreController extends ChangeNotifier {
   final ExploreRemoteDataSource _dataSource;
 
   final CustomerLocationPreferencesService _locationPreferencesService =
-    CustomerLocationPreferencesService();
+      CustomerLocationPreferencesService();
 
-    int searchRadiusKm = 50;
-    bool gpsEnabled = true;
-    bool autoDetectLocation = false;
+  int searchRadiusKm = 50;
+  bool gpsEnabled = true;
+  bool autoDetectLocation = false;
 
   ExploreRemoteDataSource get dataSource => _dataSource;
 
-  ExploreController({
-    ExploreRemoteDataSource? dataSource,
-  }) : _dataSource = dataSource ?? ExploreRemoteDataSource();
+  ExploreController({ExploreRemoteDataSource? dataSource})
+    : _dataSource = dataSource ?? ExploreRemoteDataSource();
 
   List<CustomerExperienceModel> experiences = [];
   List<CustomerExperienceModel> nearbyExperiencesList = [];
-
   List<String> categories = ['Todos'];
-
   Set<int> favoriteExperienceIds = {};
 
   String selectedCategory = 'Todos';
-
   String searchText = '';
-
-  /// Fecha seleccionada para filtrar experiencias.
-  ///
-  /// Si es null, se muestran todas las fechas.
   DateTime? selectedDate;
 
   bool isLoading = false;
+  bool isLoadingNearby = false;
+  bool isResolvingNearby = true;
+  bool hasFinishedInitialNearbyLoad = false;
+  bool hasLoadedOnce = false;
+  bool locationPermissionDenied = false;
 
   String? errorMessage;
   double? userLatitude;
   double? userLongitude;
-  bool locationPermissionDenied = false;
-  bool hasLoadedOnce = false;
 
-  List<CustomerExperienceModel> get popularExperiences {
-    return experiences;
-  }
+  List<CustomerExperienceModel> get popularExperiences => experiences;
+
+  List<CustomerExperienceModel> get nearbyExperiences => nearbyExperiencesList;
 
   List<CustomerExperienceModel> get recommendedExperiences {
-    if (favoriteExperienceIds.isEmpty) {
-      return experiences;
-    }
+    if (favoriteExperienceIds.isEmpty) return experiences;
 
     final favoriteCategories = experiences
         .where((experience) => favoriteExperienceIds.contains(experience.id))
@@ -68,35 +61,56 @@ class ExploreController extends ChangeNotifier {
     return recommended.isEmpty ? experiences : recommended;
   }
 
-  List<CustomerExperienceModel> get nearbyExperiences {
-    return nearbyExperiencesList;
-  }
-
   Future<void> initialize() async {
-    await _loadLocationPreferences();
-
-    if (gpsEnabled || autoDetectLocation) {
-      await _loadUserLocation();
-    }
-
-    await Future.wait([
+    final initialContentFuture = Future.wait([
       loadCategories(),
       loadExperiences(),
-      loadNearbyExperiences(),
     ]);
+
+    final locationFuture = _initializeLocationAndNearby();
+
+    await initialContentFuture;
+    await locationFuture;
+  }
+
+  Future<void> _initializeLocationAndNearby() async {
+    isResolvingNearby = true;
+    hasFinishedInitialNearbyLoad = false;
+    notifyListeners();
+
+    try {
+      await _loadLocationPreferences();
+
+      if (!gpsEnabled && !autoDetectLocation) {
+        nearbyExperiencesList = [];
+        return;
+      }
+
+      await _loadUserLocation();
+
+      if (userLatitude == null || userLongitude == null) {
+        nearbyExperiencesList = [];
+        return;
+      }
+
+      await loadNearbyExperiences();
+    } finally {
+      isResolvingNearby = false;
+      hasFinishedInitialNearbyLoad = true;
+      notifyListeners();
+    }
   }
 
   Future<void> _loadLocationPreferences() async {
     gpsEnabled = await _locationPreferencesService.getGpsEnabled();
-    autoDetectLocation =
-        await _locationPreferencesService.getAutoDetectEnabled();
+    autoDetectLocation = await _locationPreferencesService
+        .getAutoDetectEnabled();
     searchRadiusKm = await _locationPreferencesService.getSearchRadiusKm();
   }
 
   Future<void> loadExperiences() async {
     isLoading = true;
     errorMessage = null;
-
     notifyListeners();
 
     try {
@@ -152,10 +166,7 @@ class ExploreController extends ChangeNotifier {
 
     selectedCategory = category;
 
-    await Future.wait([
-      loadExperiences(),
-      loadNearbyExperiences(),
-    ]);
+    await Future.wait([loadExperiences(), _reloadNearbyIfAvailable()]);
   }
 
   Future<void> _loadUserLocation() async {
@@ -192,9 +203,13 @@ class ExploreController extends ChangeNotifier {
   Future<void> loadNearbyExperiences() async {
     if (userLatitude == null || userLongitude == null) {
       nearbyExperiencesList = [];
+      isLoadingNearby = false;
       notifyListeners();
       return;
     }
+
+    isLoadingNearby = true;
+    notifyListeners();
 
     try {
       nearbyExperiencesList = await _dataSource.getExperiences(
@@ -215,36 +230,38 @@ class ExploreController extends ChangeNotifier {
       );
     } catch (_) {
       nearbyExperiencesList = [];
+    } finally {
+      isLoadingNearby = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _reloadNearbyIfAvailable() async {
+    if (userLatitude == null || userLongitude == null) {
+      nearbyExperiencesList = [];
+      notifyListeners();
+      return;
     }
 
-    notifyListeners();
+    await loadNearbyExperiences();
   }
 
   Future<void> search(String value) async {
     searchText = value;
 
-    await Future.wait([
-      loadExperiences(),
-      loadNearbyExperiences(),
-    ]);
+    await Future.wait([loadExperiences(), _reloadNearbyIfAvailable()]);
   }
 
-  /// Selecciona una fecha y recarga experiencias filtradas.
   Future<void> selectDate(DateTime date) async {
     selectedDate = date;
-    await Future.wait([
-      loadExperiences(),
-      loadNearbyExperiences(),
-    ]);
+
+    await Future.wait([loadExperiences(), _reloadNearbyIfAvailable()]);
   }
 
-  /// Limpia la fecha seleccionada.
   Future<void> clearSelectedDate() async {
     selectedDate = null;
-    await Future.wait([
-      loadExperiences(),
-      loadNearbyExperiences(),
-    ]);
+
+    await Future.wait([loadExperiences(), _reloadNearbyIfAvailable()]);
   }
 
   bool isFavorite(int experienceId) {
@@ -264,13 +281,9 @@ class ExploreController extends ChangeNotifier {
 
     try {
       if (wasFavorite) {
-        await _dataSource.removeFavorite(
-          experienceId: experienceId,
-        );
+        await _dataSource.removeFavorite(experienceId: experienceId);
       } else {
-        await _dataSource.addFavorite(
-          experienceId: experienceId,
-        );
+        await _dataSource.addFavorite(experienceId: experienceId);
       }
     } catch (error) {
       if (wasFavorite) {
@@ -280,7 +293,6 @@ class ExploreController extends ChangeNotifier {
       }
 
       errorMessage = error.toString();
-
       notifyListeners();
     }
   }
@@ -290,9 +302,6 @@ class ExploreController extends ChangeNotifier {
     selectedCategory = 'Todos';
     selectedDate = null;
 
-    await Future.wait([
-      loadExperiences(),
-      loadNearbyExperiences(),
-    ]);
+    await Future.wait([loadExperiences(), _reloadNearbyIfAvailable()]);
   }
 }

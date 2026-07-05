@@ -21,10 +21,7 @@ import '../../../../auth/application/auth_controller.dart';
 ///   Primero consulta el endpoint de detalle para traer la información completa:
 ///   amenities, itinerary, schedules, cupos, etc.
 class CustomerFavoritesScreen extends StatefulWidget {
-  const CustomerFavoritesScreen({
-    super.key,
-    required this.authController,
-  });
+  const CustomerFavoritesScreen({super.key, required this.authController});
 
   final AuthController authController;
 
@@ -45,8 +42,9 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
   void initState() {
     super.initState();
 
-    /// Carga inicial de experiencias y favoritos.
-    _controller.initialize();
+    // Favoritos solo necesita el listado de experiencias.
+    // No necesita categorías, GPS ni experiencias cercanas.
+    _controller.loadExperiences();
   }
 
   @override
@@ -78,9 +76,7 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
   /// - itinerary
   /// - available_schedules
   /// - cupos reales
-  Future<void> _openExperienceDetail(
-    CustomerExperienceModel experience,
-  ) async {
+  Future<void> _openExperienceDetail(CustomerExperienceModel experience) async {
     var didOpenLoadingDialog = false;
 
     try {
@@ -88,9 +84,7 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         },
       );
 
@@ -135,13 +129,9 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
         Navigator.of(context).pop();
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
@@ -166,20 +156,15 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverToBoxAdapter(
-                    child: _FavoritesHeader(
-                      favoriteCount: favoriteCount,
-                    ),
+                    child: _FavoritesHeader(favoriteCount: favoriteCount),
                   ),
 
                   /// Estado de carga inicial.
                   if (_controller.isLoading)
                     const SliverFillRemaining(
                       hasScrollBody: false,
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      child: Center(child: CircularProgressIndicator()),
                     )
-
                   /// Estado de error.
                   else if (_controller.errorMessage != null)
                     SliverFillRemaining(
@@ -189,7 +174,6 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
                         onRetry: _controller.loadExperiences,
                       ),
                     )
-
                   /// Estado vacío.
                   else if (favorites.isEmpty)
                     SliverFillRemaining(
@@ -200,7 +184,6 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
                         },
                       ),
                     )
-
                   /// Lista de experiencias favoritas.
                   else
                     SliverPadding(
@@ -248,9 +231,7 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
 class _FavoritesHeader extends StatelessWidget {
   final int favoriteCount;
 
-  const _FavoritesHeader({
-    required this.favoriteCount,
-  });
+  const _FavoritesHeader({required this.favoriteCount});
 
   @override
   Widget build(BuildContext context) {
@@ -294,23 +275,15 @@ class _FavoritesHeader extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Experiencias que guardaste para después',
-            style: TextStyle(
-              fontSize: 15,
-              color: Color(0xFF6B7280),
-            ),
+            style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
           ),
           const SizedBox(height: 18),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 10,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: const Color(0xFFF9FAFB),
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-              ),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: Text(
               counterText,
@@ -333,9 +306,7 @@ class _FavoritesHeader extends StatelessWidget {
 class _FavoritesEmptyState extends StatelessWidget {
   final VoidCallback onExploreTap;
 
-  const _FavoritesEmptyState({
-    required this.onExploreTap,
-  });
+  const _FavoritesEmptyState({required this.onExploreTap});
 
   @override
   Widget build(BuildContext context) {
@@ -394,9 +365,7 @@ class _FavoritesEmptyState extends StatelessWidget {
               ),
               child: const Text(
                 'Explorar experiencias',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -413,10 +382,7 @@ class _FavoritesErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _FavoritesErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _FavoritesErrorState({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -445,20 +411,13 @@ class _FavoritesErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 18),
-            ElevatedButton(
-              onPressed: onRetry,
-              child: const Text('Reintentar'),
-            ),
+            ElevatedButton(onPressed: onRetry, child: const Text('Reintentar')),
           ],
         ),
       ),
     );
   }
 }
-

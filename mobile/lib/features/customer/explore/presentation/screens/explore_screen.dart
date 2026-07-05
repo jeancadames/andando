@@ -13,10 +13,7 @@ import 'experience_detail_screen.dart';
 import '../../../../auth/application/auth_controller.dart';
 
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({
-    super.key,
-    required this.authController,
-  });
+  const ExploreScreen({super.key, required this.authController});
 
   final AuthController authController;
 
@@ -81,10 +78,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
           content: const Text(
             'Para guardar esta experiencia en favoritos necesitas crear una cuenta o iniciar sesión como cliente.',
-            style: TextStyle(
-              height: 1.4,
-              color: Color(0xFF475569),
-            ),
+            style: TextStyle(height: 1.4, color: Color(0xFF475569)),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
           actions: [
@@ -131,9 +125,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         },
       );
 
@@ -168,13 +160,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
       Navigator.of(context).pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
@@ -223,17 +211,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _CategoryList(
-                          controller: _controller,
-                        ),
+                        _CategoryList(controller: _controller),
                         if (_controller.selectedDate != null)
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              20,
-                              4,
-                              20,
-                              12,
-                            ),
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                             child: GestureDetector(
                               onTap: () {
                                 _controller.clearSelectedDate();
@@ -284,9 +265,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     ),
                   ),
                   if (_controller.isLoading || !_controller.hasLoadedOnce)
-                    const SliverToBoxAdapter(
-                      child: _ExploreLoadingSkeleton(),
-                    )
+                    const SliverToBoxAdapter(child: _ExploreLoadingSkeleton())
                   else if (_controller.errorMessage != null)
                     SliverFillRemaining(
                       child: _ErrorState(
@@ -294,7 +273,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         onRetry: _controller.loadExperiences,
                       ),
                     )
-                  else if (_controller.hasLoadedOnce && _controller.experiences.isEmpty)
+                  else if (_controller.hasLoadedOnce &&
+                      _controller.experiences.isEmpty)
                     SliverFillRemaining(
                       child: _EmptyState(
                         onClearFilters: _controller.clearFilters,
@@ -326,10 +306,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       ),
                     ),
                     SliverToBoxAdapter(
-                      child: _ExperienceCarouselSection(
-                        title: 'Actividades cercanas a ti',
-                        subtitle: 'Opciones disponibles cerca de tu ubicación',
-                        experiences: _controller.nearbyExperiences,
+                      child: _NearbyExperienceSection(
                         controller: _controller,
                         onOpenExperience: (experience) {
                           _openExperienceDetail(context, experience);
@@ -337,9 +314,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         onFavoriteTap: _handleFavoriteTap,
                       ),
                     ),
-                    const SliverToBoxAdapter(
-                      child: SizedBox(height: 24),
-                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
                   ],
                 ],
               ),
@@ -401,10 +376,7 @@ class _Header extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Encuentra experiencias únicas cerca de ti',
-            style: TextStyle(
-              fontSize: 15,
-              color: Color(0xFF6B7280),
-            ),
+            style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
           ),
           const SizedBox(height: 18),
           TextField(
@@ -421,21 +393,15 @@ class _Header extends StatelessWidget {
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: Color(0xFFE5E7EB),
-                ),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: Color(0xFFE5E7EB),
-                ),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: Color(0xFF111827),
-                ),
+                borderSide: const BorderSide(color: Color(0xFF111827)),
               ),
             ),
           ),
@@ -448,18 +414,14 @@ class _Header extends StatelessWidget {
 class _CategoryList extends StatelessWidget {
   final ExploreController controller;
 
-  const _CategoryList({
-    required this.controller,
-  });
+  const _CategoryList({required this.controller});
 
   Future<void> _openDatePicker(BuildContext context) async {
     final selected = await showDatePicker(
       context: context,
       initialDate: controller.selectedDate ?? DateTime.now(),
       firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(
-        const Duration(days: 365),
-      ),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
 
     if (selected != null) {
@@ -472,12 +434,7 @@ class _CategoryList extends StatelessWidget {
     return Container(
       height: 52,
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        12,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       child: Center(
         child: Row(
           children: [
@@ -494,9 +451,7 @@ class _CategoryList extends StatelessWidget {
                     onTap: () => controller.selectCategory(category),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
                       height: 48,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
@@ -527,9 +482,7 @@ class _CategoryList extends StatelessWidget {
                   context: context,
                   initialDate: controller.selectedDate ?? DateTime.now(),
                   firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(
-                    const Duration(days: 365),
-                  ),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
                 );
 
                 if (selected != null) {
@@ -602,6 +555,120 @@ class _DateFilterBar extends StatelessWidget {
   }
 }
 
+class _NearbyExperienceSection extends StatelessWidget {
+  final ExploreController controller;
+  final ValueChanged<CustomerExperienceModel> onOpenExperience;
+  final ValueChanged<CustomerExperienceModel> onFavoriteTap;
+
+  const _NearbyExperienceSection({
+    required this.controller,
+    required this.onOpenExperience,
+    required this.onFavoriteTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(
+          title: 'Actividades cercanas a ti',
+          subtitle: 'Opciones disponibles cerca de tu ubicación',
+        ),
+        if (!controller.hasFinishedInitialNearbyLoad ||
+            controller.isResolvingNearby ||
+            controller.isLoadingNearby)
+          const _NearbyLoadingSkeleton()
+        else if (controller.nearbyExperiences.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Text(
+              'Estamos buscando opciones cercanas para ti.',
+              style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+            ),
+          )
+        else
+          SizedBox(
+            height: 350,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              scrollDirection: Axis.horizontal,
+              itemCount: controller.nearbyExperiences.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 16),
+              itemBuilder: (context, index) {
+                final experience = controller.nearbyExperiences[index];
+
+                return SizedBox(
+                  width: 260,
+                  child: _ExperienceCard(
+                    experience: experience,
+                    isFavorite: controller.isFavorite(experience.id),
+                    onFavoriteTap: () => onFavoriteTap(experience),
+                    onTap: () => onOpenExperience(experience),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _NearbyLoadingSkeleton extends StatelessWidget {
+  const _NearbyLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 350,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        scrollDirection: Axis.horizontal,
+        itemCount: 3,
+        separatorBuilder: (_, _) => const SizedBox(width: 16),
+        itemBuilder: (_, _) {
+          return Container(
+            width: 260,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  height: 155,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(26),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: List.generate(4, (_) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE5E7EB),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _ExperienceCarouselSection extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -628,10 +695,7 @@ class _ExperienceCarouselSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(
-          title: title,
-          subtitle: subtitle,
-        ),
+        _SectionTitle(title: title, subtitle: subtitle),
         SizedBox(
           height: 350,
           child: ListView.separated(
@@ -663,10 +727,7 @@ class _SectionTitle extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _SectionTitle({
-    required this.title,
-    required this.subtitle,
-  });
+  const _SectionTitle({required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -686,10 +747,7 @@ class _SectionTitle extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF6B7280),
-            ),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
           ),
         ],
       ),
@@ -712,7 +770,8 @@ class _ExperienceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = experience.coverPhotoUrl != null &&
+    final hasImage =
+        experience.coverPhotoUrl != null &&
         experience.coverPhotoUrl!.trim().isNotEmpty;
 
     debugPrint('EXPERIENCIA: ${experience.title}');
@@ -937,11 +996,7 @@ class _ImagePlaceholder extends StatelessWidget {
     return Container(
       color: const Color(0xFFE5E7EB),
       child: const Center(
-        child: Icon(
-          Icons.image_outlined,
-          size: 42,
-          color: Color(0xFF9CA3AF),
-        ),
+        child: Icon(Icons.image_outlined, size: 42, color: Color(0xFF9CA3AF)),
       ),
     );
   }
@@ -950,9 +1005,7 @@ class _ImagePlaceholder extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final VoidCallback onClearFilters;
 
-  const _EmptyState({
-    required this.onClearFilters,
-  });
+  const _EmptyState({required this.onClearFilters});
 
   @override
   Widget build(BuildContext context) {
@@ -981,10 +1034,7 @@ class _EmptyState extends StatelessWidget {
             const Text(
               'Prueba cambiando la búsqueda o la categoría seleccionada.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-              ),
+              style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 18),
             ElevatedButton(
@@ -1002,10 +1052,7 @@ class _ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1034,16 +1081,10 @@ class _ErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 18),
-            ElevatedButton(
-              onPressed: onRetry,
-              child: const Text('Reintentar'),
-            ),
+            ElevatedButton(onPressed: onRetry, child: const Text('Reintentar')),
           ],
         ),
       ),
