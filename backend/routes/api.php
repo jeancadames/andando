@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\Provider\ProviderClaimController;
 
 use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Api\Provider\ProviderPlacesController;
+use App\Http\Controllers\Api\Provider\ProviderScheduleCancellationController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -196,6 +197,9 @@ Route::prefix('provider')->group(function () {
         Route::delete('/experiences/{experience}/schedules/{schedule}', [ProviderExperienceScheduleController::class, 'destroy']);
 
         Route::get('/experiences/{experience}/schedules/{schedule}/bookings',[ProviderExperienceScheduleController::class, 'bookings']);
+
+        Route::post('/experiences/{experience}/schedules/{schedule}/cancel', ProviderScheduleCancellationController::class)
+            ->middleware('throttle:10,1');
 
         Route::get('/places/search', [ProviderPlacesController::class, 'search']);
 

@@ -28,6 +28,7 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
   final ProviderExperienceService _service = ProviderExperienceService();
 
   bool _isLoading = true;
+  bool _isCancellingSchedule = false;
   String? _error;
   List<ProviderExperienceSchedule> _schedules = [];
 
@@ -69,105 +70,182 @@ class _ExperienceCalendarScreenState extends State<ExperienceCalendarScreen> {
     }
   }
 
-Future<void> _openScheduleBookingsScreen(
-  ProviderExperienceSchedule schedule,
-) async {
-  await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ProviderScheduleBookingsScreen(
-        authController: widget.authController,
+  Future<void> _openScheduleBookingsScreen(
+    ProviderExperienceSchedule schedule,
+  ) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProviderScheduleBookingsScreen(
+          authController: widget.authController,
+          experienceId: widget.experienceId,
+          scheduleId: schedule.id,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    await _loadSchedules();
+  }
+
+  Future<void> _deleteSchedule(ProviderExperienceSchedule schedule) async {
+    try {
+      await _service.deleteSchedule(
         experienceId: widget.experienceId,
         scheduleId: schedule.id,
+        token: widget.authController.token,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fecha eliminada correctamente.'),
+        ),
+      );
+
+      await _loadSchedules();
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _cancelSchedule(ProviderExperienceSchedule schedule) async {
+    final request = await showDialog<_ScheduleCancellationRequest>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _CancelScheduleDialog(),
+    );
+
+    if (request == null) {
+      return;
+    }
+
+    setState(() {
+      _isCancellingSchedule = true;
+    });
+
+    try {
+      final result = await _service.cancelSchedule(
+        experienceId: widget.experienceId,
+        scheduleId: schedule.id,
+        token: widget.authController.token,
+        reasonType: request.reasonType,
+        reasonDescription: request.reasonDescription,
+      );
+
+      if (!mounted) return;
+
+      if (result.requiresSupportTicket) {
+        await _showSupportTicketPlaceholder(result.message);
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+        ),
+      );
+
+      await _loadSchedules();
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _isCancellingSchedule = false;
+      });
+    }
+  }
+
+  Future<void> _showSupportTicketPlaceholder(String message) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Contactar soporte'),
+          content: Text(
+            message.isNotEmpty
+                ? '$message\n\nPróximamente podrás crear un ticket para solicitar una cancelación de emergencia.'
+                : 'Próximamente podrás crear un ticket para solicitar una cancelación de emergencia.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Entendido'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openAddScheduleScreen() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddScheduleScreen(
+          authController: widget.authController,
+          experienceId: widget.experienceId,
+          experienceTitle: widget.experienceTitle,
+        ),
       ),
-    ),
-  );
-
-  if (!mounted) return;
-
-  await _loadSchedules();
-}
-
-Future<void> _deleteSchedule(ProviderExperienceSchedule schedule) async {
-  try {
-    await _service.deleteSchedule(
-      experienceId: widget.experienceId,
-      scheduleId: schedule.id,
-      token: widget.authController.token,
     );
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fecha eliminada correctamente.'),
+    if (created == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fecha programada correctamente.'),
+        ),
+      );
+
+      await _loadSchedules();
+    }
+  }
+
+  Future<void> _openEditScheduleScreen(
+    ProviderExperienceSchedule schedule,
+  ) async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddScheduleScreen(
+          authController: widget.authController,
+          experienceId: widget.experienceId,
+          experienceTitle: widget.experienceTitle,
+          scheduleToEdit: schedule,
+        ),
       ),
     );
 
-    await _loadSchedules();
-  } catch (error) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error.toString().replaceFirst('Exception: ', '')),
-      ),
-    );
+    if (updated == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fecha actualizada correctamente.'),
+        ),
+      );
+
+      await _loadSchedules();
+    }
   }
-}
-
-Future<void> _openAddScheduleScreen() async {
-  final created = await Navigator.push<bool>(
-    context,
-    MaterialPageRoute(
-      builder: (_) => AddScheduleScreen(
-        authController: widget.authController,
-        experienceId: widget.experienceId,
-        experienceTitle: widget.experienceTitle,
-      ),
-    ),
-  );
-
-  if (!mounted) return;
-
-  if (created == true) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fecha programada correctamente.'),
-      ),
-    );
-
-    await _loadSchedules();
-  }
-}
-
-Future<void> _openEditScheduleScreen(
-  ProviderExperienceSchedule schedule,
-) async {
-  final updated = await Navigator.push<bool>(
-    context,
-    MaterialPageRoute(
-      builder: (_) => AddScheduleScreen(
-        authController: widget.authController,
-        experienceId: widget.experienceId,
-        experienceTitle: widget.experienceTitle,
-        scheduleToEdit: schedule,
-      ),
-    ),
-  );
-
-  if (!mounted) return;
-
-  if (updated == true) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fecha actualizada correctamente.'),
-      ),
-    );
-
-    await _loadSchedules();
-  }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +308,8 @@ Future<void> _openEditScheduleScreen(
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: _openAddScheduleScreen,
+                  onPressed:
+                      _isCancellingSchedule ? null : _openAddScheduleScreen,
                   icon: const Icon(Icons.add),
                   label: const Text('Agregar'),
                 ),
@@ -313,6 +392,9 @@ Future<void> _openEditScheduleScreen(
           onBookings: () => _openScheduleBookingsScreen(schedule),
           onEdit: canModify ? () => _openEditScheduleScreen(schedule) : null,
           onDelete: canModify ? () => _deleteSchedule(schedule) : null,
+          onCancel: _isCancellingSchedule
+              ? null
+              : () => _cancelSchedule(schedule),
         );
       },
     );
@@ -324,12 +406,14 @@ class _ScheduleCard extends StatelessWidget {
   final VoidCallback onBookings;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onCancel;
 
   const _ScheduleCard({
     required this.schedule,
     required this.onBookings,
     required this.onEdit,
     required this.onDelete,
+    required this.onCancel,
   });
 
   @override
@@ -476,6 +560,19 @@ class _ScheduleCard extends StatelessWidget {
               ],
             ],
           ),
+          const SizedBox(height: 10),
+          _ScheduleDangerButton(
+            label: 'Cancelar fecha',
+            icon: Icons.event_busy_outlined,
+            onTap: onCancel ??
+                () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Hay una cancelación en proceso.'),
+                    ),
+                  );
+                },
+          ),
           if (safeBooked > 0) ...[
             const SizedBox(height: 12),
             const Divider(),
@@ -568,6 +665,228 @@ class _ScheduleActionButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ScheduleDangerButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ScheduleDangerButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Colors.red,
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: Colors.red,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleCancellationRequest {
+  final String reasonType;
+  final String reasonDescription;
+
+  const _ScheduleCancellationRequest({
+    required this.reasonType,
+    required this.reasonDescription,
+  });
+}
+
+class _CancellationReasonOption {
+  final String value;
+  final String label;
+
+  const _CancellationReasonOption({
+    required this.value,
+    required this.label,
+  });
+
+  static const values = [
+    _CancellationReasonOption(
+      value: 'low_participants',
+      label: 'No se alcanzó la cuota mínima',
+    ),
+    _CancellationReasonOption(
+      value: 'weather_or_natural_event',
+      label: 'Clima o fenómeno natural',
+    ),
+    _CancellationReasonOption(
+      value: 'provider_emergency',
+      label: 'Emergencia del afiliado',
+    ),
+    _CancellationReasonOption(
+      value: 'operational_issue',
+      label: 'Problema operativo',
+    ),
+    _CancellationReasonOption(
+      value: 'other',
+      label: 'Otro motivo',
+    ),
+  ];
+}
+
+class _CancelScheduleDialog extends StatefulWidget {
+  const _CancelScheduleDialog();
+
+  @override
+  State<_CancelScheduleDialog> createState() => _CancelScheduleDialogState();
+}
+
+class _CancelScheduleDialogState extends State<_CancelScheduleDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _descriptionController = TextEditingController();
+
+  String _reasonType = _CancellationReasonOption.values.first.value;
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    Navigator.pop(
+      context,
+      _ScheduleCancellationRequest(
+        reasonType: _reasonType,
+        reasonDescription: _descriptionController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cancelar fecha'),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Indica el motivo de la cancelación. Esta información será revisada por el equipo de AndanDO para monitorear cancelaciones recurrentes.',
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _reasonType,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo',
+                  border: OutlineInputBorder(),
+                ),
+                items: _CancellationReasonOption.values
+                    .map(
+                      (option) => DropdownMenuItem<String>(
+                        value: option.value,
+                        child: Text(option.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+
+                  setState(() {
+                    _reasonType = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _descriptionController,
+                minLines: 3,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  labelText: 'Explicación',
+                  hintText:
+                      'Ejemplo: Solo se inscribieron 3 personas y la cuota mínima era 10.',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  final text = value?.trim() ?? '';
+
+                  if (text.isEmpty) {
+                    return 'La explicación es obligatoria.';
+                  }
+
+                  if (text.length < 10) {
+                    return 'Agrega una explicación más detallada.';
+                  }
+
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Al confirmar, esta fecha dejará de estar disponible para reservas. Las reservas pendientes o confirmadas serán marcadas como canceladas por el sistema.',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Volver'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Cancelar fecha'),
+        ),
+      ],
     );
   }
 }
