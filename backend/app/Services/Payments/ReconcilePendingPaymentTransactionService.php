@@ -5,15 +5,19 @@ namespace App\Services\Payments;
 use App\Models\PaymentRefund;
 use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
-use App\Notifications\Payment\RefundIssuedNotification;
-use Illuminate\Support\Facades\DB;
-use Throwable;
 
-class PaymentRefundService
+/**
+ * Servicio de compatibilidad para evitar duplicar la lógica de refunds.
+ *
+ * Este archivo debe declarar ReconcilePendingPaymentTransactionService
+ * porque el nombre del archivo es ReconcilePendingPaymentTransactionService.php.
+ *
+ * La lógica real de refunds vive en PaymentRefundService.
+ */
+class ReconcilePendingPaymentTransactionService
 {
     public function __construct(
-        private readonly PaymentGatewayManager $gatewayManager,
-        private readonly PaymentCalculator $calculator,
+        private readonly PaymentRefundService $paymentRefundService,
     ) {}
 
     public function refundBooking(
@@ -22,131 +26,11 @@ class PaymentRefundService
         float $refundPercent,
         string $reason
     ): PaymentRefund {
-        $amount = (float) $transaction->amount;
-
-        $breakdown = match ((int) $refundPercent) {
-            100 => $this->calculator->calculateFullRefund($amount),
-            0 => $this->calculator->calculateNoRefund($amount),
-            default => $this->calculator->calculateCustomerPolicyRefund($amount),
-        };
-
-        $refund = PaymentRefund::create([
-            'payment_transaction_id' => $transaction->id,
-            'provider_booking_id' => $booking->id,
-            'user_id' => $booking->user_id,
-            'gateway' => config('payments.gateway', 'fake_azul'),
-            'environment' => config('payments.environment', 'test'),
-            'status' => PaymentRefund::STATUS_PENDING,
-            'reason' => $reason,
-            'amount' => $breakdown['refund_amount'],
-            'currency' => $transaction->currency,
-            'refund_percent' => $breakdown['refund_percent'],
-            'retained_amount' => $breakdown['retained_amount'],
-        ]);
-
-        if ($refund->amount <= 0) {
-            $refund->update([
-                'status' => PaymentRefund::STATUS_SUCCEEDED,
-                'processed_at' => now(),
-            ]);
-
-            return $refund;
-        }
-
-        $refund->update([
-            'status' => PaymentRefund::STATUS_PROCESSING,
-        ]);
-
-        try {
-            $response = $this->gatewayManager->gateway()->refund($refund);
-        } catch (Throwable $e) {
-            $refund->update([
-                'status' => PaymentRefund::STATUS_FAILED,
-                'gateway_error_description' => $e->getMessage(),
-                'processed_at' => now(),
-            ]);
-
-            $booking->update([
-                'refund_status' => PaymentRefund::STATUS_FAILED,
-            ]);
-
-            return $refund;
-        }
-
-        $refundSucceeded = false;
-
-        DB::transaction(function () use (
-            $refund,
-            $transaction,
-            $booking,
-            $response,
-            &$refundSucceeded
-        ) {
-            if ($response['success'] ?? false) {
-                $refund->update([
-                    'status' => PaymentRefund::STATUS_SUCCEEDED,
-
-                    'gateway_refund_id' => $response['AzulOrderId'] ?? null,
-                    'gateway_response_code' => $response['ResponseCode'] ?? null,
-                    'gateway_iso_code' => $response['IsoCode'] ?? null,
-                    'gateway_response_message' => $response['ResponseMessage'] ?? null,
-                    'gateway_error_description' => $response['ErrorDescription'] ?? null,
-
-                    'raw_request' => $response['raw_request'] ?? null,
-                    'raw_response' => $response['raw_response'] ?? $response,
-
-                    'processed_at' => now(),
-                ]);
-
-                $transaction->update([
-                    'status' => $refund->refund_percent >= 100
-                        ? PaymentTransaction::STATUS_REFUNDED
-                        : PaymentTransaction::STATUS_PARTIALLY_REFUNDED,
-                ]);
-
-                $booking->update([
-                    'refund_status' => PaymentRefund::STATUS_SUCCEEDED,
-                    'refunded_at' => now(),
-                ]);
-
-                $refundSucceeded = true;
-
-                return;
-            }
-
-            $refund->update([
-                'status' => PaymentRefund::STATUS_FAILED,
-
-                'gateway_refund_id' => $response['AzulOrderId'] ?? null,
-                'gateway_response_code' => $response['ResponseCode'] ?? null,
-                'gateway_iso_code' => $response['IsoCode'] ?? null,
-                'gateway_response_message' => $response['ResponseMessage'] ?? null,
-                'gateway_error_description' => $response['ErrorDescription'] ?? null,
-
-                'raw_request' => $response['raw_request'] ?? null,
-                'raw_response' => $response['raw_response'] ?? $response,
-
-                'processed_at' => now(),
-            ]);
-
-            $booking->update([
-                'refund_status' => PaymentRefund::STATUS_FAILED,
-            ]);
-        });
-
-        $refund->refresh();
-
-        if ($refundSucceeded) {
-            $booking->refresh();
-            $booking->loadMissing('user');
-
-            if ($booking->user) {
-                $booking->user->notify(
-                    new RefundIssuedNotification($refund)
-                );
-            }
-        }
-
-        return $refund;
+        return $this->paymentRefundService->refundBooking(
+            booking: $booking,
+            transaction: $transaction,
+            refundPercent: $refundPercent,
+            reason: $reason,
+        );
     }
 }
