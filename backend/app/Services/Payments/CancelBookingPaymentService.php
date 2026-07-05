@@ -7,6 +7,7 @@ use App\Models\ProviderBooking;
 use App\Models\ProviderPayout;
 use Illuminate\Support\Facades\DB;
 use App\Notifications\Booking\BookingCancelledNotification;
+use App\Notifications\Booking\ScheduleCancelledNotification;
 use App\Services\PushNotificationService;
 
 class CancelBookingPaymentService
@@ -81,12 +82,29 @@ class CancelBookingPaymentService
 
         if ($shouldNotify) {
             $booking->refresh();
-            $booking->loadMissing('user');
+            $booking->loadMissing([
+                'user',
+                'experience',
+                'schedule',
+                'provider.user',
+            ]);
 
             if ($booking->user) {
-                $booking->user->notify(
-                    new BookingCancelledNotification($booking)
-                );
+                if (in_array($booking->cancelled_by, [
+                    ProviderBooking::CANCELLED_BY_PROVIDER,
+                    ProviderBooking::CANCELLED_BY_ADMIN,
+                ], true)) {
+                    $booking->user->notify(
+                        new ScheduleCancelledNotification(
+                            booking: $booking,
+                            cancelledBy: (string) $booking->cancelled_by
+                        )
+                    );
+                } else {
+                    $booking->user->notify(
+                        new BookingCancelledNotification($booking)
+                    );
+                }
             }
         }
 
