@@ -7,6 +7,7 @@ use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
 use App\Services\PushNotificationService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class PaymentRefundService
@@ -23,6 +24,49 @@ class PaymentRefundService
         float $refundPercent,
         string $reason
     ): PaymentRefund {
+        $existingRefund = PaymentRefund::query()
+            ->where('payment_transaction_id', $transaction->id)
+            ->where('provider_booking_id', $booking->id)
+            ->whereIn('status', [
+                PaymentRefund::STATUS_PENDING,
+                PaymentRefund::STATUS_PROCESSING,
+                PaymentRefund::STATUS_SUCCEEDED,
+            ])
+            ->latest()
+            ->first();
+
+        if ($existingRefund) {
+            Log::info('Existing payment refund reused to avoid duplicate refund.', [
+                'refund_id' => $existingRefund->id,
+                'booking_id' => $booking->id,
+                'payment_transaction_id' => $transaction->id,
+                'status' => $existingRefund->status,
+                'reason' => $reason,
+                'requested_refund_percent' => $refundPercent,
+            ]);
+
+            if ($existingRefund->status === PaymentRefund::STATUS_SUCCEEDED) {
+                $transaction->update([
+                    'status' => $existingRefund->refund_percent >= 100
+                        ? PaymentTransaction::STATUS_REFUNDED
+                        : PaymentTransaction::STATUS_PARTIALLY_REFUNDED,
+                ]);
+
+                $booking->update([
+                    'payment_status' => $existingRefund->refund_percent >= 100
+                        ? ProviderBooking::PAYMENT_STATUS_REFUNDED
+                        : ProviderBooking::PAYMENT_STATUS_PARTIALLY_REFUNDED,
+                    'refund_status' => $existingRefund->status,
+                    'refund_amount' => $existingRefund->amount,
+                    'refund_percentage' => (int) round((float) $existingRefund->refund_percent),
+                    'administrative_fee_amount' => $existingRefund->retained_amount,
+                    'refunded_at' => $existingRefund->processed_at ?? now(),
+                ]);
+            }
+
+            return $existingRefund;
+        }
+
         $amount = (float) $transaction->amount;
 
         $breakdown = match ((int) $refundPercent) {
@@ -71,10 +115,21 @@ class PaymentRefundService
                 'refund_status' => PaymentRefund::STATUS_FAILED,
             ]);
 
+            Log::warning('Payment refund failed and requires manual review.', [
+                'refund_id' => $refund->id,
+                'booking_id' => $booking->id,
+                'payment_transaction_id' => $transaction->id,
+                'amount' => $refund->amount,
+                'currency' => $refund->currency,
+                'reason' => $reason,
+                'exception_class' => get_class($e),
+                'exception_message' => $e->getMessage(),
+            ]);
+
             return $refund;
         }
 
-        return DB::transaction(function () use ($refund, $transaction, $booking, $response) {
+        return DB::transaction(function () use ($refund, $transaction, $booking, $response, $reason) {
             if ($response['success'] ?? false) {
                 $refund->update([
                     'status' => PaymentRefund::STATUS_SUCCEEDED,
@@ -98,7 +153,13 @@ class PaymentRefundService
                 ]);
 
                 $booking->update([
+                    'payment_status' => $refund->refund_percent >= 100
+                        ? ProviderBooking::PAYMENT_STATUS_REFUNDED
+                        : ProviderBooking::PAYMENT_STATUS_PARTIALLY_REFUNDED,
                     'refund_status' => $refund->status,
+                    'refund_amount' => $refund->amount,
+                    'refund_percentage' => (int) round((float) $refund->refund_percent),
+                    'administrative_fee_amount' => $refund->retained_amount,
                     'refunded_at' => now(),
                 ]);
 
@@ -150,6 +211,19 @@ class PaymentRefundService
 
             $booking->update([
                 'refund_status' => PaymentRefund::STATUS_FAILED,
+            ]);
+
+            Log::warning('Payment refund was rejected by gateway and requires manual review.', [
+                'refund_id' => $refund->id,
+                'booking_id' => $booking->id,
+                'payment_transaction_id' => $transaction->id,
+                'amount' => $refund->amount,
+                'currency' => $refund->currency,
+                'reason' => $reason,
+                'gateway_response_code' => $response['ResponseCode'] ?? null,
+                'gateway_iso_code' => $response['IsoCode'] ?? null,
+                'gateway_response_message' => $response['ResponseMessage'] ?? null,
+                'gateway_error_description' => $response['ErrorDescription'] ?? null,
             ]);
 
             return $refund;

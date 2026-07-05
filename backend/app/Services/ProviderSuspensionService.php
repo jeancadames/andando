@@ -6,8 +6,9 @@ use App\Models\Provider;
 use App\Models\ProviderBooking;
 use App\Models\ProviderExperience;
 use App\Models\ProviderExperienceSchedule;
+use App\Services\Payments\BookingCancellationDecisionService;
+use App\Services\Payments\CancelBookingPaymentService;
 use Illuminate\Support\Facades\DB;
-use App\Services\PushNotificationService;
 
 /**
  * Centraliza la cancelación en cascada cuando se suspende un afiliado
@@ -22,15 +23,16 @@ use App\Services\PushNotificationService;
  */
 class ProviderSuspensionService
 {
-
     public function __construct(
         private readonly PushNotificationService $pushNotificationService,
+        private readonly CancelBookingPaymentService $cancelBookingPaymentService,
     ) {}
+
     /**
      * Cancela TODA la operación de un proveedor (al suspender la cuenta):
      *  - experiencias                -> rejected + is_active = false
+     *  - bookings pending|confirmed  -> cancelled + refund 100% si estaban pagadas
      *  - schedules active|paused     -> cancelled
-     *  - bookings pending|confirmed  -> cancelled
      *
      * No toca schedules/bookings completed (ya ocurrieron).
      */
@@ -40,13 +42,9 @@ class ProviderSuspensionService
         ProviderExperience::where('provider_id', $provider->id)
             ->update(['status' => 'rejected', 'is_active' => false]);
 
-        // Salidas/horarios disponibles o pausados -> cancelados y ocultos.
-        // Se marca deleted_at (soft delete) para que el afiliado no las vea.
-        ProviderExperienceSchedule::where('provider_id', $provider->id)
-            ->whereIn('status', ['active', 'paused'])
-            ->update(['status' => 'cancelled', 'deleted_at' => now()]);
-
-        // Reservas pendientes o confirmadas -> canceladas.
+        // Reservas pendientes o confirmadas -> canceladas usando el flujo financiero.
+        // IMPORTANTE: esto debe ocurrir antes de soft-deletear schedules para que
+        // CancelBookingPaymentService pueda acceder a $booking->schedule.
         $bookings = ProviderBooking::query()
             ->with([
                 'user',
@@ -54,17 +52,25 @@ class ProviderSuspensionService
                 'schedule',
             ])
             ->where('provider_id', $provider->id)
-            ->whereIn('status', ['pending', 'confirmed'])
+            ->whereIn('status', [
+                ProviderBooking::STATUS_PENDING,
+                ProviderBooking::STATUS_CONFIRMED,
+            ])
             ->get();
 
         if ($bookings->isNotEmpty()) {
-            ProviderBooking::whereIn('id', $bookings->pluck('id'))
-                ->update([
-                    'status' => 'cancelled',
-                    'cancelled_by' => ProviderBooking::CANCELLED_BY_ADMIN,
+            foreach ($bookings as $booking) {
+                $this->cancelBookingPaymentService->cancel(
+                    booking: $booking,
+                    reason: BookingCancellationDecisionService::REASON_ADMIN,
+                    cancelledBy: ProviderBooking::CANCELLED_BY_ADMIN,
+                );
+
+                // Conservamos una razón operativa más específica para auditoría.
+                $booking->forceFill([
                     'cancellation_reason' => 'provider_suspended_by_admin',
-                    'cancelled_at' => now(),
-                ]);
+                ])->save();
+            }
 
             DB::afterCommit(function () use ($bookings): void {
                 foreach ($bookings as $booking) {
@@ -93,23 +99,27 @@ class ProviderSuspensionService
                 }
             });
         }
+
+        // Salidas/horarios disponibles o pausados -> cancelados y ocultos.
+        // Se hace después de cancelar bookings para no romper relaciones usadas por pagos/payouts.
+        ProviderExperienceSchedule::where('provider_id', $provider->id)
+            ->whereIn('status', ['active', 'paused'])
+            ->update(['status' => 'cancelled', 'deleted_at' => now()]);
     }
 
     /**
      * Cancela una experiencia concreta y su operación asociada
      * (al rechazar/cancelar la experiencia desde el panel):
      *  - la experiencia              -> rejected + is_active = false
-     *  - sus schedules active|paused -> cancelled
-     *  - sus bookings pending|confirmed -> cancelled
+     *  - bookings pending|confirmed  -> cancelled + refund 100% si estaban pagadas
+     *  - schedules active|paused     -> cancelled
      */
     public function cancelExperienceOperations(ProviderExperience $experience): void
     {
         $experience->update(['status' => 'rejected', 'is_active' => false]);
 
-        ProviderExperienceSchedule::where('provider_experience_id', $experience->id)
-            ->whereIn('status', ['active', 'paused'])
-            ->update(['status' => 'cancelled', 'deleted_at' => now()]);
-
+        // Reservas pendientes o confirmadas -> canceladas usando el flujo financiero.
+        // IMPORTANTE: esto debe ocurrir antes de soft-deletear schedules.
         $bookings = ProviderBooking::query()
             ->with([
                 'user',
@@ -117,17 +127,25 @@ class ProviderSuspensionService
                 'schedule',
             ])
             ->where('provider_experience_id', $experience->id)
-            ->whereIn('status', ['pending', 'confirmed'])
+            ->whereIn('status', [
+                ProviderBooking::STATUS_PENDING,
+                ProviderBooking::STATUS_CONFIRMED,
+            ])
             ->get();
 
         if ($bookings->isNotEmpty()) {
-            ProviderBooking::whereIn('id', $bookings->pluck('id'))
-                ->update([
-                    'status' => 'cancelled',
-                    'cancelled_by' => ProviderBooking::CANCELLED_BY_ADMIN,
+            foreach ($bookings as $booking) {
+                $this->cancelBookingPaymentService->cancel(
+                    booking: $booking,
+                    reason: BookingCancellationDecisionService::REASON_ADMIN,
+                    cancelledBy: ProviderBooking::CANCELLED_BY_ADMIN,
+                );
+
+                // Conservamos una razón operativa más específica para auditoría.
+                $booking->forceFill([
                     'cancellation_reason' => 'experience_rejected_by_admin',
-                    'cancelled_at' => now(),
-                ]);
+                ])->save();
+            }
 
             DB::afterCommit(function () use ($bookings, $experience): void {
                 foreach ($bookings as $booking) {
@@ -157,6 +175,10 @@ class ProviderSuspensionService
                 }
             });
         }
+
+        ProviderExperienceSchedule::where('provider_experience_id', $experience->id)
+            ->whereIn('status', ['active', 'paused'])
+            ->update(['status' => 'cancelled', 'deleted_at' => now()]);
     }
 
     /**
