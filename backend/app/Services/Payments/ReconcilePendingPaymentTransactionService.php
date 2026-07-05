@@ -2,96 +2,151 @@
 
 namespace App\Services\Payments;
 
+use App\Models\PaymentRefund;
 use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
-use App\Services\Payments\Azul\AzulClient;
+use App\Notifications\Payment\RefundIssuedNotification;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
-class ReconcilePendingPaymentTransactionService
+class PaymentRefundService
 {
     public function __construct(
         private readonly PaymentGatewayManager $gatewayManager,
-        private readonly ProviderPayoutService $providerPayoutService,
-        private readonly AzulClient $azulClient,
+        private readonly PaymentCalculator $calculator,
     ) {}
 
-    public function reconcile(PaymentTransaction $transaction): void
-    {
-        if ($transaction->status !== PaymentTransaction::STATUS_PENDING_VERIFICATION) {
-            return;
-        }
+    public function refundBooking(
+        ProviderBooking $booking,
+        PaymentTransaction $transaction,
+        float $refundPercent,
+        string $reason
+    ): PaymentRefund {
+        $amount = (float) $transaction->amount;
 
-        try {
-            $response = $this->gatewayManager->gateway()->verify($transaction);
-        } catch (Throwable $e) {
-            $transaction->update([
-                'gateway_error_description' => 'verification_failed_retry_required',
-                'failure_reason' => 'pending_verification_retry_required',
+        $breakdown = match ((int) $refundPercent) {
+            100 => $this->calculator->calculateFullRefund($amount),
+            0 => $this->calculator->calculateNoRefund($amount),
+            default => $this->calculator->calculateCustomerPolicyRefund($amount),
+        };
+
+        $refund = PaymentRefund::create([
+            'payment_transaction_id' => $transaction->id,
+            'provider_booking_id' => $booking->id,
+            'user_id' => $booking->user_id,
+            'gateway' => config('payments.gateway', 'fake_azul'),
+            'environment' => config('payments.environment', 'test'),
+            'status' => PaymentRefund::STATUS_PENDING,
+            'reason' => $reason,
+            'amount' => $breakdown['refund_amount'],
+            'currency' => $transaction->currency,
+            'refund_percent' => $breakdown['refund_percent'],
+            'retained_amount' => $breakdown['retained_amount'],
+        ]);
+
+        if ($refund->amount <= 0) {
+            $refund->update([
+                'status' => PaymentRefund::STATUS_SUCCEEDED,
+                'processed_at' => now(),
             ]);
 
-            return;
+            return $refund;
         }
 
-        $safeResponse = $this->azulClient->sanitizeForStorage($response);
+        $refund->update([
+            'status' => PaymentRefund::STATUS_PROCESSING,
+        ]);
 
-        DB::transaction(function () use ($transaction, $response, $safeResponse) {
-            $transaction->refresh();
+        try {
+            $response = $this->gatewayManager->gateway()->refund($refund);
+        } catch (Throwable $e) {
+            $refund->update([
+                'status' => PaymentRefund::STATUS_FAILED,
+                'gateway_error_description' => $e->getMessage(),
+                'processed_at' => now(),
+            ]);
 
-            if (($response['Found'] ?? false) === true
-                && ($response['ResponseCode'] ?? null) === 'ISO8583'
-                && ($response['IsoCode'] ?? null) === '00'
-            ) {
-                $transaction->update([
-                    'status' => PaymentTransaction::STATUS_PAID,
+            $booking->update([
+                'refund_status' => PaymentRefund::STATUS_FAILED,
+            ]);
+
+            return $refund;
+        }
+
+        $refundSucceeded = false;
+
+        DB::transaction(function () use (
+            $refund,
+            $transaction,
+            $booking,
+            $response,
+            &$refundSucceeded
+        ) {
+            if ($response['success'] ?? false) {
+                $refund->update([
+                    'status' => PaymentRefund::STATUS_SUCCEEDED,
+
+                    'gateway_refund_id' => $response['AzulOrderId'] ?? null,
+                    'gateway_response_code' => $response['ResponseCode'] ?? null,
+                    'gateway_iso_code' => $response['IsoCode'] ?? null,
+                    'gateway_response_message' => $response['ResponseMessage'] ?? null,
+                    'gateway_error_description' => $response['ErrorDescription'] ?? null,
+
+                    'raw_request' => $response['raw_request'] ?? null,
+                    'raw_response' => $response['raw_response'] ?? $response,
+
                     'processed_at' => now(),
-
-                    'gateway_order_id' => $response['AzulOrderId'] ?? null,
-                    'gateway_authorization_code' => $response['AuthorizationCode'] ?? null,
-                    'gateway_rrn' => $response['RRN'] ?? null,
-                    'gateway_response_code' => $response['ResponseCode'] ?? null,
-                    'gateway_iso_code' => $response['IsoCode'] ?? null,
-                    'gateway_response_message' => $response['ResponseMessage'] ?? null,
-                    'gateway_error_description' => null,
-
-                    'raw_response' => $safeResponse,
-                    'failure_reason' => null,
                 ]);
 
-                $transaction->booking->update([
-                    'status' => ProviderBooking::STATUS_CONFIRMED,
-                    'payment_status' => ProviderBooking::PAYMENT_STATUS_PAID,
-                    'charged_at' => now(),
-                ]);
-
-                $this->providerPayoutService->ensurePayoutForSchedule(
-                    $transaction->schedule
-                );
-
-                return;
-            }
-
-            if (($response['Found'] ?? false) === false) {
                 $transaction->update([
-                    'gateway_response_code' => $response['ResponseCode'] ?? null,
-                    'gateway_iso_code' => $response['IsoCode'] ?? null,
-                    'gateway_response_message' => $response['ResponseMessage'] ?? null,
-                    'gateway_error_description' => 'payment_not_found_during_verification',
-                    'raw_response' => $safeResponse,
-                    'failure_reason' => 'still_pending_verification',
+                    'status' => $refund->refund_percent >= 100
+                        ? PaymentTransaction::STATUS_REFUNDED
+                        : PaymentTransaction::STATUS_PARTIALLY_REFUNDED,
                 ]);
+
+                $booking->update([
+                    'refund_status' => PaymentRefund::STATUS_SUCCEEDED,
+                    'refunded_at' => now(),
+                ]);
+
+                $refundSucceeded = true;
 
                 return;
             }
 
-            $transaction->update([
+            $refund->update([
+                'status' => PaymentRefund::STATUS_FAILED,
+
+                'gateway_refund_id' => $response['AzulOrderId'] ?? null,
                 'gateway_response_code' => $response['ResponseCode'] ?? null,
                 'gateway_iso_code' => $response['IsoCode'] ?? null,
                 'gateway_response_message' => $response['ResponseMessage'] ?? null,
-                'gateway_error_description' => $response['ErrorDescription'] ?? 'verification_not_approved',
-                'raw_response' => $safeResponse,
-                'failure_reason' => 'verification_not_approved',
+                'gateway_error_description' => $response['ErrorDescription'] ?? null,
+
+                'raw_request' => $response['raw_request'] ?? null,
+                'raw_response' => $response['raw_response'] ?? $response,
+
+                'processed_at' => now(),
+            ]);
+
+            $booking->update([
+                'refund_status' => PaymentRefund::STATUS_FAILED,
             ]);
         });
+
+        $refund->refresh();
+
+        if ($refundSucceeded) {
+            $booking->refresh();
+            $booking->loadMissing('user');
+
+            if ($booking->user) {
+                $booking->user->notify(
+                    new RefundIssuedNotification($refund)
+                );
+            }
+        }
+
+        return $refund;
     }
 }

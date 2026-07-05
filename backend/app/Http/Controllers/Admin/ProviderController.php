@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Provider;
+use App\Notifications\Provider\ProviderBlockedNotification;
 use App\Services\ProviderSuspensionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,15 @@ class ProviderController extends Controller
             // Cierra su sesión en la app: invalida todos sus tokens de acceso.
             $provider->user?->tokens()->delete();
         });
+
+        $provider->refresh();
+        $provider->loadMissing('user');
+
+        if ($provider->user) {
+            $provider->user->notify(
+                new ProviderBlockedNotification($provider)
+            );
+        }
 
         return back()->with(
             'success',

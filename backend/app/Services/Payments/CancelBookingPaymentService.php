@@ -6,6 +6,7 @@ use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
 use App\Models\ProviderPayout;
 use Illuminate\Support\Facades\DB;
+use App\Notifications\Booking\BookingCancelledNotification;
 
 class CancelBookingPaymentService
 {
@@ -17,7 +18,9 @@ class CancelBookingPaymentService
 
     public function cancel(ProviderBooking $booking, string $reason, string $cancelledBy): void
     {
-        DB::transaction(function () use ($booking, $reason, $cancelledBy) {
+        $shouldNotify = false;
+
+        DB::transaction(function () use ($booking, $reason, $cancelledBy, &$shouldNotify) {
             $decision = $this->decisionService->decide($booking, $reason);
 
             $paidTransaction = $booking->paymentTransactions()
@@ -60,6 +63,19 @@ class CancelBookingPaymentService
                     reason: (string) $decision['refund_reason'],
                 );
             }
+
+            $shouldNotify = true;
         });
+
+        if ($shouldNotify) {
+            $booking->refresh();
+            $booking->loadMissing('user');
+
+            if ($booking->user) {
+                $booking->user->notify(
+                    new BookingCancelledNotification($booking)
+                );
+            }
+        }
     }
 }

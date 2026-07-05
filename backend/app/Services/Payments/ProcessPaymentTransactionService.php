@@ -4,6 +4,8 @@ namespace App\Services\Payments;
 
 use App\Models\PaymentTransaction;
 use App\Models\ProviderBooking;
+use App\Notifications\Payment\PaymentConfirmedNotification;
+use App\Notifications\Payment\PaymentFailedNotification;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -16,6 +18,9 @@ class ProcessPaymentTransactionService
 
     public function process(PaymentTransaction $transaction): void
     {
+        $paymentConfirmed = false;
+        $paymentFailed = false;
+
         if (! $transaction->isScheduled()) {
             return;
         }
@@ -29,7 +34,12 @@ class ProcessPaymentTransactionService
         try {
             $response = $this->gatewayManager->gateway()->charge($transaction);
 
-            DB::transaction(function () use ($transaction, $response) {
+            DB::transaction(function () use (
+                $transaction,
+                $response,
+                &$paymentConfirmed,
+                &$paymentFailed
+            ) {
                 $transaction->refresh();
 
                 if ($response['success'] ?? false) {
@@ -58,6 +68,8 @@ class ProcessPaymentTransactionService
                     $this->providerPayoutService->ensurePayoutForSchedule(
                         $transaction->schedule
                     );
+
+                    $paymentConfirmed = true;
 
                     return;
                 }
@@ -89,9 +101,11 @@ class ProcessPaymentTransactionService
                     'cancellation_reason' => 'payment_failed',
                     'cancelled_at' => now(),
                 ]);
+
+                $paymentFailed = true;
             });
         } catch (Throwable $e) {
-            DB::transaction(function () use ($transaction, $e) {
+            DB::transaction(function () use ($transaction) {
                 $transaction->refresh();
 
                 $transaction->update([
@@ -104,6 +118,23 @@ class ProcessPaymentTransactionService
                     'payment_status' => ProviderBooking::PAYMENT_STATUS_PENDING_VERIFICATION,
                 ]);
             });
+
+            return;
+        }
+
+        $transaction->refresh();
+        $transaction->loadMissing('booking.user');
+
+        if ($paymentConfirmed && $transaction->booking?->user) {
+            $transaction->booking->user->notify(
+                new PaymentConfirmedNotification($transaction)
+            );
+        }
+
+        if ($paymentFailed && $transaction->booking?->user) {
+            $transaction->booking->user->notify(
+                new PaymentFailedNotification($transaction)
+            );
         }
     }
 }

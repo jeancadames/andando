@@ -22,14 +22,22 @@ class ClaimUpdatedNotification extends Notification
     {
         $this->claim->loadMissing(['booking.experience', 'booking.schedule']);
 
-        $subject = $this->claim->status === 'resolved'
-            ? 'Tu reclamo fue resuelto'
-            : 'Tu reclamo fue actualizado';
+        $subject = match ($this->claim->status) {
+            'resolved' => 'Tu reclamo fue resuelto',
+            'rejected' => 'Tu reclamo fue rechazado',
+            default => 'Tu reclamo fue actualizado',
+        };
+
+        $title = match ($this->claim->status) {
+            'resolved' => 'Reclamo resuelto',
+            'rejected' => 'Reclamo rechazado',
+            default => 'Reclamo actualizado',
+        };
 
         return (new MailMessage)
             ->subject($subject)
             ->view('emails.claim.claim-updated', [
-                'title' => 'Reclamo actualizado',
+                'title' => $title,
                 'user' => $notifiable,
                 'claim' => $this->claim,
                 'booking' => $this->claim->booking,

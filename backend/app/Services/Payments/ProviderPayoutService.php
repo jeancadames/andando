@@ -5,6 +5,7 @@ namespace App\Services\Payments;
 use App\Models\PaymentTransaction;
 use App\Models\ProviderExperienceSchedule;
 use App\Models\ProviderPayout;
+use App\Notifications\Payment\CommissionPaidNotification;
 
 class ProviderPayoutService
 {
@@ -49,6 +50,10 @@ class ProviderPayoutService
 
     public function markPaid(ProviderPayout $payout, ?string $externalReference = null): void
     {
+        if ($payout->isPaid()) {
+            return;
+        }
+
         $totals = $this->calculateCurrentTotals($payout);
 
         $payout->update([
@@ -60,6 +65,15 @@ class ProviderPayoutService
             'released_at' => now(),
             'external_reference' => $externalReference,
         ]);
+
+        $payout->refresh();
+        $payout->loadMissing('provider.user');
+
+        if ($payout->provider?->user) {
+            $payout->provider->user->notify(
+                new CommissionPaidNotification($payout)
+            );
+        }
     }
 
     public function calculateCurrentTotals(ProviderPayout $payout): array
