@@ -40,16 +40,6 @@ class User extends Authenticatable
         'type',
         'phone',
 
-        // Perfil del cliente
-        'avatar_path',
-        'birth_date',
-        'gender',
-        'nationality',
-        'residence_city',
-        'preferred_currency',
-        'language',
-        'country',
-
         //firebase google auth
         'firebase_uid',
         'avatar_url',
@@ -71,7 +61,6 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'birth_date' => 'date',
         ];
     }
 

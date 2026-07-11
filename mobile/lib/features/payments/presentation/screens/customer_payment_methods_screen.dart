@@ -59,7 +59,7 @@ class _CustomerPaymentMethodsScreenState
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
-        return _AddCardSheet(
+        return AddCardSheet(
           onSubmit:
               ({
                 required type,
@@ -1449,8 +1449,14 @@ BoxDecoration _cardDecoration(List<Color> colors) {
   );
 }
 
-class _AddCardSheet extends StatefulWidget {
-  const _AddCardSheet({required this.onSubmit});
+class AddCardSheet extends StatefulWidget {
+  const AddCardSheet({
+    super.key,
+    required this.onSubmit,
+    this.isBookingFlow = false,
+  });
+
+  final bool isBookingFlow;
 
   final Future<bool> Function({
     required String type,
@@ -1463,10 +1469,10 @@ class _AddCardSheet extends StatefulWidget {
   onSubmit;
 
   @override
-  State<_AddCardSheet> createState() => _AddCardSheetState();
+  State<AddCardSheet> createState() => _AddCardSheetState();
 }
 
-class _AddCardSheetState extends State<_AddCardSheet> {
+class _AddCardSheetState extends State<AddCardSheet> {
   final _formKey = GlobalKey<FormState>();
 
   final _numberController = TextEditingController();
@@ -1612,6 +1618,67 @@ class _AddCardSheetState extends State<_AddCardSheet> {
                     ],
                   ),
                   const SizedBox(height: 18),
+
+                  if (widget.isBookingFlow) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F7FF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFD5E7FA),
+                        ),
+                      ),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.credit_card_rounded,
+                                color: Color(0xFF003B73),
+                                size: 22,
+                              ),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Agrega una tarjeta para continuar con tu reserva',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 10),
+                          Text(
+                            'Crearemos un token seguro para que puedas utilizar esta tarjeta en futuras transacciones. AndanDO no almacena el número completo de tu tarjeta ni el CVV.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Puedes consultar y administrar esta tarjeta desde Perfil → Configuraciones → Métodos de pago.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF003B73),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+
                   Row(
                     children: [
                       Expanded(

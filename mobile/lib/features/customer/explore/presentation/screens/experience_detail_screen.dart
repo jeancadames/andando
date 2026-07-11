@@ -10,6 +10,8 @@ import '../../../booking/data/datasources/customer_booking_remote_datasource.dar
 import '../../../../../core/router/route_names.dart';
 import '../../../../auth/application/auth_controller.dart';
 import '../../../chat/data/services/customer_chat_service.dart';
+import '../../../../payments/presentation/controllers/customer_payment_methods_controller.dart';
+import '../../../../payments/presentation/screens/customer_payment_methods_screen.dart';
 
 class ExperienceDetailScreen extends StatefulWidget {
   final CustomerExperienceModel experience;
@@ -50,6 +52,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
   late final TextEditingController _travelersController;
   late final CustomerBookingRemoteDataSource _bookingDataSource;
+  late final CustomerPaymentMethodsController _paymentMethodsController;
 
   final CustomerChatService _chatService = CustomerChatService();
 
@@ -273,6 +276,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
     _travelersController = TextEditingController(text: travelers.toString());
     _bookingDataSource = CustomerBookingRemoteDataSource();
+    _paymentMethodsController = CustomerPaymentMethodsController();
 
     _restorePendingBookingSelection();
 
@@ -287,6 +291,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   @override
   void dispose() {
     _travelersController.dispose();
+    _paymentMethodsController.dispose();
     super.dispose();
   }
 
@@ -499,7 +504,141 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   });
 }
 
-Future<void> _reserveExperience() async {
+Future<bool> _openAddCardForBooking() async {
+  _paymentMethodsController.errorMessage = null;
+
+  final added = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return AddCardSheet(
+        isBookingFlow: true,
+        onSubmit:
+            ({
+              required type,
+              required cardNumber,
+              required holderName,
+              required expiryMonth,
+              required expiryYear,
+              required cvv,
+            }) {
+              return _paymentMethodsController.createPaymentMethod(
+                type: type,
+                cardNumber: cardNumber,
+                holderName: holderName,
+                expiryMonth: expiryMonth,
+                expiryYear: expiryYear,
+                cvv: cvv,
+              );
+            },
+      );
+    },
+  );
+
+  if (!mounted) return false;
+
+  if (added == true) {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          icon: const CircleAvatar(
+            radius: 30,
+            backgroundColor: Color(0xFFE8F8EE),
+            child: Icon(
+              Icons.check_rounded,
+              color: Color(0xFF16A34A),
+              size: 36,
+            ),
+          ),
+          title: const Text(
+            'Tarjeta registrada',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          content: const Text(
+            'Tu tarjeta fue registrada exitosamente. Ahora continuaremos automáticamente con tu reserva.',
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Continuar'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return true;
+  }
+
+  final errorMessage = _paymentMethodsController.errorMessage;
+
+  if (errorMessage != null && errorMessage.trim().isNotEmpty) {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          icon: const CircleAvatar(
+            radius: 30,
+            backgroundColor: Color(0xFFFEECEC),
+            child: Icon(
+              Icons.close_rounded,
+              color: Color(0xFFDC2626),
+              size: 36,
+            ),
+          ),
+          title: const Text(
+            'No pudimos registrar la tarjeta',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          content: Text(
+            errorMessage.replaceFirst('Exception: ', ''),
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Intentar nuevamente'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  return false;
+}
+
+Future<void> _reserveExperience({
+    bool skipReview = false,
+  }) async {
   if (!canReserve || selectedSchedule == null) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -524,24 +663,26 @@ Future<void> _reserveExperience() async {
     return;
   }
 
-  final shouldConfirm = await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) {
-      return _BookingReviewDialog(
-        experienceTitle: widget.experience.title,
-        date: selectedSchedule!.formattedDate,
-        travelers: travelers,
-        duration: widget.experience.displayDuration,
-        unitPrice: formattedUnitPrice,
-        totalPrice: formattedTotal,
-        includedItems: widget.experience.displayAmenities,
-        cancellationPolicy: widget.experience.cancellationPolicy,
-      );
-    },
-  );
+  if (!skipReview) {
+    final shouldConfirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return _BookingReviewDialog(
+          experienceTitle: widget.experience.title,
+          date: selectedSchedule!.formattedDate,
+          travelers: travelers,
+          duration: widget.experience.displayDuration,
+          unitPrice: formattedUnitPrice,
+          totalPrice: formattedTotal,
+          includedItems: widget.experience.displayAmenities,
+          cancellationPolicy: widget.experience.cancellationPolicy,
+        );
+      },
+    );
 
-  if (shouldConfirm != true) return;
+    if (shouldConfirm != true) return;
+  }
 
   setState(() {
     isReserving = true;
@@ -583,91 +724,15 @@ Future<void> _reserveExperience() async {
     if (!mounted) return;
 
     if (error.code == 'CARD_REQUIRED') {
-      final goToPaymentMethods = await showDialog<bool>(
-        context: context,
-        barrierDismissible: true,
-        builder: (dialogContext) {
-          return Dialog(
-            backgroundColor: Colors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 22),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 68,
-                    height: 68,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEFF6FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.credit_card_rounded,
-                      size: 34,
-                      color: Color(0xFF003B73),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Agrega una tarjeta',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 23,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    error.message,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.45,
-                      color: Color(0xFF64748B),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton.icon(
-                      onPressed: () =>
-                          Navigator.of(dialogContext).pop(true),
-                      icon: const Icon(Icons.add_card_rounded),
-                      label: const Text('Agregar método de pago'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF003B73),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.of(dialogContext).pop(false),
-                    child: const Text('Cancelar'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
+      final cardCreated = await _openAddCardForBooking();
 
-      if (goToPaymentMethods == true && mounted) {
-        context.pushNamed('customerPaymentMethods');
-      }
+      if (!mounted || !cardCreated) return;
 
+      setState(() {
+        isReserving = false;
+      });
+
+      await _reserveExperience(skipReview: true);
       return;
     }
 
@@ -692,6 +757,8 @@ Future<void> _reserveExperience() async {
     });
   }
 }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -2486,6 +2553,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
               _CancellationPolicyCard(
                 policy: widget.cancellationPolicy,
               ),
+              const SizedBox(height: 15),
               const _PolicyItem(
                 icon: Icons.credit_card_rounded,
                 iconColor: Color(0xFF003B73),

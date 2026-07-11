@@ -30,6 +30,7 @@ class ClientProfileController extends Controller
     public function show(Request $request): JsonResponse
     {
         $user = $request->user();
+        $user->load('clientProfile');
 
         $toursCount = ProviderBooking::query()
             ->where('user_id', $user->id)
@@ -105,19 +106,29 @@ class ClientProfileController extends Controller
         $user->update([
             'name' => $validated['name'],
             'phone' => $validated['phone'] ?? null,
-            'birth_date' => $validated['birth_date'] ?? null,
-            'gender' => $validated['gender'] ?? null,
-            'nationality' => $validated['nationality'] ?? null,
-            'residence_city' => $validated['residence_city'] ?? null,
-            'preferred_currency' => $validated['preferred_currency'] ?? 'DOP',
-            'language' => $validated['language'] ?? 'es',
-            'country' => $validated['country'] ?? null,
         ]);
+
+        $user->clientProfile()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+            ],
+            [
+                'birth_date' => $validated['birth_date'] ?? null,
+                'gender' => $validated['gender'] ?? null,
+                'nationality' => $validated['nationality'] ?? null,
+                'residence_city' => $validated['residence_city'] ?? null,
+                'preferred_currency' => $validated['preferred_currency'] ?? 'DOP',
+                'language' => $validated['language'] ?? 'es',
+                'country' => $validated['country'] ?? null,
+            ]
+        );
 
         return response()->json([
             'message' => 'Perfil actualizado correctamente.',
             'data' => [
-                'user' => $this->formatUser($user->fresh()),
+                'user' => $this->formatUser(
+                    $user->fresh()->load('clientProfile')
+                ),
             ],
         ]);
     }
@@ -133,8 +144,12 @@ class ClientProfileController extends Controller
             'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
-        if ($user->avatar_path && Storage::disk('public')->exists($user->avatar_path)) {
-            Storage::disk('public')->delete($user->avatar_path);
+        $profile = $user->clientProfile()->firstOrCreate([
+            'user_id' => $user->id,
+        ]);
+
+        if ($profile->avatar_path && Storage::disk('public')->exists($profile->avatar_path)) {
+            Storage::disk('public')->delete($profile->avatar_path);
         }
 
         $path = $validated['avatar']->store(
@@ -142,14 +157,16 @@ class ClientProfileController extends Controller
             'public'
         );
 
-        $user->update([
+        $profile->update([
             'avatar_path' => $path,
         ]);
 
         return response()->json([
             'message' => 'Foto de perfil actualizada correctamente.',
             'data' => [
-                'user' => $this->formatUser($user->fresh()),
+                'user' => $this->formatUser(
+                    $user->fresh()->load('clientProfile')
+                ),
             ],
         ]);
     }
@@ -171,25 +188,27 @@ class ClientProfileController extends Controller
      */
     private function formatUser($user): array
     {
+        $profile = $user->clientProfile;
+
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'phone' => $user->phone,
             'type' => $user->type,
-            'avatar_path' => $user->avatar_path,
-            'avatar_url' => $user->avatar_path
-                ? url('/api/public-files/' . $user->avatar_path)
+            'avatar_path' => $profile?->avatar_path,
+            'avatar_url' => $profile?->avatar_path
+                ? url('/api/public-files/' . $profile->avatar_path)
+                : $user->avatar_url,
+            'birth_date' => $profile?->birth_date
+                ? $profile->birth_date->format('Y-m-d')
                 : null,
-            'birth_date' => $user->birth_date
-                ? $user->birth_date->format('Y-m-d')
-                : null,
-            'gender' => $user->gender,
-            'nationality' => $user->nationality,
-            'residence_city' => $user->residence_city,
-            'preferred_currency' => $user->preferred_currency,
-            'language' => $user->language,
-            'country' => $user->country,
+            'gender' => $profile?->gender,
+            'nationality' => $profile?->nationality,
+            'residence_city' => $profile?->residence_city,
+            'preferred_currency' => $profile?->preferred_currency ?? 'DOP',
+            'language' => $profile?->language ?? 'es',
+            'country' => $profile?->country,
             'created_at' => $user->created_at?->toISOString(),
         ];
     }
