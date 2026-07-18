@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\NotificationPreferenceController;
+use App\Http\Controllers\Api\LegalDocumentController;
+use App\Http\Controllers\Api\LegalAcceptanceController;
 
 use App\Http\Controllers\Api\Auth\PasswordResetController;
 
@@ -135,6 +137,20 @@ Route::get('/public-files/{path}', function (string $path) {
         }
     }, 200, $headers);
 })->where('path', '.*');
+
+
+/*
+|--------------------------------------------------------------------------
+| Documentos legales públicos
+|--------------------------------------------------------------------------
+*/
+Route::prefix('legal')->group(function () {
+    Route::get('/documents', [LegalDocumentController::class, 'index']);
+    Route::get('/documents/{type}', [LegalDocumentController::class, 'show'])
+        ->where('type', '[a-z0-9_]+');
+});
+
+
 /*
 |--------------------------------------------------------------------------
 | Autenticación general
@@ -148,6 +164,12 @@ Route::post('/auth/google', GoogleAuthController::class);
 Route::post('/auth/apple', AppleAuthController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
+
+   Route::post(
+        '/legal/acceptances',
+        [LegalAcceptanceController::class, 'store']
+    )->middleware('throttle:20,1');    
+
     Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
     Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy']);
 

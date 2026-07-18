@@ -101,6 +101,14 @@ class ProviderExperienceSchedule extends Model
         );
     }
 
+    public function legalAcceptances(): HasMany
+    {
+        return $this->hasMany(
+            LegalAcceptance::class,
+            'schedule_id'
+        );
+    }
+
     public function providerPayout(): HasOne
     {
         return $this->hasOne(

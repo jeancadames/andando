@@ -165,6 +165,14 @@ class ProviderExperience extends Model
         );
     }
 
+    public function legalAcceptances(): HasMany
+    {
+        return $this->hasMany(
+            LegalAcceptance::class,
+            'experience_id'
+        );
+    }
+
     /**
      * Puntos de recogida geolocalizados para mostrar en mapa.
      *

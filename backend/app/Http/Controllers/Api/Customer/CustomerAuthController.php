@@ -2,83 +2,97 @@
 
 namespace App\Http\Controllers\Api\Customer;
 
-use App\Notifications\Auth\WelcomeCustomerNotification;
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\CustomerRegisterRequest;
+use App\Models\LegalDocument;
 use App\Models\User;
+use App\Notifications\Auth\WelcomeCustomerNotification;
+use App\Services\Legal\LegalAcceptanceService;
+use App\Services\Legal\LegalDocumentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
-/**
- * Class CustomerAuthController
- *
- * Este controlador maneja la autenticación de clientes.
- *
- * RESPONSABILIDADES:
- * - Recibir la request validada
- * - Ejecutar lógica de negocio
- * - Crear usuario
- * - Generar token
- * - Responder JSON
- *
- * IMPORTANTE:
- * No valida datos (eso lo hace el Request)
- */
 class CustomerAuthController extends Controller
 {
-    /**
-     * Registrar un nuevo cliente
-     *
-     * Flujo:
-     * 1. Recibe datos validados
-     * 2. Inicia transacción
-     * 3. Crea usuario
-     * 4. Genera token Sanctum
-     * 5. Devuelve respuesta
-     */
-    public function register(CustomerRegisterRequest $request): JsonResponse
-    {
-        // Datos ya validados por el Request
+    public function __construct(
+        private readonly LegalDocumentService $legalDocumentService,
+        private readonly LegalAcceptanceService $legalAcceptanceService
+    ) {
+    }
+
+    public function register(
+        CustomerRegisterRequest $request
+    ): JsonResponse {
         $validated = $request->validated();
 
-        /**
-         * DB::transaction asegura que:
-         * - Si algo falla, TODO se revierte
-         * - No quedan datos inconsistentes
-         */
-        $result = DB::transaction(function () use ($validated) {
+        $termsDocument = $this->validateCurrentDocument(
+            field: 'terms_document_id',
+            expectedType: 'terms_user',
+            documentId: $validated['terms_document_id'],
+            checksum: $validated['terms_checksum']
+        );
 
-            /**
-             * Crear usuario en base de datos
-             */
+        $privacyDocument = $this->validateCurrentDocument(
+            field: 'privacy_document_id',
+            expectedType: 'privacy',
+            documentId: $validated['privacy_document_id'],
+            checksum: $validated['privacy_checksum']
+        );
+
+        $result = DB::transaction(function () use (
+            $request,
+            $validated,
+            $termsDocument,
+            $privacyDocument
+        ): array {
             $user = User::query()->create([
-                // Guardamos full_name en campo name
                 'name' => $validated['full_name'],
-
-                // Normalizamos email a minúsculas
-                'email' => strtolower($validated['email']),
-
-                // Teléfono opcional
+                'email' => $validated['email'],
                 'phone' => $validated['phone'] ?? null,
-
-                // Tipo de usuario (IMPORTANTE)
+                'birth_date' => $validated['birth_date'],
                 'type' => 'customer',
-
-                // Hash de contraseña (NUNCA guardar texto plano)
                 'password' => Hash::make($validated['password']),
             ]);
 
-            /**
-             * Crear token de autenticación
-             * Este token se usará en todas las requests futuras
-             */
-            $token = $user->createToken('customer-mobile')->plainTextToken;
+            $termsAcceptance = $this->legalAcceptanceService
+                ->acceptForUser(
+                    user: $user,
+                    documentId: $termsDocument->id,
+                    checksum: $termsDocument->checksum,
+                    request: $request,
+                    context: [
+                        'metadata' => [
+                            'source' => 'customer_registration',
+                            'acceptance_kind' => 'contract_acceptance',
+                        ],
+                    ]
+                );
+
+            $privacyAcknowledgement = $this->legalAcceptanceService
+                ->acceptForUser(
+                    user: $user,
+                    documentId: $privacyDocument->id,
+                    checksum: $privacyDocument->checksum,
+                    request: $request,
+                    context: [
+                        'metadata' => [
+                            'source' => 'customer_registration',
+                            'acceptance_kind' => 'privacy_acknowledgement',
+                        ],
+                    ]
+                );
+
+            $token = $user
+                ->createToken('customer-mobile')
+                ->plainTextToken;
 
             return [
                 'user' => $user,
                 'token' => $token,
+                'terms_acceptance' => $termsAcceptance,
+                'privacy_acknowledgement' => $privacyAcknowledgement,
             ];
         });
 
@@ -86,23 +100,82 @@ class CustomerAuthController extends Controller
             new WelcomeCustomerNotification()
         );
 
-        /**
-         * Respuesta estándar hacia Flutter
-         */
         return response()->json([
             'message' => 'Cuenta de cliente creada correctamente.',
-
-            // Token para autenticación
             'token' => $result['token'],
-
-            // Datos del usuario
             'user' => [
                 'id' => $result['user']->id,
                 'name' => $result['user']->name,
                 'email' => $result['user']->email,
                 'phone' => $result['user']->phone,
+                'birth_date' => $result['user']
+                    ->birth_date
+                    ?->format('Y-m-d'),
                 'type' => $result['user']->type,
             ],
+            'legal' => [
+                'terms' => [
+                    'document_id' => $termsDocument->id,
+                    'version' => $termsDocument->version,
+                    'checksum' => $termsDocument->checksum,
+                    'accepted_at' => $result['terms_acceptance']
+                        ->accepted_at
+                        ?->toIso8601String(),
+                ],
+                'privacy' => [
+                    'document_id' => $privacyDocument->id,
+                    'version' => $privacyDocument->version,
+                    'checksum' => $privacyDocument->checksum,
+                    'acknowledged_at' => $result[
+                        'privacy_acknowledgement'
+                    ]->accepted_at?->toIso8601String(),
+                ],
+            ],
         ], 201);
+    }
+
+    private function validateCurrentDocument(
+        string $field,
+        string $expectedType,
+        int $documentId,
+        string $checksum
+    ): LegalDocument {
+        $document = $this->legalDocumentService->current(
+            $expectedType,
+            'customer'
+        );
+
+        if ($document === null) {
+            throw ValidationException::withMessages([
+                $field => [
+                    'El documento legal requerido no está disponible.',
+                ],
+            ]);
+        }
+
+        if ($document->id !== $documentId) {
+            throw ValidationException::withMessages([
+                $field => [
+                    'El documento legal cambió. Revísalo nuevamente antes de continuar.',
+                ],
+            ]);
+        }
+
+        if (! $this->legalDocumentService->checksumMatches(
+            $document,
+            $checksum
+        )) {
+            $checksumField = $expectedType === 'terms_user'
+                ? 'terms_checksum'
+                : 'privacy_checksum';
+
+            throw ValidationException::withMessages([
+                $checksumField => [
+                    'El documento legal cambió. Revísalo nuevamente antes de continuar.',
+                ],
+            ]);
+        }
+
+        return $document;
     }
 }

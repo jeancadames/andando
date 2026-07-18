@@ -75,6 +75,11 @@ class Provider extends Model
         return $this->hasMany(ProviderExperienceSchedule::class);
     }
 
+    public function legalAcceptances(): HasMany
+    {
+        return $this->hasMany(LegalAcceptance::class);
+    }
+
     public function isPending(): bool
     {
         return $this->status === 'pending';

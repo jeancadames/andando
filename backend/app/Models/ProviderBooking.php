@@ -149,12 +149,20 @@ class ProviderBooking extends Model
         return $this->hasMany(PaymentRefund::class, 'provider_booking_id');
     }
 
+    public function legalAcceptances(): HasMany
+    {
+        return $this->hasMany(
+            LegalAcceptance::class,
+            'booking_id'
+        );
+    }
+
     public function latestPaymentTransaction()
     {
         return $this->hasOne(PaymentTransaction::class, 'provider_booking_id')->latestOfMany();
     }
 
-        public function isPending(): bool
+    public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
     }

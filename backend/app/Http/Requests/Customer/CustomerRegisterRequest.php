@@ -4,68 +4,189 @@ namespace App\Http\Requests\Customer;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/**
- * Class CustomerRegisterRequest
- *
- * Este Request se encarga de:
- * - Validar los datos que vienen desde Flutter
- * - Centralizar reglas de validación
- * - Evitar lógica en el Controller
- *
- * IMPORTANTE:
- * Flutter SOLO envía datos, Laravel decide si son válidos.
- */
 class CustomerRegisterRequest extends FormRequest
 {
-    /**
-     * Autoriza la petición.
-     * Aquí podrías validar permisos si fuera necesario.
-     */
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Reglas de validación.
-     *
-     * Estas reglas aseguran:
-     * - Integridad de datos
-     * - Consistencia del sistema
-     */
     public function rules(): array
     {
         return [
-            // Nombre completo obligatorio, mínimo 2 caracteres
-            'full_name' => ['required', 'string', 'min:2', 'max:255'],
+            'full_name' => [
+                'required',
+                'string',
+                'min:2',
+                'max:255',
+            ],
 
-            // Email obligatorio, único en tabla users
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                'unique:users,email',
+            ],
 
-            // Teléfono opcional
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => [
+                'nullable',
+                'string',
+                'max:30',
+            ],
 
-            // Contraseña obligatoria + confirmación
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'birth_date' => [
+                'required',
+                'date_format:Y-m-d',
+                'before_or_equal:' . now()
+                    ->subYears(18)
+                    ->toDateString(),
+            ],
+
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'confirmed',
+            ],
+
+            'terms_document_id' => [
+                'required',
+                'integer',
+                'exists:legal_documents,id',
+            ],
+
+            'terms_checksum' => [
+                'required',
+                'string',
+                'size:64',
+            ],
+
+            'accept_terms' => [
+                'required',
+                'accepted',
+            ],
+
+            'privacy_document_id' => [
+                'required',
+                'integer',
+                'exists:legal_documents,id',
+            ],
+
+            'privacy_checksum' => [
+                'required',
+                'string',
+                'size:64',
+            ],
+
+            'privacy_acknowledged' => [
+                'required',
+                'accepted',
+            ],
         ];
     }
 
-    /**
-     * Mensajes personalizados para errores.
-     */
     public function messages(): array
     {
         return [
-            'full_name.required' => 'El nombre completo es obligatorio.',
-            'full_name.min' => 'El nombre debe tener al menos 2 caracteres.',
+            'full_name.required' =>
+                'El nombre completo es obligatorio.',
 
-            'email.required' => 'El correo es obligatorio.',
-            'email.email' => 'El correo no tiene un formato válido.',
-            'email.unique' => 'Este correo ya está registrado.',
+            'full_name.min' =>
+                'El nombre debe tener al menos 2 caracteres.',
 
-            'password.required' => 'La contraseña es obligatoria.',
-            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
-            'password.confirmed' => 'Las contraseñas no coinciden.',
+            'email.required' =>
+                'El correo es obligatorio.',
+
+            'email.email' =>
+                'El correo no tiene un formato válido.',
+
+            'email.unique' =>
+                'Este correo ya está registrado.',
+
+            'birth_date.required' =>
+                'La fecha de nacimiento es obligatoria.',
+
+            'birth_date.date_format' =>
+                'La fecha de nacimiento debe tener el formato AAAA-MM-DD.',
+
+            'birth_date.before_or_equal' =>
+                'Debes tener al menos 18 años para crear una cuenta en AndanDO.',
+
+            'password.required' =>
+                'La contraseña es obligatoria.',
+
+            'password.min' =>
+                'La contraseña debe tener al menos 8 caracteres.',
+
+            'password.confirmed' =>
+                'Las contraseñas no coinciden.',
+
+            'terms_document_id.required' =>
+                'No se pudo identificar la versión de los Términos y Condiciones.',
+
+            'terms_document_id.exists' =>
+                'La versión de los Términos y Condiciones indicada no existe.',
+
+            'terms_checksum.required' =>
+                'No se recibió la verificación de los Términos y Condiciones.',
+
+            'terms_checksum.size' =>
+                'La verificación de los Términos y Condiciones no es válida.',
+
+            'accept_terms.required' =>
+                'Debes aceptar los Términos y Condiciones.',
+
+            'accept_terms.accepted' =>
+                'Debes aceptar los Términos y Condiciones.',
+
+            'privacy_document_id.required' =>
+                'No se pudo identificar la versión de la Política de Privacidad.',
+
+            'privacy_document_id.exists' =>
+                'La versión de la Política de Privacidad indicada no existe.',
+
+            'privacy_checksum.required' =>
+                'No se recibió la verificación de la Política de Privacidad.',
+
+            'privacy_checksum.size' =>
+                'La verificación de la Política de Privacidad no es válida.',
+
+            'privacy_acknowledged.required' =>
+                'Debes confirmar que leíste la Política de Privacidad.',
+
+            'privacy_acknowledged.accepted' =>
+                'Debes confirmar que leíste la Política de Privacidad.',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $email = $this->input('email');
+
+        if (is_string($email)) {
+            $this->merge([
+                'email' => strtolower(trim($email)),
+            ]);
+        }
+
+        $fullName = $this->input('full_name');
+
+        if (is_string($fullName)) {
+            $this->merge([
+                'full_name' => trim($fullName),
+            ]);
+        }
+
+        $phone = $this->input('phone');
+
+        if (is_string($phone)) {
+            $phone = trim($phone);
+
+            $this->merge([
+                'phone' => $phone === ''
+                    ? null
+                    : $phone,
+            ]);
+        }
     }
 }

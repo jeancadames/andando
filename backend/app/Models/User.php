@@ -39,8 +39,8 @@ class User extends Authenticatable
         'password',
         'type',
         'phone',
+        'birth_date',
 
-        //firebase google auth
         'firebase_uid',
         'avatar_url',
     ];
@@ -60,6 +60,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'birth_date' => 'date',
             'password' => 'hashed',
         ];
     }
@@ -100,6 +101,11 @@ class User extends Authenticatable
     public function notificationPreference(): HasOne
     {
         return $this->hasOne(UserNotificationPreference::class);
+    }
+
+    public function legalAcceptances(): HasMany
+    {
+        return $this->hasMany(LegalAcceptance::class);
     }
 
     public function sendPasswordResetNotification($token): void
