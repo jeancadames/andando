@@ -5,11 +5,17 @@ namespace App\Http\Controllers\Api\Client;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerFavoriteExperience;
 use App\Models\ProviderExperience;
+use App\Services\Experiences\ExperiencePricingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ExploreController extends Controller
 {
+    public function __construct(
+        private readonly ExperiencePricingService $pricingService,
+    ) {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = ProviderExperience::query()
@@ -201,6 +207,11 @@ class ExploreController extends Controller
             ? $experience->mapPickupPoints
             : $experience->mapPickupPoints()->get();
 
+        $pricing = $this->pricingService->calculate(
+            $experience,
+            $experience->price,
+        );
+
         $data = [
             'id' => $experience->id,
             'title' => $experience->title,
@@ -220,7 +231,14 @@ class ExploreController extends Controller
             'distance_km' => isset($experience->distance_km)
                 ? round((float) $experience->distance_km, 1)
                 : null,
-            'price' => (float) $experience->price,
+            'price' => $pricing['final_price'],
+            'original_price' => $pricing['original_price'],
+            'has_discount' => $pricing['has_discount'],
+            'discount_percentage' => $pricing['has_discount']
+                ? $pricing['discount_percentage']
+                : null,
+            'discount_amount' => $pricing['discount_amount'],
+            'final_price' => $pricing['final_price'],
             'currency' => $experience->currency ?? 'DOP',
             'capacity' => $experience->capacity,
             'cancellation_policy' => $experience->cancellation_policy,
@@ -320,14 +338,24 @@ class ExploreController extends Controller
                     $schedule->capacity - $reservedGuests,
                 );
 
+                $schedulePricing = $this->pricingService->calculate(
+                    $experience,
+                    $schedule->price ?? $experience->price,
+                );
+
                 return [
                     'id' => $schedule->id,
                     'starts_at' => $schedule->starts_at?->toIso8601String(),
                     'capacity' => $schedule->capacity,
                     'available_spots' => $availableSpots,
-                    'price' => (float) (
-                        $schedule->price ?? $experience->price
-                    ),
+                    'price' => $schedulePricing['final_price'],
+                    'original_price' => $schedulePricing['original_price'],
+                    'has_discount' => $schedulePricing['has_discount'],
+                    'discount_percentage' => $schedulePricing['has_discount']
+                        ? $schedulePricing['discount_percentage']
+                        : null,
+                    'discount_amount' => $schedulePricing['discount_amount'],
+                    'final_price' => $schedulePricing['final_price'],
                     'currency' => $schedule->currency
                         ?? $experience->currency
                         ?? 'DOP',

@@ -11,10 +11,7 @@ import '../../../../../shared/widgets/provider_bottom_nav.dart';
 class ProviderChatListScreen extends StatefulWidget {
   final AuthController authController;
 
-  const ProviderChatListScreen({
-    super.key,
-    required this.authController,
-  });
+  const ProviderChatListScreen({super.key, required this.authController});
 
   @override
   State<ProviderChatListScreen> createState() => _ProviderChatListScreenState();
@@ -83,34 +80,13 @@ class _ProviderChatListScreenState extends State<ProviderChatListScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No pudimos actualizar los mensajes.'),
-        ),
+        const SnackBar(content: Text('No pudimos actualizar los mensajes.')),
       );
     }
   }
 
   void _openConversation(ChatConversationModel conversation) {
-    context.push(
-      '/provider/messages/${conversation.id}',
-      extra: conversation,
-    );
-  }
-
-  void _goToDashboard() {
-    context.go('/provider/dashboard');
-  }
-
-  void _goToCatalog() {
-    context.go('/provider/catalog');
-  }
-
-  void _goToMessages() {
-    context.go('/provider/messages');
-  }
-
-  void _goToProfile() {
-    context.go('/provider/profile');
+    context.push('/provider/messages/${conversation.id}', extra: conversation);
   }
 
   @override
@@ -133,9 +109,7 @@ class _ProviderChatListScreenState extends State<ProviderChatListScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(
-                child: _ProviderMessagesHeader(
-                  unreadCount: totalUnread,
-                ),
+                child: _ProviderMessagesHeader(unreadCount: totalUnread),
               ),
               SliverToBoxAdapter(
                 child: Padding(
@@ -145,9 +119,7 @@ class _ProviderChatListScreenState extends State<ProviderChatListScreen> {
               ),
               if (_isLoading)
                 const SliverFillRemaining(
-                  child: Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  child: Center(child: CircularProgressIndicator()),
                 )
               else if (_errorMessage != null)
                 SliverFillRemaining(
@@ -183,13 +155,8 @@ class _ProviderChatListScreenState extends State<ProviderChatListScreen> {
         ),
       ),
       bottomNavigationBar: ProviderBottomNav(
-        currentIndex: 2,
         authController: widget.authController,
         messagesUnreadCount: totalUnread,
-        onDashboard: _goToDashboard,
-        onCatalog: _goToCatalog,
-        onMessages: _goToMessages,
-        onProfile: _goToProfile,
       ),
     );
   }
@@ -198,9 +165,7 @@ class _ProviderChatListScreenState extends State<ProviderChatListScreen> {
 class _ProviderMessagesHeader extends StatelessWidget {
   final int unreadCount;
 
-  const _ProviderMessagesHeader({
-    required this.unreadCount,
-  });
+  const _ProviderMessagesHeader({required this.unreadCount});
 
   @override
   Widget build(BuildContext context) {
@@ -299,10 +264,7 @@ class _ProviderConversationCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: const Color(0xFF003B73),
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
-                          ),
+                          border: Border.all(color: Colors.white, width: 2),
                         ),
                         child: const Icon(
                           Icons.person_rounded,
@@ -446,7 +408,8 @@ class _ProviderConversationCard extends StatelessWidget {
     final now = DateTime.now();
     final local = date.toLocal();
 
-    final isToday = now.year == local.year &&
+    final isToday =
+        now.year == local.year &&
         now.month == local.month &&
         now.day == local.day;
 
@@ -467,9 +430,7 @@ class _ProviderConversationCard extends StatelessWidget {
 class _NoticeBox extends StatelessWidget {
   final String text;
 
-  const _NoticeBox({
-    required this.text,
-  });
+  const _NoticeBox({required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -479,9 +440,7 @@ class _NoticeBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFBFDBFE),
-        ),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -523,10 +482,7 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
@@ -551,10 +507,7 @@ class _ImagePlaceholder extends StatelessWidget {
     return Container(
       color: const Color(0xFFE9D2D8),
       child: const Center(
-        child: Icon(
-          Icons.travel_explore_rounded,
-          color: Color(0xFF94A3B8),
-        ),
+        child: Icon(Icons.travel_explore_rounded, color: Color(0xFF94A3B8)),
       ),
     );
   }
@@ -615,10 +568,7 @@ class _ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -647,10 +597,7 @@ class _ErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 18),
             ElevatedButton(

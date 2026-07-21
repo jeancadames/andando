@@ -55,13 +55,26 @@ class ProviderExperienceForm {
   int capacity = 1;
 
   double price = 0;
+  bool allowsDiscount = false;
+  double? discountPercentage;
   String currency = 'DOP';
+
+  double get effectivePrice {
+    if (!allowsDiscount || price <= 0) return price;
+
+    final percentage = (discountPercentage ?? 0).clamp(0, 90).toDouble();
+    return double.parse((price * (1 - (percentage / 100))).toStringAsFixed(2));
+  }
+
   String province = '';
 
   String experienceAddress = '';
+  String? experiencePlaceId;
   double? experienceLatitude;
   double? experienceLongitude;
   bool includesTransport = false;
+  bool allowsMinors = false;
+  ExperienceDifficulty? difficultyLevel;
 
   List<String> pickupPoints = [''];
   List<MapPickupPoint> mapPickupPoints = [];
@@ -77,6 +90,7 @@ class ProviderExperienceForm {
 
   String cancellationPolicy = '';
 
+  List<ProviderExperiencePhoto> existingPhotos = [];
   List<XFile> photos = [];
 
   ProviderExperienceForm();
@@ -90,16 +104,22 @@ class ProviderExperienceForm {
     form.duration = experience.duration ?? '';
     form.capacity = experience.capacity;
     form.price = experience.price;
+    form.allowsDiscount = experience.allowsDiscount;
+    form.discountPercentage = experience.discountPercentage;
     form.currency = experience.currency;
     form.province = experience.province ?? '';
 
     form.experienceAddress = experience.experienceAddress ?? '';
+    form.experiencePlaceId = experience.experiencePlaceId;
     form.experienceLatitude = experience.experienceLatitude;
     form.experienceLongitude = experience.experienceLongitude;
     form.includesTransport = experience.includesTransport;
+    form.allowsMinors = experience.allowsMinors;
+    form.difficultyLevel = experience.difficultyLevel;
 
-    form.pickupPoints =
-        experience.pickupPoints.isEmpty ? [''] : experience.pickupPoints;
+    form.pickupPoints = experience.pickupPoints.isEmpty
+        ? ['']
+        : experience.pickupPoints;
     form.mapPickupPoints = experience.mapPickupPoints;
 
     form.itinerary = experience.itinerary.isEmpty
@@ -107,21 +127,24 @@ class ProviderExperienceForm {
             {'time': '', 'activity': ''},
           ]
         : experience.itinerary
-            .map(
-              (item) => {
-                'time': item['time']?.toString() ?? '',
-                'activity': item['activity']?.toString() ?? '',
-              },
-            )
-            .toList();
+              .map(
+                (item) => {
+                  'time': item['time']?.toString() ?? '',
+                  'activity': item['activity']?.toString() ?? '',
+                },
+              )
+              .toList();
 
     form.amenities = experience.amenities;
     form.included = experience.included.isEmpty ? [''] : experience.included;
-    form.notIncluded =
-        experience.notIncluded.isEmpty ? [''] : experience.notIncluded;
-    form.requirements =
-        experience.requirements.isEmpty ? [''] : experience.requirements;
+    form.notIncluded = experience.notIncluded.isEmpty
+        ? ['']
+        : experience.notIncluded;
+    form.requirements = experience.requirements.isEmpty
+        ? ['']
+        : experience.requirements;
     form.cancellationPolicy = experience.cancellationPolicy ?? '';
+    form.existingPhotos = List<ProviderExperiencePhoto>.from(experience.photos);
 
     return form;
   }
@@ -249,24 +272,16 @@ class ProviderExperienceService {
       return [];
     }
 
-    final uri = Uri.parse('$baseUrl/provider/places/search').replace(
-      queryParameters: {
-        'q': cleanQuery,
-        'limit': '8',
-      },
-    );
+    final uri = Uri.parse(
+      '$baseUrl/provider/places/search',
+    ).replace(queryParameters: {'q': cleanQuery, 'limit': '8'});
 
-    final response = await http.get(
-      uri,
-      headers: _jsonHeaders(token),
-    );
+    final response = await http.get(uri, headers: _jsonHeaders(token));
 
     final body = _decode(response);
 
     if (!_isSuccessStatus(response.statusCode)) {
-      throw Exception(
-        body['message'] ?? 'No se pudieron buscar lugares.',
-      );
+      throw Exception(body['message'] ?? 'No se pudieron buscar lugares.');
     }
 
     final data = body['data'] as List? ?? [];
@@ -274,9 +289,7 @@ class ProviderExperienceService {
     return data
         .whereType<Map>()
         .map(
-          (item) => PlaceSearchResult.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
+          (item) => PlaceSearchResult.fromJson(Map<String, dynamic>.from(item)),
         )
         .toList();
   }
@@ -287,14 +300,11 @@ class ProviderExperienceService {
   }) async {
     _ensureAuthenticated(token);
 
-    final uri = Uri.parse('$baseUrl/provider/experiences').replace(
-      queryParameters: status == null ? null : {'status': status},
-    );
+    final uri = Uri.parse(
+      '$baseUrl/provider/experiences',
+    ).replace(queryParameters: status == null ? null : {'status': status});
 
-    final response = await http.get(
-      uri,
-      headers: _jsonHeaders(token),
-    );
+    final response = await http.get(uri, headers: _jsonHeaders(token));
 
     final body = _decode(response);
 
@@ -323,9 +333,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudo cargar la experiencia.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo cargar la experiencia.');
     }
 
     return ProviderExperience.fromJson(body['data']);
@@ -355,21 +363,37 @@ class ProviderExperienceService {
     request.fields['duration'] = form.duration;
     request.fields['capacity'] = form.capacity.toString();
     request.fields['price'] = form.price.toString();
+    request.fields['allows_discount'] = form.allowsDiscount ? '1' : '0';
+
+    if (form.allowsDiscount && form.discountPercentage != null) {
+      request.fields['discount_percentage'] = form.discountPercentage
+          .toString();
+    }
+
     request.fields['currency'] = form.currency;
     request.fields['province'] = form.province;
     request.fields['includes_transport'] = form.includesTransport ? '1' : '0';
+    request.fields['allows_minors'] = form.allowsMinors ? '1' : '0';
+
+    if (form.difficultyLevel != null) {
+      request.fields['difficulty_level'] = form.difficultyLevel!.apiValue;
+    }
     request.fields['cancellation_policy'] = form.cancellationPolicy;
 
     request.fields['experience_address'] = form.experienceAddress;
 
+    if (form.experiencePlaceId?.trim().isNotEmpty == true) {
+      request.fields['experience_place_id'] = form.experiencePlaceId!.trim();
+    }
+
     if (form.experienceLatitude != null) {
-      request.fields['experience_latitude'] =
-          form.experienceLatitude.toString();
+      request.fields['experience_latitude'] = form.experienceLatitude
+          .toString();
     }
 
     if (form.experienceLongitude != null) {
-      request.fields['experience_longitude'] =
-          form.experienceLongitude.toString();
+      request.fields['experience_longitude'] = form.experienceLongitude
+          .toString();
     }
 
     _addStringArray(request, 'pickup_points', form.pickupPoints);
@@ -381,8 +405,7 @@ class ProviderExperienceService {
     _addStringArray(request, 'requirements', form.requirements);
 
     for (int i = 0; i < form.itinerary.length; i++) {
-      request.fields['itinerary[$i][time]'] =
-          form.itinerary[i]['time'] ?? '';
+      request.fields['itinerary[$i][time]'] = form.itinerary[i]['time'] ?? '';
 
       request.fields['itinerary[$i][activity]'] =
           form.itinerary[i]['activity'] ?? '';
@@ -406,9 +429,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception(
-        body['message'] ?? 'No se pudo guardar la experiencia.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo guardar la experiencia.');
     }
 
     return ProviderExperience.fromJson(body['data']);
@@ -428,9 +449,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudo eliminar la experiencia.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo eliminar la experiencia.');
     }
   }
 
@@ -448,18 +467,13 @@ class ProviderExperienceService {
         '$baseUrl/provider/experiences/$experienceId/schedules/$scheduleId',
       ),
       headers: _jsonHeaders(token),
-      body: jsonEncode({
-        'starts_at': '$date $time:00',
-        'status': 'active',
-      }),
+      body: jsonEncode({'starts_at': '$date $time:00', 'status': 'active'}),
     );
 
     final body = _decode(response);
 
     if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudo actualizar la fecha.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo actualizar la fecha.');
     }
   }
 
@@ -480,9 +494,7 @@ class ProviderExperienceService {
     debugPrint('SCHEDULES BODY: ${response.body}');
 
     if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudieron cargar las fechas.',
-      );
+      throw Exception(body['message'] ?? 'No se pudieron cargar las fechas.');
     }
 
     final data = body['data'] as List? ?? [];
@@ -509,9 +521,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudieron cargar las reservas.',
-      );
+      throw Exception(body['message'] ?? 'No se pudieron cargar las reservas.');
     }
 
     return ProviderScheduleBookingsResponse.fromJson(body);
@@ -541,9 +551,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (!_isSuccessStatus(response.statusCode)) {
-      throw Exception(
-        body['message'] ?? 'No se pudo crear la fecha.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo crear la fecha.');
     }
   }
 
@@ -569,9 +577,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (!_isSuccessStatus(response.statusCode)) {
-      throw Exception(
-        body['message'] ?? 'No se pudo crear la fecha.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo crear la fecha.');
     }
   }
 
@@ -603,9 +609,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (!_isSuccessStatus(response.statusCode)) {
-      throw Exception(
-        body['message'] ?? 'No se pudieron crear las fechas.',
-      );
+      throw Exception(body['message'] ?? 'No se pudieron crear las fechas.');
     }
   }
 
@@ -639,9 +643,7 @@ class ProviderExperienceService {
     }
 
     if (!_isSuccessStatus(response.statusCode)) {
-      throw Exception(
-        body['message'] ?? 'No se pudo cancelar la fecha.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo cancelar la fecha.');
     }
 
     return ProviderScheduleCancellationResult.fromJson(body);
@@ -664,9 +666,7 @@ class ProviderExperienceService {
     final body = _decode(response);
 
     if (response.statusCode != 200) {
-      throw Exception(
-        body['message'] ?? 'No se pudo eliminar la fecha.',
-      );
+      throw Exception(body['message'] ?? 'No se pudo eliminar la fecha.');
     }
   }
 
@@ -689,13 +689,17 @@ class ProviderExperienceService {
 
       request.fields['map_pickup_points[$i][name]'] = point.name;
       request.fields['map_pickup_points[$i][address]'] = point.address;
-      request.fields['map_pickup_points[$i][latitude]'] =
-          point.latitude.toString();
-      request.fields['map_pickup_points[$i][longitude]'] =
-          point.longitude.toString();
+      request.fields['map_pickup_points[$i][latitude]'] = point.latitude
+          .toString();
+      request.fields['map_pickup_points[$i][longitude]'] = point.longitude
+          .toString();
 
-      if (point.instructions != null &&
-          point.instructions!.trim().isNotEmpty) {
+      if (point.placeId?.trim().isNotEmpty == true) {
+        request.fields['map_pickup_points[$i][place_id]'] = point.placeId!
+            .trim();
+      }
+
+      if (point.instructions != null && point.instructions!.trim().isNotEmpty) {
         request.fields['map_pickup_points[$i][instructions]'] =
             point.instructions!;
       }

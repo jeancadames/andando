@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentRefund extends Model
 {
@@ -12,6 +13,7 @@ class PaymentRefund extends Model
     public const STATUS_PROCESSING = 'processing';
     public const STATUS_SUCCEEDED = 'succeeded';
     public const STATUS_FAILED = 'failed';
+    public const STATUS_PENDING_VERIFICATION = 'pending_verification';
 
     public const REASON_CUSTOMER_POLICY = 'customer_policy';
     public const REASON_PROVIDER_CANCELLED = 'provider_cancelled';
@@ -67,7 +69,13 @@ class PaymentRefund extends Model
         return $this->belongsTo(User::class);
     }
 
-        public function isPending(): bool
+    /** AndanDO Admin Payments Module */
+    public function attempts(): HasMany
+    {
+        return $this->hasMany(PaymentRefundAttempt::class)->orderBy('attempt_number');
+    }
+
+    public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
     }
@@ -85,5 +93,10 @@ class PaymentRefund extends Model
     public function isFailed(): bool
     {
         return $this->status === self::STATUS_FAILED;
+    }
+
+    public function isPendingVerification(): bool
+    {
+        return $this->status === self::STATUS_PENDING_VERIFICATION;
     }
 }

@@ -66,6 +66,9 @@ class ProviderRegisterFormData {
   /// Paso 3: licencia comercial opcional.
   PlatformFile? businessLicense;
 
+  /// Paso 3: poliza de seguro opcional.
+  PlatformFile? insurancePolicy;
+
   /// Paso 4: aceptación de términos.
   bool acceptTerms = false;
 

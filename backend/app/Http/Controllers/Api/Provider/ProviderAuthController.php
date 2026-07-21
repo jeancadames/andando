@@ -104,6 +104,16 @@ class ProviderAuthController extends Controller
                     );
                 }
 
+                if ($request->hasFile('insurance_policy')) {
+                    $this->storeDocument(
+                        request: $request,
+                        provider: $provider,
+                        verificationRequest: $verificationRequest,
+                        inputName: 'insurance_policy',
+                        type: 'insurance_policy',
+                    );
+                }
+
                 /// Creamos token móvil.
                 $token = $user->createToken('provider-mobile')->plainTextToken;
 

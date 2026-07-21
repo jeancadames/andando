@@ -1,19 +1,10 @@
 /// Punto de recogida geolocalizado para una experiencia.
-///
-/// Se usa para enviar al backend:
-/// map_pickup_points[]
-///
-/// AndanDO guarda:
-/// - nombre
-/// - dirección visible
-/// - latitud
-/// - longitud
-/// - instrucciones opcionales
 class MapPickupPoint {
   final String name;
   final String address;
   final double latitude;
   final double longitude;
+  final String? placeId;
   final String? instructions;
 
   const MapPickupPoint({
@@ -21,6 +12,7 @@ class MapPickupPoint {
     required this.address,
     required this.latitude,
     required this.longitude,
+    this.placeId,
     this.instructions,
   });
 
@@ -30,6 +22,7 @@ class MapPickupPoint {
       address: json['address']?.toString() ?? '',
       latitude: _toDouble(json['latitude']),
       longitude: _toDouble(json['longitude']),
+      placeId: json['place_id']?.toString(),
       instructions: json['instructions']?.toString(),
     );
   }
@@ -40,6 +33,7 @@ class MapPickupPoint {
       'address': address,
       'latitude': latitude.toString(),
       'longitude': longitude.toString(),
+      if (placeId != null && placeId!.trim().isNotEmpty) 'place_id': placeId!,
       if (instructions != null && instructions!.trim().isNotEmpty)
         'instructions': instructions!,
     };

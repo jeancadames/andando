@@ -18,6 +18,11 @@ const tabs = [
     { key: 'rejected', label: 'Rechazados', count: props.counts.rejected },
 ];
 
+function commissionPercent(rate?: string | number | null): string {
+    if (rate === null || rate === undefined) return 'Pendiente';
+    return `${(Number(rate) * 100).toFixed(2)}%`;
+}
+
 function setStatus(status: string) {
     router.get('/admin/afiliados', { status }, { preserveState: true, replace: true });
 }
@@ -58,6 +63,7 @@ function setStatus(status: string) {
                     <tr>
                         <th class="px-5 py-3">Negocio</th>
                         <th class="px-5 py-3">Tipo</th>
+                        <th class="px-5 py-3">Comisión</th>
                         <th class="px-5 py-3">Contacto</th>
                         <th class="px-5 py-3">Docs</th>
                         <th class="px-5 py-3">Enviada</th>
@@ -82,6 +88,9 @@ function setStatus(status: string) {
                         <td class="px-5 py-3 text-slate-600">
                             {{ req.provider?.business_type?.name ?? '—' }}
                         </td>
+                        <td class="px-5 py-3 font-medium text-slate-700">
+                            {{ commissionPercent(req.provider?.commission_rate) }}
+                        </td>
                         <td class="px-5 py-3">
                             <p class="text-slate-700">{{ req.provider?.user?.name }}</p>
                             <p class="text-xs text-slate-500">{{ req.provider?.user?.email }}</p>
@@ -101,7 +110,7 @@ function setStatus(status: string) {
                         </td>
                     </tr>
                     <tr v-if="!requests.data.length">
-                        <td colspan="7" class="px-5 py-10 text-center text-slate-400">
+                        <td colspan="8" class="px-5 py-10 text-center text-slate-400">
                             No hay solicitudes en esta categoría.
                         </td>
                     </tr>

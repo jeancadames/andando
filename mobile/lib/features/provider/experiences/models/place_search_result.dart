@@ -1,10 +1,12 @@
 class PlaceSearchResult {
+  final String placeId;
   final String name;
   final String address;
   final double latitude;
   final double longitude;
 
   const PlaceSearchResult({
+    required this.placeId,
     required this.name,
     required this.address,
     required this.latitude,
@@ -13,6 +15,7 @@ class PlaceSearchResult {
 
   factory PlaceSearchResult.fromJson(Map<String, dynamic> json) {
     return PlaceSearchResult(
+      placeId: json['place_id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
       latitude: _toDouble(json['latitude']),

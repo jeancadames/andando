@@ -22,10 +22,11 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
-    'nominatim' => [
-        'base_url' => env('NOMINATIM_BASE_URL', 'https://nominatim.openstreetmap.org'),
-        'country' => env('NOMINATIM_COUNTRY', 'do'),
-        'user_agent' => env('NOMINATIM_USER_AGENT', 'AndanDO/1.0'),
+    'google_places' => [
+        'api_key' => env('GOOGLE_PLACES_API_KEY'),
+        'base_url' => env('GOOGLE_PLACES_BASE_URL', 'https://places.googleapis.com'),
+        'language' => env('GOOGLE_PLACES_LANGUAGE', 'es'),
+        'region' => env('GOOGLE_PLACES_REGION', 'DO'),
     ],
 
     'ses' => [

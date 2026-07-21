@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../models/map_pickup_point.dart';
+import '../models/provider_experience.dart';
 import '../presentation/screens/location_picker_map_screen.dart';
 
 import '../models/experience_location.dart';
@@ -208,9 +209,13 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.duration = _durationNumberForInput(loadedForm.duration);
         _form.capacity = loadedForm.capacity;
         _form.price = loadedForm.price;
+        _form.allowsDiscount = loadedForm.allowsDiscount;
+        _form.discountPercentage = loadedForm.discountPercentage;
         _form.currency = loadedForm.currency;
         _form.province = loadedForm.province;
         _form.includesTransport = loadedForm.includesTransport;
+        _form.allowsMinors = loadedForm.allowsMinors;
+        _form.difficultyLevel = loadedForm.difficultyLevel;
         _form.experienceAddress = loadedForm.experienceAddress;
         _form.experienceLatitude = loadedForm.experienceLatitude;
         _form.experienceLongitude = loadedForm.experienceLongitude;
@@ -221,6 +226,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         _form.included = loadedForm.included;
         _form.notIncluded = loadedForm.notIncluded;
         _form.requirements = loadedForm.requirements;
+        _form.existingPhotos = loadedForm.existingPhotos;
         _form.cancellationPolicy = _normalizeCancellationPolicyForInput(
           loadedForm.cancellationPolicy,
         );
@@ -247,22 +253,29 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
 
         return _form.title.trim().isNotEmpty &&
             _form.category.trim().isNotEmpty &&
+            _form.difficultyLevel != null &&
             _form.description.trim().isNotEmpty &&
             _isPositiveIntegerText(durationHours) &&
             _form.capacity > 0;
 
       case 2:
-        return widget.isEditing || _form.photos.length >= 3;
+        return _form.existingPhotos.length + _form.photos.length >= 3;
 
       case 3:
         final hasExperienceLocation =
             _form.experienceAddress.trim().isNotEmpty &&
-                _form.experienceLatitude != null &&
-                _form.experienceLongitude != null;
+            _form.experienceLatitude != null &&
+            _form.experienceLongitude != null;
 
         final hasPickupPoint = _form.mapPickupPoints.isNotEmpty;
 
+        final hasValidDiscount =
+            !_form.allowsDiscount ||
+            ((_form.discountPercentage ?? 0) >= 1 &&
+                (_form.discountPercentage ?? 0) <= 90);
+
         return _form.price > 0 &&
+            hasValidDiscount &&
             _form.province.trim().isNotEmpty &&
             hasExperienceLocation &&
             (!_form.includesTransport || hasPickupPoint);
@@ -303,13 +316,11 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(28),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
         return _PublishPriceConfirmationSheet(
-          price: _form.price,
+          price: _form.effectivePrice,
           currency: _form.currency,
           commissionRate: _commissionRate,
           pricingSettingsLoaded: _pricingSettingsLoaded,
@@ -458,10 +469,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         ),
         title: Text(
           widget.isEditing ? 'Editar experiencia' : 'Nueva experiencia',
-          style: TextStyle(
-            color: primary,
-            fontWeight: FontWeight.w800,
-          ),
+          style: TextStyle(color: primary, fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
         actions: [
@@ -474,18 +482,18 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!.replaceFirst('Exception: ', '')))
-              : Column(
-                  children: [
-                    _ProgressHeader(currentStep: _currentStep),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: _buildStep(),
-                      ),
-                    ),
-                  ],
+          ? Center(child: Text(_error!.replaceFirst('Exception: ', '')))
+          : Column(
+              children: [
+                _ProgressHeader(currentStep: _currentStep),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: _buildStep(),
+                  ),
                 ),
+              ],
+            ),
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -506,8 +514,8 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
                 _isSaving
                     ? 'Guardando...'
                     : _currentStep == 5
-                        ? 'Publicar experiencia'
-                        : 'Continuar',
+                    ? 'Publicar experiencia'
+                    : 'Continuar',
               ),
             ),
           ),
@@ -527,6 +535,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
 
       case 2:
         return _PhotosStep(
+          existingPhotos: _form.existingPhotos,
           photos: _form.photos,
           onPickPhotos: _pickPhotos,
           onRemove: (index) {
@@ -547,10 +556,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
         );
 
       case 4:
-        return _ItineraryStep(
-          form: _form,
-          onChanged: () => setState(() {}),
-        );
+        return _ItineraryStep(form: _form, onChanged: () => setState(() {}));
 
       case 5:
         return _RulesStep(
@@ -569,9 +575,7 @@ class _CreateExperienceScreenState extends State<CreateExperienceScreen> {
 class _ProgressHeader extends StatelessWidget {
   final int currentStep;
 
-  const _ProgressHeader({
-    required this.currentStep,
-  });
+  const _ProgressHeader({required this.currentStep});
 
   @override
   Widget build(BuildContext context) {
@@ -646,6 +650,21 @@ class _BasicInfoStep extends StatelessWidget {
             onChanged();
           },
         ),
+        _DropdownInput(
+          label: 'Nivel de dificultad *',
+          value: form.difficultyLevel?.apiValue,
+          items: ExperienceDifficulty.values
+              .map((difficulty) => difficulty.apiValue)
+              .toList(),
+          labels: {
+            for (final difficulty in ExperienceDifficulty.values)
+              difficulty.apiValue: difficulty.label,
+          },
+          onChanged: (value) {
+            form.difficultyLevel = ExperienceDifficulty.fromApiValue(value);
+            onChanged();
+          },
+        ),
         _Input(
           label: 'Descripción *',
           initialValue: form.description,
@@ -664,9 +683,7 @@ class _BasicInfoStep extends StatelessWidget {
                 initialValue: _durationNumberForInput(form.duration),
                 hint: '8',
                 keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 suffixText: 'horas',
                 onChanged: (value) {
                   form.duration = value.trim();
@@ -678,12 +695,12 @@ class _BasicInfoStep extends StatelessWidget {
             Expanded(
               child: _Input(
                 label: 'Capacidad *',
-                initialValue: form.capacity <= 0 ? '' : form.capacity.toString(),
+                initialValue: form.capacity <= 0
+                    ? ''
+                    : form.capacity.toString(),
                 hint: '15',
                 keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 onChanged: (value) {
                   form.capacity = int.tryParse(value) ?? 0;
                   onChanged();
@@ -698,11 +715,13 @@ class _BasicInfoStep extends StatelessWidget {
 }
 
 class _PhotosStep extends StatelessWidget {
+  final List<ProviderExperiencePhoto> existingPhotos;
   final List<XFile> photos;
   final VoidCallback onPickPhotos;
   final ValueChanged<int> onRemove;
 
   const _PhotosStep({
+    required this.existingPhotos,
     required this.photos,
     required this.onPickPhotos,
     required this.onRemove,
@@ -710,6 +729,8 @@ class _PhotosStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final totalPhotos = existingPhotos.length + photos.length;
+
     return _StepContainer(
       title: 'Fotos',
       subtitle: 'Mínimo 3 fotos. La primera será la portada.',
@@ -727,14 +748,14 @@ class _PhotosStep extends StatelessWidget {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: photos.length + 1,
+          itemCount: totalPhotos + 1,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
           ),
           itemBuilder: (context, index) {
-            if (index == photos.length) {
+            if (index == totalPhotos) {
               return InkWell(
                 onTap: onPickPhotos,
                 borderRadius: BorderRadius.circular(22),
@@ -758,40 +779,48 @@ class _PhotosStep extends StatelessWidget {
               );
             }
 
+            final isExisting = index < existingPhotos.length;
+            final localIndex = index - existingPhotos.length;
+            final existingPhoto = isExisting ? existingPhotos[index] : null;
+            final isCover = isExisting
+                ? existingPhoto!.isCover || index == 0
+                : existingPhotos.isEmpty && localIndex == 0;
+
             return Stack(
               children: [
                 Positioned.fill(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(22),
-                    child: _SelectedPhotoPreview(
-                      photo: photos[index],
-                    ),
+                    child: isExisting
+                        ? _ExistingPhotoPreview(photo: existingPhoto!)
+                        : _SelectedPhotoPreview(photo: photos[localIndex]),
                   ),
                 ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Material(
-                    color: Colors.red,
-                    shape: const CircleBorder(),
-                    elevation: 3,
-                    child: InkWell(
-                      onTap: () => onRemove(index),
-                      customBorder: const CircleBorder(),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.delete_outline,
-                          size: 22,
-                          color: Colors.white,
+                if (!isExisting)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Material(
+                      color: Colors.red,
+                      shape: const CircleBorder(),
+                      elevation: 3,
+                      child: InkWell(
+                        onTap: () => onRemove(localIndex),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.delete_outline,
+                            size: 22,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                if (index == 0)
+                if (isCover)
                   Positioned(
                     left: 8,
                     bottom: 8,
@@ -806,10 +835,7 @@ class _PhotosStep extends StatelessWidget {
                       ),
                       child: const Text(
                         'Portada',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.white, fontSize: 12),
                       ),
                     ),
                   ),
@@ -822,10 +848,32 @@ class _PhotosStep extends StatelessWidget {
   }
 }
 
+class _ExistingPhotoPreview extends StatelessWidget {
+  const _ExistingPhotoPreview({required this.photo});
+
+  final ProviderExperiencePhoto photo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      photo.url,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('ERROR IMAGEN AFILIADO: $error');
+        debugPrint('URL IMAGEN AFILIADO: ${photo.url}');
+
+        return Container(
+          color: const Color(0xFFE5E7EB),
+          alignment: Alignment.center,
+          child: const Icon(Icons.broken_image_outlined),
+        );
+      },
+    );
+  }
+}
+
 class _SelectedPhotoPreview extends StatelessWidget {
-  const _SelectedPhotoPreview({
-    required this.photo,
-  });
+  const _SelectedPhotoPreview({required this.photo});
 
   final XFile photo;
 
@@ -837,18 +885,14 @@ class _SelectedPhotoPreview extends StatelessWidget {
         if (snapshot.hasError) {
           return Container(
             color: const Color(0xFFE5E7EB),
-            child: const Center(
-              child: Icon(Icons.broken_image_outlined),
-            ),
+            child: const Center(child: Icon(Icons.broken_image_outlined)),
           );
         }
 
         if (!snapshot.hasData) {
           return Container(
             color: const Color(0xFFE5E7EB),
-            child: const Center(
-              child: CircularProgressIndicator(),
-            ),
+            child: const Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -892,16 +936,65 @@ class _PriceLocationStep extends StatelessWidget {
           hint: '3500',
           keyboardType: TextInputType.number,
           prefixIcon: Icons.attach_money,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-          ],
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           onChanged: (value) {
             form.price = double.tryParse(value) ?? 0;
             onChanged();
           },
         ),
+        SwitchListTile(
+          value: form.allowsDiscount,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            '??Permitir descuento en esta experiencia?',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text(
+            'El descuento se aplica automaticamente al precio por persona.',
+          ),
+          onChanged: (value) {
+            form.allowsDiscount = value;
+
+            if (!value) {
+              form.discountPercentage = null;
+            }
+
+            onChanged();
+          },
+        ),
+        if (form.allowsDiscount) ...[
+          _Input(
+            label: 'Porcentaje de descuento *',
+            initialValue: form.discountPercentage == null
+                ? ''
+                : form.discountPercentage!.toStringAsFixed(0),
+            hint: '10',
+            keyboardType: TextInputType.number,
+            prefixIcon: Icons.percent,
+            suffixText: '%',
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (value) {
+              form.discountPercentage = double.tryParse(value);
+              onChanged();
+            },
+          ),
+          if ((form.discountPercentage ?? 0) < 1 ||
+              (form.discountPercentage ?? 0) > 90)
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Ingresa un porcentaje entre 1 % y 90 %.',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          _DiscountPreviewCard(form: form),
+        ],
         _PriceBreakdownCard(
-          price: form.price,
+          price: form.effectivePrice,
           currency: form.currency,
           commissionRate: commissionRate,
           pricingSettingsLoaded: pricingSettingsLoaded,
@@ -944,11 +1037,7 @@ class _PriceLocationStep extends StatelessWidget {
         ),
 
         if (form.includesTransport)
-          _PickupPointsSection(
-            form: form,
-            token: token,
-            onChanged: onChanged,
-          ),
+          _PickupPointsSection(form: form, token: token, onChanged: onChanged),
       ],
     );
   }
@@ -975,6 +1064,14 @@ class _ExperienceLocationSection extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => ExperienceLocationPickerScreen(
           token: token,
+          initialLocation: hasLocation
+              ? ExperienceLocation(
+                  address: form.experienceAddress,
+                  latitude: form.experienceLatitude!,
+                  longitude: form.experienceLongitude!,
+                  placeId: form.experiencePlaceId,
+                )
+              : null,
         ),
       ),
     );
@@ -982,6 +1079,7 @@ class _ExperienceLocationSection extends StatelessWidget {
     if (location == null) return;
 
     form.experienceAddress = location.address;
+    form.experiencePlaceId = location.placeId;
     form.experienceLatitude = location.latitude;
     form.experienceLongitude = location.longitude;
 
@@ -990,6 +1088,7 @@ class _ExperienceLocationSection extends StatelessWidget {
 
   void _clearLocation() {
     form.experienceAddress = '';
+    form.experiencePlaceId = null;
     form.experienceLatitude = null;
     form.experienceLongitude = null;
 
@@ -1008,10 +1107,7 @@ class _ExperienceLocationSection extends StatelessWidget {
         const SizedBox(height: 6),
         const Text(
           'Esta ubicación se usará para mostrar experiencias cerca del cliente.',
-          style: TextStyle(
-            fontSize: 12,
-            color: Color(0xFF6B7280),
-          ),
+          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -1034,9 +1130,7 @@ class _ExperienceLocationSection extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF9FAFB),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-              ),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1049,9 +1143,7 @@ class _ExperienceLocationSection extends StatelessWidget {
                     children: [
                       Text(
                         form.experienceAddress,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -1089,18 +1181,26 @@ class _PickupPointsSection extends StatelessWidget {
     required this.onChanged,
   });
 
-  Future<void> _openMapPicker(BuildContext context) async {
+  Future<void> _openMapPicker(BuildContext context, {int? editingIndex}) async {
+    final initialPoint = editingIndex == null
+        ? null
+        : form.mapPickupPoints[editingIndex];
+
     final point = await Navigator.of(context).push<MapPickupPoint>(
       MaterialPageRoute(
-        builder: (_) => LocationPickerMapScreen(
-          token: token,
-        ),
+        builder: (_) =>
+            LocationPickerMapScreen(token: token, initialPoint: initialPoint),
       ),
     );
 
     if (point == null) return;
 
-    form.mapPickupPoints.add(point);
+    if (editingIndex == null) {
+      form.mapPickupPoints.add(point);
+    } else {
+      form.mapPickupPoints[editingIndex] = point;
+    }
+
     onChanged();
   }
 
@@ -1137,9 +1237,7 @@ class _PickupPointsSection extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFFE5E7EB),
-                ),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1153,16 +1251,12 @@ class _PickupPointsSection extends StatelessWidget {
                       children: [
                         Text(
                           point.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           point.address,
-                          style: const TextStyle(
-                            color: Color(0xFF6B7280),
-                          ),
+                          style: const TextStyle(color: Color(0xFF6B7280)),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -1188,6 +1282,13 @@ class _PickupPointsSection extends StatelessWidget {
                   ),
 
                   IconButton(
+                    tooltip: 'Editar punto',
+                    onPressed: () =>
+                        _openMapPicker(context, editingIndex: index),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Eliminar punto',
                     onPressed: () {
                       form.mapPickupPoints.removeAt(index);
                       onChanged();
@@ -1200,6 +1301,52 @@ class _PickupPointsSection extends StatelessWidget {
           }),
         ],
       ],
+    );
+  }
+}
+
+class _DiscountPreviewCard extends StatelessWidget {
+  final ProviderExperienceForm form;
+
+  const _DiscountPreviewCard({required this.form});
+
+  @override
+  Widget build(BuildContext context) {
+    final discountAmount = form.price - form.effectivePrice;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Vista previa del descuento',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          _BreakdownRow(
+            label: 'Precio original',
+            value: _formatCurrencyAmount(form.price, form.currency),
+          ),
+          const SizedBox(height: 6),
+          _BreakdownRow(
+            label: 'Descuento',
+            value: '-${_formatCurrencyAmount(discountAmount, form.currency)}',
+          ),
+          const SizedBox(height: 6),
+          _BreakdownRow(
+            label: 'Cliente paga',
+            value: _formatCurrencyAmount(form.effectivePrice, form.currency),
+            isStrong: true,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1230,27 +1377,19 @@ class _PriceBreakdownCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: primary.withOpacity(0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: primary.withOpacity(0.18),
-        ),
+        border: Border.all(color: primary.withOpacity(0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.receipt_long_outlined,
-                color: primary,
-              ),
+              Icon(Icons.receipt_long_outlined, color: primary),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   'Desglose transparente',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                 ),
               ),
             ],
@@ -1260,10 +1399,7 @@ class _PriceBreakdownCard extends StatelessWidget {
             pricingSettingsLoaded
                 ? 'La comisión de AndanDO es de $percentageLabel por reserva confirmada.'
                 : 'Cargando configuración de comisión...',
-            style: const TextStyle(
-              color: Colors.black54,
-              height: 1.35,
-            ),
+            style: const TextStyle(color: Colors.black54, height: 1.35),
           ),
           const SizedBox(height: 14),
           if (price <= 0)
@@ -1380,19 +1516,13 @@ class _PublishPriceConfirmationSheet extends StatelessWidget {
                     color: primary.withOpacity(0.10),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    Icons.price_check_outlined,
-                    color: primary,
-                  ),
+                  child: Icon(Icons.price_check_outlined, color: primary),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
                     'Antes de publicar',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                   ),
                 ),
               ],
@@ -1400,10 +1530,7 @@ class _PublishPriceConfirmationSheet extends StatelessWidget {
             const SizedBox(height: 10),
             const Text(
               'Confirma que este será el desglose por persona para esta experiencia.',
-              style: TextStyle(
-                color: Colors.black54,
-                height: 1.35,
-              ),
+              style: TextStyle(color: Colors.black54, height: 1.35),
             ),
             const SizedBox(height: 16),
             _PriceBreakdownCard(
@@ -1451,10 +1578,7 @@ class _ItineraryStep extends StatelessWidget {
   final ProviderExperienceForm form;
   final VoidCallback onChanged;
 
-  const _ItineraryStep({
-    required this.form,
-    required this.onChanged,
-  });
+  const _ItineraryStep({required this.form, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1586,9 +1710,7 @@ class _ItineraryTimePickerField extends StatelessWidget {
       initialTime: _initialTimeFromValue(value),
       builder: (context, child) {
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: false,
-          ),
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
           child: child ?? const SizedBox.shrink(),
         );
       },
@@ -1612,15 +1734,11 @@ class _ItineraryTimePickerField extends StatelessWidget {
           filled: true,
           fillColor: Colors.white,
           prefixIcon: const Icon(Icons.access_time),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
         ),
         child: Text(
           hasValue ? value : 'Seleccionar hora',
-          style: TextStyle(
-            color: hasValue ? Colors.black87 : Colors.grey,
-          ),
+          style: TextStyle(color: hasValue ? Colors.black87 : Colors.grey),
         ),
       ),
     );
@@ -1677,10 +1795,29 @@ class _RulesStep extends StatelessWidget {
           hint: 'Ej: Ropa cómoda',
           onChanged: onChanged,
         ),
+
+        SwitchListTile(
+          value: form.allowsMinors,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            '¿Se permiten menores de edad?',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            form.allowsMinors
+                ? 'Sí, pueden participar niños y adolescentes.'
+                : 'No, esta experiencia es solo para mayores de edad.',
+          ),
+          onChanged: (value) {
+            form.allowsMinors = value;
+            onChanged();
+          },
+        ),
         _DropdownInput(
           label: 'Política de cancelación *',
-          value:
-              form.cancellationPolicy.isEmpty ? null : form.cancellationPolicy,
+          value: form.cancellationPolicy.isEmpty
+              ? null
+              : form.cancellationPolicy,
           items: const [
             'free_24h',
             'free_48h',
@@ -1723,22 +1860,14 @@ class _StepContainer extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-          ),
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: const TextStyle(color: Colors.grey),
-        ),
+        Text(subtitle, style: const TextStyle(color: Colors.grey)),
         const SizedBox(height: 24),
         ...children.map(
-          (child) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: child,
-          ),
+          (child) =>
+              Padding(padding: const EdgeInsets.only(bottom: 16), child: child),
         ),
       ],
     );
@@ -1783,9 +1912,7 @@ class _Input extends StatelessWidget {
         suffixText: suffixText,
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }
@@ -1816,10 +1943,7 @@ class _DropdownInput extends StatelessWidget {
       value: selectedValue,
       placeholder: 'Seleccionar...',
       options: items.map((item) {
-        return AppSelectOption(
-          value: item,
-          label: labels?[item] ?? item,
-        );
+        return AppSelectOption(value: item, label: labels?[item] ?? item);
       }).toList(),
       onChanged: onChanged,
       height: 56,
@@ -1850,10 +1974,7 @@ class _EditableStringList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         ...List.generate(items.length, (index) {
           return Padding(
@@ -1901,4 +2022,3 @@ class _EditableStringList extends StatelessWidget {
     );
   }
 }
-

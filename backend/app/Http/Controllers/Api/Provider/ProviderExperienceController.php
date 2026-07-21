@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api\Provider;
 
+use App\Enums\ExperienceDifficulty;
 use App\Http\Controllers\Controller;
 use App\Models\Provider;
 use App\Models\ProviderExperience;
 use App\Models\ProviderExperiencePhoto;
+use App\Services\Experiences\ExperiencePricingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +15,11 @@ use Illuminate\Validation\Rule;
 
 class ProviderExperienceController extends Controller
 {
+    public function __construct(
+        private readonly ExperiencePricingService $pricingService,
+    ) {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $provider = $this->currentProvider($request);
@@ -221,15 +228,29 @@ class ProviderExperienceController extends Controller
             'maxCapacity' => ['nullable', 'integer', 'min:1', 'max:500'],
 
             'price' => [$requiredIfPublishing, 'numeric', 'min:0', 'max:99999999.99'],
+            'allows_discount' => ['nullable', 'boolean'],
+            'discount_percentage' => [
+                Rule::requiredIf($request->boolean('allows_discount')),
+                'nullable',
+                'numeric',
+                'min:' . ExperiencePricingService::MIN_DISCOUNT_PERCENTAGE,
+                'max:' . ExperiencePricingService::MAX_DISCOUNT_PERCENTAGE,
+            ],
             'currency' => ['nullable', 'string', Rule::in(['DOP', 'USD'])],
 
             'location' => ['nullable', 'string', 'max:255'],
             'province' => [$requiredIfPublishing, 'string', 'max:100'],
 
             'experience_address' => ['nullable', 'string', 'max:255'],
+            'experience_place_id' => ['nullable', 'string', 'max:255'],
             'experience_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'experience_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'includes_transport' => ['nullable', 'boolean'],
+            'allows_minors' => ['nullable', 'boolean'],
+            'difficulty_level' => [
+                $requiredIfPublishing,
+                Rule::enum(ExperienceDifficulty::class),
+            ],
 
             'pickup_points' => [$requiredIfPublishing, 'array'],
             'pickup_points.*' => ['nullable', 'string', 'max:255'],
@@ -237,6 +258,7 @@ class ProviderExperienceController extends Controller
             'map_pickup_points' => ['nullable', 'array'],
             'map_pickup_points.*.name' => ['nullable', 'string', 'max:255'],
             'map_pickup_points.*.address' => ['nullable', 'string', 'max:500'],
+            'map_pickup_points.*.place_id' => ['nullable', 'string', 'max:255'],
             'map_pickup_points.*.latitude' => ['required', 'numeric', 'between:-90,90'],
             'map_pickup_points.*.longitude' => ['required', 'numeric', 'between:-180,180'],
             'map_pickup_points.*.instructions' => ['nullable', 'string', 'max:1000'],
@@ -276,12 +298,21 @@ class ProviderExperienceController extends Controller
             'province' => $validated['province'] ?? null,
 
             'experience_address' => $validated['experience_address'] ?? null,
+            'experience_place_id' => $validated['experience_place_id'] ?? null,
             'experience_latitude' => $validated['experience_latitude'] ?? null,
             'experience_longitude' => $validated['experience_longitude'] ?? null,
             'includes_transport' => (bool) ($validated['includes_transport'] ?? false),
+            'allows_minors' => (bool) ($validated['allows_minors'] ?? false),
+            ...(array_key_exists('difficulty_level', $validated)
+                ? ['difficulty_level' => $validated['difficulty_level']]
+                : []),
 
             'pickup_points' => $this->cleanArray($validated['pickup_points'] ?? []),
             'price' => $validated['price'] ?? 0,
+            'allows_discount' => (bool) ($validated['allows_discount'] ?? false),
+            'discount_percentage' => (bool) ($validated['allows_discount'] ?? false)
+                ? ($validated['discount_percentage'] ?? null)
+                : null,
             'currency' => $validated['currency'] ?? 'DOP',
             'capacity' => $validated['capacity'] ?? $validated['maxCapacity'] ?? 1,
             'itinerary' => $this->cleanItinerary($validated['itinerary'] ?? []),
@@ -332,11 +363,24 @@ class ProviderExperienceController extends Controller
             'province',
             'price',
             'capacity',
+            'difficulty_level',
             'cancellation_policy',
         ] as $field) {
             if (blank($experience->{$field})) {
                 $missing[] = $field;
             }
+        }
+
+        if (
+            (bool) $experience->allows_discount
+            && (
+                (float) $experience->discount_percentage
+                    < ExperiencePricingService::MIN_DISCOUNT_PERCENTAGE
+                || (float) $experience->discount_percentage
+                    > ExperiencePricingService::MAX_DISCOUNT_PERCENTAGE
+            )
+        ) {
+            $missing[] = 'discount_percentage';
         }
 
         if (
@@ -429,6 +473,11 @@ class ProviderExperienceController extends Controller
             ? $experience->mapPickupPoints
             : $experience->mapPickupPoints()->get();
 
+        $pricing = $this->pricingService->calculate(
+            $experience,
+            $experience->price,
+        );
+
         return [
             'id' => $experience->id,
             'title' => $experience->title,
@@ -439,6 +488,7 @@ class ProviderExperienceController extends Controller
             'province' => $experience->province,
 
             'experience_address' => $experience->experience_address,
+            'experience_place_id' => $experience->experience_place_id,
             'experience_latitude' => $experience->experience_latitude !== null
                 ? (float) $experience->experience_latitude
                 : null,
@@ -446,12 +496,15 @@ class ProviderExperienceController extends Controller
                 ? (float) $experience->experience_longitude
                 : null,
             'includes_transport' => (bool) $experience->includes_transport,
+            'allows_minors' => (bool) $experience->allows_minors,
+            'difficulty_level' => $experience->difficulty_level?->value,
             
             'pickup_points' => $experience->pickup_points ?? [],
             'map_pickup_points' => $mapPickupPoints->map(fn ($point) => [
                 'id' => $point->id,
                 'name' => $point->name,
                 'address' => $point->address,
+                'place_id' => $point->place_id,
                 'latitude' => (float) $point->latitude,
                 'longitude' => (float) $point->longitude,
                 'instructions' => $point->instructions,
@@ -459,6 +512,13 @@ class ProviderExperienceController extends Controller
             ])->values(),
 
             'price' => (float) $experience->price,
+            'allows_discount' => (bool) $experience->allows_discount,
+            'discount_percentage' => (bool) $experience->allows_discount
+                && $experience->discount_percentage !== null
+                    ? (float) $experience->discount_percentage
+                    : null,
+            'discount_amount' => $pricing['discount_amount'],
+            'final_price' => $pricing['final_price'],
             'currency' => $experience->currency,
             'capacity' => $experience->capacity,
             'itinerary' => $experience->itinerary ?? [],
@@ -472,13 +532,13 @@ class ProviderExperienceController extends Controller
             'published_at' => optional($experience->published_at)->toISOString(),
 
             'cover_photo_url' => $displayPhoto
-                ? asset('storage/' . ltrim($displayPhoto->path, '/'))
+                ? url('/api/public-files/' . ltrim($displayPhoto->path, '/'))
                 : null,
 
             'photos' => $experience->relationLoaded('photos')
                 ? $experience->photos->map(fn ($photo) => [
                     'id' => $photo->id,
-                    'url' => asset('storage/' . ltrim($photo->path, '/')),
+                    'url' => url('/api/public-files/' . ltrim($photo->path, '/')),
                     'is_cover' => $photo->is_cover,
                     'sort_order' => $photo->sort_order,
                 ])->values()
@@ -508,6 +568,7 @@ class ProviderExperienceController extends Controller
             $experience->mapPickupPoints()->create([
                 'name' => $point['name'] ?? null,
                 'address' => $point['address'] ?? null,
+                'place_id' => $point['place_id'] ?? null,
                 'latitude' => $latitude,
                 'longitude' => $longitude,
                 'instructions' => $point['instructions'] ?? null,

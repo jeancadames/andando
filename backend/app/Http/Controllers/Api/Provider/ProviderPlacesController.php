@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Api\Provider;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
+use Throwable;
 
 class ProviderPlacesController extends Controller
 {
@@ -19,114 +20,91 @@ class ProviderPlacesController extends Controller
 
         $query = trim($validated['q']);
         $limit = (int) ($validated['limit'] ?? 5);
+        $apiKey = trim((string) config('services.google_places.api_key'));
 
-        $cacheKey = 'nominatim_search_' . md5(
-            mb_strtolower($query) . '|' . $limit
-        );
+        if ($apiKey === '') {
+            return response()->json([
+                'message' => 'La busqueda de ubicaciones no esta configurada.',
+            ], 503);
+        }
 
-        $results = Cache::remember($cacheKey, now()->addDays(7), function () use (
-            $query,
-            $limit
-        ) {
+        try {
             $baseUrl = rtrim(
-                config('services.nominatim.base_url', 'https://nominatim.openstreetmap.org'),
+                (string) config(
+                    'services.google_places.base_url',
+                    'https://places.googleapis.com'
+                ),
                 '/'
             );
 
             $response = Http::withHeaders([
-                'User-Agent' => config('services.nominatim.user_agent', 'AndanDO/1.0'),
                 'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'X-Goog-Api-Key' => $apiKey,
+                'X-Goog-FieldMask' => implode(',', [
+                    'places.id',
+                    'places.displayName',
+                    'places.formattedAddress',
+                    'places.location',
+                ]),
             ])
                 ->timeout(12)
-                ->get($baseUrl . '/search', [
-                    'q' => $query,
-                    'format' => 'jsonv2',
-                    'addressdetails' => 1,
-                    'limit' => $limit,
-                    'countrycodes' => config('services.nominatim.country', 'do'),
-                    'accept-language' => 'es',
+                ->post($baseUrl . '/v1/places:searchText', [
+                    'textQuery' => $query,
+                    'languageCode' => (string) config(
+                        'services.google_places.language',
+                        'es'
+                    ),
+                    'regionCode' => (string) config(
+                        'services.google_places.region',
+                        'DO'
+                    ),
+                    'pageSize' => $limit,
                 ]);
 
             if (! $response->successful()) {
-                return [
-                    'error' => true,
-                    'status' => $response->status(),
-                    'body' => $response->json(),
-                ];
+                throw new RuntimeException(
+                    'Google Places respondio con HTTP ' . $response->status()
+                );
             }
 
-            return collect($response->json())
-                ->map(function ($place) {
+            $results = collect($response->json('places', []))
+                ->map(function (array $place): array {
+                    $displayName = $place['displayName']['text'] ?? '';
+                    $address = $place['formattedAddress'] ?? '';
+                    $location = $place['location'] ?? [];
+
                     return [
-                        'place_id' => (string) ($place['place_id'] ?? ''),
-                        'name' => $this->resolveName($place),
-                        'address' => $place['display_name'] ?? '',
-                        'latitude' => isset($place['lat'])
-                            ? (float) $place['lat']
+                        'place_id' => (string) ($place['id'] ?? ''),
+                        'name' => trim((string) $displayName),
+                        'address' => trim((string) $address),
+                        'latitude' => isset($location['latitude'])
+                            ? (float) $location['latitude']
                             : null,
-                        'longitude' => isset($place['lon'])
-                            ? (float) $place['lon']
+                        'longitude' => isset($location['longitude'])
+                            ? (float) $location['longitude']
                             : null,
-                        'type' => $place['type'] ?? null,
-                        'category' => $place['category'] ?? null,
                     ];
                 })
-                ->filter(function ($place) {
-                    return ! empty($place['name']) &&
-                        ! empty($place['address']) &&
-                        $place['latitude'] !== null &&
-                        $place['longitude'] !== null;
+                ->filter(function (array $place): bool {
+                    return $place['name'] !== ''
+                        && $place['address'] !== ''
+                        && $place['latitude'] !== null
+                        && $place['longitude'] !== null;
                 })
                 ->values()
                 ->all();
-        });
+        } catch (Throwable $exception) {
+            report($exception);
 
-        if (is_array($results) && ($results['error'] ?? false)) {
             return response()->json([
-                'message' => 'No se pudieron buscar ubicaciones.',
-                'status' => $results['status'] ?? null,
-                'details' => $results['body'] ?? null,
+                'message' => 'No se pudieron buscar ubicaciones en este momento.',
             ], 502);
         }
 
         return response()->json([
             'data' => $results,
-            'attribution' => '© OpenStreetMap contributors',
+            'attribution' => 'Google Maps',
         ]);
-    }
-
-    private function resolveName(array $place): string
-    {
-        $named = trim((string) ($place['name'] ?? ''));
-
-        if ($named !== '') {
-            return $named;
-        }
-
-        $address = $place['address'] ?? [];
-
-        foreach ([
-            'tourism',
-            'amenity',
-            'building',
-            'road',
-            'suburb',
-            'neighbourhood',
-            'city',
-            'town',
-            'village',
-        ] as $key) {
-            if (! empty($address[$key])) {
-                return (string) $address[$key];
-            }
-        }
-
-        $displayName = (string) ($place['display_name'] ?? '');
-
-        if ($displayName !== '') {
-            return explode(',', $displayName)[0] ?? $displayName;
-        }
-
-        return 'Ubicación seleccionada';
     }
 }

@@ -64,6 +64,12 @@ class ProviderRegisterRequest extends FormRequest
                 'max:5120',
                 'mimes:pdf,jpg,jpeg,png,webp',
             ],
+            'insurance_policy' => [
+                'nullable',
+                'file',
+                'max:5120',
+                'mimes:pdf,jpg,jpeg,png,webp',
+            ],
 
             /// Paso 4
             'accept_terms' => ['required', 'accepted'],

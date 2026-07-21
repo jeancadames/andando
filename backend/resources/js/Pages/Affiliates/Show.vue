@@ -9,6 +9,7 @@ import type { VerificationRequest } from '@/types';
 
 const props = defineProps<{
     request: VerificationRequest;
+    defaultCommissionPercent: number;
 }>();
 
 const processing = ref(false);
@@ -16,6 +17,14 @@ const showApprove = ref(false);
 const showReject = ref(false);
 const showSuspend = ref(false);
 const showReactivate = ref(false);
+const approvalCommissionPercent = ref(
+    props.request.provider?.commission_rate === null
+    || props.request.provider?.commission_rate === undefined
+        ? props.defaultCommissionPercent
+        : Number(props.request.provider.commission_rate) * 100,
+);
+const currentCommissionPercent = ref(approvalCommissionPercent.value);
+const commissionProcessing = ref(false);
 
 const isPending = computed(() => props.request.status === 'pending');
 const providerId = computed(() => props.request.provider?.id);
@@ -25,8 +34,11 @@ function approve() {
     processing.value = true;
     router.post(
         `/admin/afiliados/${props.request.id}/aprobar`,
-        {},
-        { onFinish: () => { processing.value = false; showApprove.value = false; } },
+        { commission_percent: approvalCommissionPercent.value },
+        {
+            onSuccess: () => { showApprove.value = false; },
+            onFinish: () => { processing.value = false; },
+        },
     );
 }
 
@@ -54,6 +66,22 @@ function reactivate() {
         `/admin/proveedores/${providerId.value}/reactivar`,
         {},
         { onFinish: () => { processing.value = false; showReactivate.value = false; } },
+    );
+}
+
+function updateCommission() {
+    const value = Number(currentCommissionPercent.value);
+
+    if (!Number.isFinite(value) || value < 0 || value > 100 || !providerId.value) {
+        window.alert('La comisión debe estar entre 0% y 100%.');
+        return;
+    }
+
+    commissionProcessing.value = true;
+    router.patch(
+        `/admin/comisiones/${providerId.value}`,
+        { commission_percent: value },
+        { onFinish: () => { commissionProcessing.value = false; } },
     );
 }
 
@@ -206,6 +234,37 @@ function isImage(mime?: string | null): boolean {
                     </dl>
                 </section>
 
+                <!-- AndanDO Provider Commissions Module -->
+                <section
+                    v-if="providerStatus === 'approved' || providerStatus === 'suspended'"
+                    class="rounded-xl bg-white p-6 shadow-sm"
+                >
+                    <h3 class="mb-2 font-semibold text-slate-800">Comisión AndanDO</h3>
+                    <p class="mb-3 text-xs text-slate-500">
+                        Se aplicará únicamente a reservas y transacciones nuevas.
+                    </p>
+                    <div class="flex items-center gap-2">
+                        <div class="flex flex-1 items-center rounded-lg border border-slate-200 focus-within:border-sky-500">
+                            <input
+                                v-model.number="currentCommissionPercent"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                class="w-full rounded-l-lg border-0 px-3 py-2 text-right text-sm outline-none"
+                            />
+                            <span class="pr-3 text-slate-400">%</span>
+                        </div>
+                        <button
+                            class="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                            :disabled="commissionProcessing"
+                            @click="updateCommission"
+                        >
+                            {{ commissionProcessing ? 'Guardando…' : 'Guardar' }}
+                        </button>
+                    </div>
+                </section>
+
                 <!-- Estado de revisión -->
                 <section class="rounded-xl bg-white p-6 shadow-sm">
                     <h3 class="mb-3 font-semibold text-slate-800">Revisión</h3>
@@ -292,16 +351,49 @@ function isImage(mime?: string | null): boolean {
         </div>
 
         <!-- Modales -->
-        <ConfirmModal
-            :show="showApprove"
-            title="Aprobar afiliado"
-            message="El proveedor podrá publicar experiencias. ¿Confirmas?"
-            confirm-text="Aprobar"
-            confirm-color="success"
-            :processing="processing"
-            @confirm="approve"
-            @cancel="showApprove = false"
-        />
+        <!-- AndanDO Provider Commissions Module: aprobación con comisión -->
+        <div v-if="showApprove" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                <h3 class="text-lg font-semibold text-slate-900">Aprobar afiliado</h3>
+                <p class="mt-2 text-sm text-slate-600">
+                    Asigna la comisión de AndanDO antes de habilitar al afiliado.
+                </p>
+                <label class="mt-5 block text-sm font-medium text-slate-700">
+                    Comisión AndanDO
+                    <div class="mt-1 flex items-center rounded-lg border border-slate-300 focus-within:border-sky-500">
+                        <input
+                            v-model.number="approvalCommissionPercent"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            required
+                            class="w-full rounded-l-lg border-0 px-3 py-2.5 text-right outline-none"
+                        />
+                        <span class="pr-3 text-slate-400">%</span>
+                    </div>
+                </label>
+                <p class="mt-2 text-xs text-slate-500">
+                    El afiliado recibirá {{ (100 - Number(approvalCommissionPercent || 0)).toFixed(2) }}%.
+                </p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button
+                        class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        :disabled="processing"
+                        @click="showApprove = false"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                        :disabled="processing || !Number.isFinite(Number(approvalCommissionPercent)) || approvalCommissionPercent < 0 || approvalCommissionPercent > 100"
+                        @click="approve"
+                    >
+                        {{ processing ? 'Aprobando…' : 'Aprobar afiliado' }}
+                    </button>
+                </div>
+            </div>
+        </div>
         <ConfirmModal
             :show="showReject"
             title="Rechazar solicitud"

@@ -97,9 +97,7 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
   }
 
   void _select(PlaceSearchResult place) {
-    _controller.text = place.address.isNotEmpty
-        ? place.address
-        : place.name;
+    _controller.text = place.address.isNotEmpty ? place.address : place.name;
 
     setState(() {
       _results = [];
@@ -130,9 +128,7 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
                     child: SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   )
                 : const Icon(Icons.search),
@@ -143,15 +139,11 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
           const SizedBox(height: 8),
 
           Container(
-            constraints: const BoxConstraints(
-              maxHeight: 220,
-            ),
+            constraints: const BoxConstraints(maxHeight: 220),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-              ),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: const [
                 BoxShadow(
                   blurRadius: 12,
@@ -163,8 +155,7 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _results.length,
-              separatorBuilder: (_, __) =>
-                  const Divider(height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final place = _results[index];
 
@@ -185,6 +176,18 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
               },
             ),
           ),
+          const SizedBox(height: 4),
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'Google Maps',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF5E5E5E),
+              ),
+            ),
+          ),
         ],
 
         if (_hasSearched &&
@@ -199,40 +202,28 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-              ),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: const Column(
               children: [
-                Icon(
-                  Icons.search_off,
-                  color: Colors.grey,
-                ),
+                Icon(Icons.search_off, color: Colors.grey),
                 SizedBox(height: 8),
                 Text(
                   'No encontramos coincidencias',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 SizedBox(height: 4),
                 Text(
                   'Prueba con otro nombre o una dirección más específica.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                  ),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
               ],
             ),
           ),
         ],
 
-        if (!_loading &&
-            query.isNotEmpty &&
-            query.length < 3) ...[
+        if (!_loading && query.isNotEmpty && query.length < 3) ...[
           const SizedBox(height: 8),
 
           Container(
@@ -241,16 +232,11 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
             decoration: BoxDecoration(
               color: const Color(0xFFF9FAFB),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-              ),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: const Text(
               'Escribe al menos 3 caracteres para buscar ubicaciones.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
+              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
           ),
         ],

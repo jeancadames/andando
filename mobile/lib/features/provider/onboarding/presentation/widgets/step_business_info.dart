@@ -89,30 +89,15 @@ class StepBusinessInfo extends StatelessWidget {
   /// activities_experiences
   /// other
   static const List<_SelectOption> _businessTypes = [
-    _SelectOption(
-      value: 'tourism_agency',
-      label: 'Agencia de Turismo',
-    ),
-    _SelectOption(
-      value: 'tour_operator',
-      label: 'Tour Operador',
-    ),
-    _SelectOption(
-      value: 'tour_guide',
-      label: 'Guía Turístico',
-    ),
-    _SelectOption(
-      value: 'tourism_transport',
-      label: 'Transporte Turístico',
-    ),
+    _SelectOption(value: 'tourism_agency', label: 'Agencia de Turismo'),
+    _SelectOption(value: 'tour_operator', label: 'Tour Operador'),
+    _SelectOption(value: 'tour_guide', label: 'Guía Turístico'),
+    _SelectOption(value: 'tourism_transport', label: 'Transporte Turístico'),
     _SelectOption(
       value: 'activities_experiences',
       label: 'Actividades y Experiencias',
     ),
-    _SelectOption(
-      value: 'other',
-      label: 'Otro',
-    ),
+    _SelectOption(value: 'other', label: 'Otro'),
   ];
 
   /// Provincias de República Dominicana + Distrito Nacional.
@@ -149,19 +134,37 @@ class StepBusinessInfo extends StatelessWidget {
     _SelectOption(value: 'San Cristóbal', label: 'San Cristóbal'),
     _SelectOption(value: 'San José de Ocoa', label: 'San José de Ocoa'),
     _SelectOption(value: 'San Juan', label: 'San Juan'),
-    _SelectOption(
-      value: 'San Pedro de Macorís',
-      label: 'San Pedro de Macorís',
-    ),
+    _SelectOption(value: 'San Pedro de Macorís', label: 'San Pedro de Macorís'),
     _SelectOption(value: 'Sánchez Ramírez', label: 'Sánchez Ramírez'),
     _SelectOption(value: 'Santiago', label: 'Santiago'),
-    _SelectOption(
-      value: 'Santiago Rodríguez',
-      label: 'Santiago Rodríguez',
-    ),
+    _SelectOption(value: 'Santiago Rodríguez', label: 'Santiago Rodríguez'),
     _SelectOption(value: 'Santo Domingo', label: 'Santo Domingo'),
     _SelectOption(value: 'Valverde', label: 'Valverde'),
   ];
+
+  void _formatRnc() {
+    final rawDigits = rncController.text.replaceAll(RegExp(r'\D'), '');
+    final digits = rawDigits.length > 9 ? rawDigits.substring(0, 9) : rawDigits;
+
+    final buffer = StringBuffer();
+
+    for (var index = 0; index < digits.length; index++) {
+      if (index == 3 || index == 8) {
+        buffer.write('-');
+      }
+
+      buffer.write(digits[index]);
+    }
+
+    final formatted = buffer.toString();
+
+    if (rncController.text == formatted) return;
+
+    rncController.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -181,10 +184,7 @@ class StepBusinessInfo extends StatelessWidget {
 
         const Text(
           'Cuéntanos sobre tu empresa',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppColors.mutedForeground,
-          ),
+          style: TextStyle(fontSize: 14, color: AppColors.mutedForeground),
         ),
 
         const SizedBox(height: 28),
@@ -215,8 +215,11 @@ class StepBusinessInfo extends StatelessWidget {
           controller: rncController,
           hintText: '000-00000-0',
           prefixIcon: Icons.credit_card_outlined,
-          keyboardType: TextInputType.text,
-          onChanged: onChanged,
+          keyboardType: TextInputType.number,
+          onChanged: () {
+            _formatRnc();
+            onChanged();
+          },
         ),
 
         const SizedBox(height: 20),
@@ -273,10 +276,7 @@ class StepBusinessInfo extends StatelessWidget {
 /// label:
 /// Texto visible para el usuario.
 class _SelectOption {
-  const _SelectOption({
-    required this.value,
-    required this.label,
-  });
+  const _SelectOption({required this.value, required this.label});
 
   final String value;
   final String label;
@@ -360,11 +360,8 @@ class _StepSelectFieldState extends State<_StepSelectField> {
     final safeBottom = mediaQuery.padding.bottom;
 
     final availableAbove = fieldOffset.dy - safeTop - _gap;
-    final availableBelow = screenHeight -
-        fieldOffset.dy -
-        fieldSize.height -
-        safeBottom -
-        _gap;
+    final availableBelow =
+        screenHeight - fieldOffset.dy - fieldSize.height - safeBottom - _gap;
 
     final desiredHeight = (widget.options.length * _itemHeight).clamp(
       _minUsableMenuHeight,
@@ -416,9 +413,7 @@ class _StepSelectFieldState extends State<_StepSelectField> {
                     decoration: BoxDecoration(
                       color: AppColors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFFE5E7EB),
-                      ),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.10),
@@ -499,14 +494,13 @@ class _StepSelectFieldState extends State<_StepSelectField> {
       (option) => option.value == widget.value,
     );
 
-    final selectedValue =
-        widget.value.isEmpty || !optionExists ? null : widget.value;
+    final selectedValue = widget.value.isEmpty || !optionExists
+        ? null
+        : widget.value;
 
     final selectedOption = selectedValue == null
         ? null
-        : widget.options.firstWhere(
-            (option) => option.value == selectedValue,
-          );
+        : widget.options.firstWhere((option) => option.value == selectedValue);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

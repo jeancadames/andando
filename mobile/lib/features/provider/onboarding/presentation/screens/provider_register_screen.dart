@@ -21,10 +21,7 @@ import '../widgets/step_terms.dart';
 /// 3. Documentación
 /// 4. Términos y condiciones
 class ProviderRegisterScreen extends StatefulWidget {
-  const ProviderRegisterScreen({
-    super.key,
-    required this.authController,
-  });
+  const ProviderRegisterScreen({super.key, required this.authController});
 
   final AuthController authController;
 
@@ -70,12 +67,12 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
   }
 
   String _normalizeDominicanPhone(String value) {
-  final digits = value.replaceAll(RegExp(r'\D'), '');
+    final digits = value.replaceAll(RegExp(r'\D'), '');
 
-  // Permite formato internacional: +1 809 123 4567
-  if (digits.length == 11 && digits.startsWith('1')) {
-    return digits.substring(1);
-  }
+    // Permite formato internacional: +1 809 123 4567
+    if (digits.length == 11 && digits.startsWith('1')) {
+      return digits.substring(1);
+    }
 
     return digits;
   }
@@ -151,16 +148,16 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
     }
   }
 
-void _goBack() {
-  if (_currentStep == 1) {
-    context.goNamed(RouteNames.login);
-    return;
-  }
+  void _goBack() {
+    if (_currentStep == 1) {
+      context.goNamed(RouteNames.login);
+      return;
+    }
 
-  setState(() {
-    _currentStep--;
-  });
-}
+    setState(() {
+      _currentStep--;
+    });
+  }
 
   void _handleContinue() {
     if (!_canProceed()) {
@@ -173,11 +170,9 @@ void _goBack() {
             'Ingresa un teléfono dominicano válido. Ej: 809-123-4567, 829-123-4567 o +1 849-123-4567.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
@@ -215,9 +210,7 @@ void _goBack() {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-        ),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
       if (mounted) {
@@ -245,9 +238,7 @@ void _goBack() {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('El archivo no puede superar los 5MB.'),
-        ),
+        const SnackBar(content: Text('El archivo no puede superar los 5MB.')),
       );
       return;
     }
@@ -266,10 +257,7 @@ void _goBack() {
       body: SafeArea(
         child: Column(
           children: [
-            _RegisterHeader(
-              currentStep: _currentStep,
-              onBack: _goBack,
-            ),
+            _RegisterHeader(currentStep: _currentStep, onBack: _goBack),
 
             Expanded(
               child: SingleChildScrollView(
@@ -282,20 +270,20 @@ void _goBack() {
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
                 color: AppColors.white,
-                border: Border(
-                  top: BorderSide(color: Color(0xFFE5E7EB)),
-                ),
+                border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
               ),
               child: SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed:
-                      canProceed && !_isSubmitting ? _handleContinue : null,
+                  onPressed: canProceed && !_isSubmitting
+                      ? _handleContinue
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryBlue,
-                    disabledBackgroundColor:
-                        AppColors.primaryBlue.withAlpha(120),
+                    disabledBackgroundColor: AppColors.primaryBlue.withAlpha(
+                      120,
+                    ),
                     foregroundColor: AppColors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -334,10 +322,11 @@ void _goBack() {
           confirmPasswordController: _confirmPasswordController,
           showPassword: _showPassword,
           showConfirmPassword: _showConfirmPassword,
-          emailErrorText: _emailController.text.trim().isNotEmpty &&
-              !_isValidEmail(_emailController.text)
-          ? 'Ingresa un correo válido. Ej: nombre@dominio.com.'
-          : null,
+          emailErrorText:
+              _emailController.text.trim().isNotEmpty &&
+                  !_isValidEmail(_emailController.text)
+              ? 'Ingresa un correo válido. Ej: nombre@dominio.com.'
+              : null,
           onTogglePassword: () {
             setState(() {
               _showPassword = !_showPassword;
@@ -381,6 +370,7 @@ void _goBack() {
           identityCard: _formData.identityCard,
           rncCertificate: _formData.rncCertificate,
           businessLicense: _formData.businessLicense,
+          insurancePolicy: _formData.insurancePolicy,
           onPickIdentityCard: () {
             _pickFile(
               onSelected: (file) {
@@ -399,6 +389,13 @@ void _goBack() {
             _pickFile(
               onSelected: (file) {
                 _formData.businessLicense = file;
+              },
+            );
+          },
+          onPickInsurancePolicy: () {
+            _pickFile(
+              onSelected: (file) {
+                _formData.insurancePolicy = file;
               },
             );
           },
@@ -435,10 +432,7 @@ class _OptionItem {
 
 /// Header del registro con progreso.
 class _RegisterHeader extends StatelessWidget {
-  const _RegisterHeader({
-    required this.currentStep,
-    required this.onBack,
-  });
+  const _RegisterHeader({required this.currentStep, required this.onBack});
 
   final int currentStep;
   final VoidCallback onBack;
@@ -449,9 +443,7 @@ class _RegisterHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       decoration: const BoxDecoration(
         color: AppColors.white,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE5E7EB)),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,9 +461,7 @@ class _RegisterHeader extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Paso $currentStep de 4',
-            style: const TextStyle(
-              color: AppColors.mutedForeground,
-            ),
+            style: const TextStyle(color: AppColors.mutedForeground),
           ),
           const SizedBox(height: 24),
           Row(
@@ -482,9 +472,7 @@ class _RegisterHeader extends StatelessWidget {
               return Expanded(
                 child: Container(
                   height: 5,
-                  margin: EdgeInsets.only(
-                    right: index == 3 ? 0 : 8,
-                  ),
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 8),
                   decoration: BoxDecoration(
                     color: isActive
                         ? AppColors.primaryBlue
@@ -502,9 +490,7 @@ class _RegisterHeader extends StatelessWidget {
 }
 
 class _BackButtonCircle extends StatelessWidget {
-  const _BackButtonCircle({
-    required this.onPressed,
-  });
+  const _BackButtonCircle({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -520,10 +506,7 @@ class _BackButtonCircle extends StatelessWidget {
           color: AppColors.primaryBlue.withAlpha(20),
           shape: BoxShape.circle,
         ),
-        child: const Icon(
-          Icons.arrow_back,
-          color: AppColors.primaryBlue,
-        ),
+        child: const Icon(Icons.arrow_back, color: AppColors.primaryBlue),
       ),
     );
   }

@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\Provider\ProviderAnalyticsController;
 use App\Http\Controllers\Api\Provider\ProviderExperienceReviewController;
 use App\Http\Controllers\Api\Provider\ProviderConversationController;
 use App\Http\Controllers\Api\Provider\ProviderPricingSettingController;
+use App\Http\Controllers\Api\Provider\ProviderSettingsController;
 use App\Http\Controllers\Api\Client\ClientPaymentMethodController;
 use App\Http\Controllers\Api\Client\ClientPaymentTransactionController;
 use App\Http\Controllers\Api\Client\ClientClaimController;
@@ -196,9 +197,23 @@ Route::prefix('provider')->group(function () {
     Route::post('/register', [ProviderAuthController::class, 'register']);
     Route::post('/login', [ProviderAuthController::class, 'login']);
 
+    Route::get(
+        '/documents/{document}/file',
+        [ProviderSettingsController::class, 'documentFile']
+    )
+        ->middleware('signed')
+        ->name('api.provider.documents.file');
+
     Route::middleware(['auth:sanctum', 'provider.active'])->group(function () {
         Route::get('/me', [ProviderAuthController::class, 'me']);
         Route::post('/logout', [ProviderAuthController::class, 'logout']);
+
+        Route::get('/settings', [ProviderSettingsController::class, 'show']);
+        Route::put('/settings', [ProviderSettingsController::class, 'update']);
+        Route::post(
+            '/settings/documents',
+            [ProviderSettingsController::class, 'uploadOptionalDocuments']
+        )->middleware('throttle:10,1');
 
         Route::get('/pricing-settings', [ProviderPricingSettingController::class, 'index']);
 

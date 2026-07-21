@@ -12,10 +12,7 @@ import '../widgets/provider_experience_reviews_button.dart';
 import '../../../../shared/widgets/provider_bottom_nav.dart';
 
 class ProviderCatalogScreen extends StatefulWidget {
-  const ProviderCatalogScreen({
-    super.key,
-    required this.authController,
-  });
+  const ProviderCatalogScreen({super.key, required this.authController});
 
   final AuthController authController;
 
@@ -129,9 +126,8 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CreateExperienceScreen(
-          authController: widget.authController,
-        ),
+        builder: (_) =>
+            CreateExperienceScreen(authController: widget.authController),
       ),
     ).then((_) => _loadExperiences());
   }
@@ -163,9 +159,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message.replaceFirst('Exception: ', '')),
-      ),
+      SnackBar(content: Text(message.replaceFirst('Exception: ', ''))),
     );
   }
 
@@ -226,11 +220,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
                     color: _CatalogColors.primary,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.add,
-                    size: 23,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.add, size: 23, color: Colors.white),
                 ),
               ),
             ),
@@ -253,11 +243,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
               },
             ),
           ),
-          const Divider(
-            height: 1,
-            thickness: 1,
-            color: _CatalogColors.border,
-          ),
+          const Divider(height: 1, thickness: 1, color: _CatalogColors.border),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadExperiences,
@@ -267,13 +253,8 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
           ),
         ],
       ),
-        bottomNavigationBar: ProviderBottomNav(
-        currentIndex: 0,
+      bottomNavigationBar: ProviderBottomNav(
         authController: widget.authController,
-        onDashboard: () => context.go('/provider/dashboard'),
-        onCatalog: () {},
-        onMessages: () => context.go('/provider/messages'),
-        onProfile: () => context.go('/provider/profile'),
       ),
     );
   }
@@ -281,9 +262,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: _CatalogColors.primary,
-        ),
+        child: CircularProgressIndicator(color: _CatalogColors.primary),
       );
     }
 
@@ -292,11 +271,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 80),
-          const Icon(
-            Icons.error_outline,
-            size: 56,
-            color: Colors.red,
-          ),
+          const Icon(Icons.error_outline, size: 56, color: Colors.red),
           const SizedBox(height: 16),
           Text(
             _error!.replaceFirst('Exception: ', ''),
@@ -316,11 +291,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 80),
-          const Icon(
-            Icons.card_travel,
-            size: 64,
-            color: Colors.grey,
-          ),
+          const Icon(Icons.card_travel, size: 64, color: Colors.grey),
           const SizedBox(height: 16),
           Text(
             _activeTab == 'published'
@@ -339,9 +310,7 @@ class _ProviderCatalogScreenState extends State<ProviderCatalogScreen> {
                 ? 'Publica tu primera experiencia para empezar a recibir reservas.'
                 : 'Guarda borradores mientras completas tus experiencias.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _CatalogColors.mutedText,
-            ),
+            style: const TextStyle(color: _CatalogColors.mutedText),
           ),
           const SizedBox(height: 24),
           FilledButton(
@@ -513,14 +482,8 @@ class _ExperienceCard extends StatelessWidget {
                     if (value == 'delete') onDelete();
                   },
                   itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Text('Editar'),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Eliminar'),
-                    ),
+                    PopupMenuItem(value: 'edit', child: Text('Editar')),
+                    PopupMenuItem(value: 'delete', child: Text('Eliminar')),
                   ],
                 ),
               ],
@@ -571,8 +534,9 @@ class _CardActions extends StatelessWidget {
                 child: _CatalogActionButton(
                   label: isDraft ? 'Configurar Fechas' : 'Ver Calendario',
                   onTap: onCalendar,
-                  backgroundColor:
-                      isDraft ? Colors.white : _CatalogColors.primary,
+                  backgroundColor: isDraft
+                      ? Colors.white
+                      : _CatalogColors.primary,
                   borderColor: _CatalogColors.primary,
                   textColor: isDraft ? _CatalogColors.primary : Colors.white,
                 ),
@@ -629,10 +593,7 @@ class _CatalogActionButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: borderColor,
-              width: 1.3,
-            ),
+            border: Border.all(color: borderColor, width: 1.3),
           ),
           child: Text(
             label,
@@ -653,9 +614,7 @@ class _CatalogActionButton extends StatelessWidget {
 class _MetricsGrid extends StatelessWidget {
   final ProviderExperience experience;
 
-  const _MetricsGrid({
-    required this.experience,
-  });
+  const _MetricsGrid({required this.experience});
 
   @override
   Widget build(BuildContext context) {
@@ -721,10 +680,7 @@ class _ExperienceHeader extends StatelessWidget {
   final ProviderExperience experience;
   final bool isDraft;
 
-  const _ExperienceHeader({
-    required this.experience,
-    required this.isDraft,
-  });
+  const _ExperienceHeader({required this.experience, required this.isDraft});
 
   @override
   Widget build(BuildContext context) {
@@ -833,10 +789,7 @@ class _MetricBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 72,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(16),
@@ -844,11 +797,7 @@ class _MetricBox extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 17,
-            color: iconColor,
-          ),
+          Icon(icon, size: 17, color: iconColor),
           const SizedBox(height: 5),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -878,137 +827,6 @@ class _MetricBox extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ProviderBottomNav extends StatelessWidget {
-  final int currentIndex;
-  final VoidCallback onDashboard;
-  final VoidCallback onCatalog;
-  final VoidCallback onMessages;
-  final VoidCallback onProfile;
-
-  const _ProviderBottomNav({
-    required this.currentIndex,
-    required this.onDashboard,
-    required this.onCatalog,
-    required this.onMessages,
-    required this.onProfile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: _CatalogColors.border),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            children: [
-              _BottomNavItem(
-                label: 'Dashboard',
-                icon: Icons.trending_up,
-                isActive: currentIndex == 0,
-                onTap: onDashboard,
-              ),
-              _BottomNavItem(
-                label: 'Catálogo',
-                icon: Icons.calendar_month_outlined,
-                isActive: currentIndex == 1,
-                onTap: onCatalog,
-              ),
-              _BottomNavItem(
-                label: 'Mensajes',
-                icon: Icons.chat_bubble_outline,
-                isActive: currentIndex == 2,
-                showDot: true,
-                onTap: onMessages,
-              ),
-              _BottomNavItem(
-                label: 'Perfil',
-                icon: Icons.person_outline,
-                isActive: currentIndex == 3,
-                onTap: onProfile,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final bool showDot;
-  final VoidCallback onTap;
-
-  const _BottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.isActive = false,
-    this.showDot = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        isActive ? _CatalogColors.primary : _CatalogColors.mutedText;
-
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    color: color,
-                    size: 24,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight:
-                          isActive ? FontWeight.w800 : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (showDot)
-              Positioned(
-                top: 13,
-                right: 28,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: _CatalogColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -42,7 +43,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   /// Llave del formulario.
   ///
   /// Permite validar email y contraseña antes de enviar.
@@ -72,9 +74,46 @@ class _LoginScreenState extends State<LoginScreen> {
   /// Indica si se presionó el botón de Apple.
   bool _isAppleLoading = false;
 
+  /// Controla la animación de entrada de toda la pantalla.
+  late final AnimationController _entranceController;
+
+  /// Fade global de entrada.
+  late final Animation<double> _fadeIn;
+
+  /// Desplazamiento vertical suave de entrada.
+  late final Animation<Offset> _slideIn;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 720),
+    );
+
+    _fadeIn = CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOutCubic,
+    );
+
+    _slideIn = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _entranceController.forward();
+  }
+
   @override
   void dispose() {
     /// Siempre liberamos los controladores para evitar fugas de memoria.
+    _entranceController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
 
@@ -94,6 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!isValid) {
       return;
     }
+
+    FocusScope.of(context).unfocus();
 
     setState(() {
       _isLoading = true;
@@ -131,13 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
-      );
+      _showError(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() {
@@ -145,6 +180,50 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  /// Muestra un error con estilo coherente con el rediseño.
+  void _showError(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.textDark,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          content: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withAlpha(45),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.error_outline,
+                  color: AppColors.primaryRed,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   /// Normaliza el tipo de usuario recibido desde Laravel.
@@ -248,13 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
-      );
+      _showError(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() {
@@ -293,13 +366,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
-      );
+      _showError(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() {
@@ -343,263 +410,583 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool anyLoading = _isLoading || _isGoogleLoading || _isAppleLoading;
+
     return Scaffold(
-      backgroundColor: AppColors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 48),
+      backgroundColor: const Color(0xFFF6F7FB),
+      body: Stack(
+        children: [
+          /// Fondo decorativo: manchas de color desenfocadas + ruta discontinua.
+          /// Aporta identidad de marca sin comprometer la legibilidad del formulario.
+          const Positioned.fill(
+            child: _AuroraBackground(),
+          ),
 
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 310,
-                        ),
-                        child: Image.asset(
-                          'assets/images/logos/andando_logo.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Text(
-                              'AndanDO',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppColors.primaryBlue,
-                                fontSize: 44,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: FadeTransition(
+                    opacity: _fadeIn,
+                    child: SlideTransition(
+                      position: _slideIn,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 36),
 
-                    const SizedBox(height: 72),
-
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          _LoginTextField(
-                            label: 'Correo electrónico',
-                            controller: _emailController,
-                            hintText: 'tu@correo.com',
-                            prefixIcon: Icons.mail_outline,
-                            keyboardType: TextInputType.emailAddress,
-                            validator: (value) {
-                              final email = value?.trim() ?? '';
-
-                              if (email.isEmpty) {
-                                return 'El correo es obligatorio.';
-                              }
-
-                              if (!email.contains('@')) {
-                                return 'Ingresa un correo válido.';
-                              }
-
-                              return null;
-                            },
-                          ),
-
-                          const SizedBox(height: 22),
-
-                          _LoginTextField(
-                            label: 'Contraseña',
-                            controller: _passwordController,
-                            hintText: '••••••••',
-                            prefixIcon: Icons.lock_outline,
-                            obscureText: !_showPassword,
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _showPassword = !_showPassword;
-                                });
-                              },
-                              icon: Icon(
-                                _showPassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: AppColors.mutedForeground,
+                            /// Logo de la marca.
+                            Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 220,
+                                ),
+                                child: Image.asset(
+                                  'assets/images/logos/andando_logo.png',
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Text(
+                                      'AndanDO',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: AppColors.primaryBlue,
+                                        fontSize: 40,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'La contraseña es obligatoria.';
-                              }
 
-                              return null;
-                            },
-                          ),
+                            const SizedBox(height: 28),
 
-                          const SizedBox(height: 12),
+                            /// Encabezado de bienvenida.
+                            const Text(
+                              '¡Hola de nuevo!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.textDark,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.6,
+                                height: 1.1,
+                              ),
+                            ),
 
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: _goToForgotPassword,
-                              child: const Text(
-                                '¿Olvidaste tu contraseña?',
+                            const SizedBox(height: 8),
+
+                            /// Subtítulo con acento de marca en color sólido.
+                            RichText(
+                              textAlign: TextAlign.center,
+                              text: const TextSpan(
+                                text: 'Sigue descubriendo\n',
                                 style: TextStyle(
-                                  color: AppColors.primaryBlue,
-                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.mutedForeground,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: 'República Dominicana',
+                                    style: TextStyle(
+                                      color: AppColors.primaryBlue,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 30),
+
+                            /// Tarjeta flotante que contiene el formulario.
+                            /// El efecto de elevación separa el input del fondo.
+                            Container(
+                              padding: const EdgeInsets.fromLTRB(22, 26, 22, 26),
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: const Color(0xFFEDEFF5),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primaryBlue.withAlpha(18),
+                                    blurRadius: 40,
+                                    spreadRadius: -8,
+                                    offset: const Offset(0, 20),
+                                  ),
+                                ],
+                              ),
+                              child: Form(
+                                key: _formKey,
+                                child: Column(
+                                  children: [
+                                    _LoginTextField(
+                                      label: 'Correo electrónico',
+                                      controller: _emailController,
+                                      hintText: 'tu@correo.com',
+                                      prefixIcon: Icons.mail_outline_rounded,
+                                      keyboardType:
+                                          TextInputType.emailAddress,
+                                      textInputAction: TextInputAction.next,
+                                      validator: (value) {
+                                        final email = value?.trim() ?? '';
+
+                                        if (email.isEmpty) {
+                                          return 'El correo es obligatorio.';
+                                        }
+
+                                        if (!email.contains('@')) {
+                                          return 'Ingresa un correo válido.';
+                                        }
+
+                                        return null;
+                                      },
+                                    ),
+
+                                    const SizedBox(height: 18),
+
+                                    _LoginTextField(
+                                      label: 'Contraseña',
+                                      controller: _passwordController,
+                                      hintText: '••••••••',
+                                      prefixIcon: Icons.lock_outline_rounded,
+                                      obscureText: !_showPassword,
+                                      textInputAction: TextInputAction.done,
+                                      onFieldSubmitted: (_) {
+                                        if (!anyLoading) _submitLogin();
+                                      },
+                                      suffixIcon: IconButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            _showPassword = !_showPassword;
+                                          });
+                                        },
+                                        icon: Icon(
+                                          _showPassword
+                                              ? Icons
+                                                  .visibility_off_outlined
+                                              : Icons.visibility_outlined,
+                                          color: AppColors.mutedForeground,
+                                          size: 21,
+                                        ),
+                                      ),
+                                      validator: (value) {
+                                        if (value == null || value.isEmpty) {
+                                          return 'La contraseña es obligatoria.';
+                                        }
+
+                                        return null;
+                                      },
+                                    ),
+
+                                    const SizedBox(height: 10),
+
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: _goToForgotPassword,
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 4,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize
+                                                  .shrinkWrap,
+                                        ),
+                                        child: const Text(
+                                          '¿Olvidaste tu contraseña?',
+                                          style: TextStyle(
+                                            color: AppColors.primaryBlue,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 16),
+
+                                    /// Botón principal con degradado de marca.
+                                    _PrimaryGradientButton(
+                                      label: 'Iniciar sesión',
+                                      isLoading: _isLoading,
+                                      onPressed:
+                                          anyLoading ? null : _submitLogin,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 26),
+
+                            const _OrDivider(),
+
+                            const SizedBox(height: 22),
+
+                            /// Botones sociales en fila compacta.
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _SocialLoginButton(
+                                    label: 'Google',
+                                    backgroundColor: AppColors.white,
+                                    foregroundColor: AppColors.textDark,
+                                    borderColor: const Color(0xFFE5E7EB),
+                                    isLoading: _isGoogleLoading,
+                                    icon: const _GoogleIcon(),
+                                    onPressed: anyLoading
+                                        ? null
+                                        : _handleGoogleLogin,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: _SocialLoginButton(
+                                    label: 'Apple',
+                                    backgroundColor: AppColors.textDark,
+                                    foregroundColor: AppColors.white,
+                                    borderColor: AppColors.textDark,
+                                    isLoading: _isAppleLoading,
+                                    icon: const _AppleIcon(),
+                                    onPressed: anyLoading
+                                        ? null
+                                        : _handleAppleLogin,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 28),
+
+                            /// Bloque de registro.
+                            RichText(
+                              textAlign: TextAlign.center,
+                              text: const TextSpan(
+                                text: '¿No tienes cuenta? ',
+                                style: TextStyle(
+                                  color: AppColors.mutedForeground,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                children: [],
+                              ),
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: OutlinedButton(
+                                onPressed:
+                                    anyLoading ? null : _goToCustomerRegister,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.primaryBlue,
+                                  backgroundColor: AppColors.white,
+                                  side: const BorderSide(
+                                    color: AppColors.primaryBlue,
+                                    width: 1.6,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Crear cuenta',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            /// Acceso a registro de afiliado, con estilo de chip.
+                            _AffiliateChip(
+                              onTap:
+                                  anyLoading ? null : _goToAffiliateRegister,
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            TextButton(
+                              onPressed: anyLoading ? null : _continueAsGuest,
+                              child: const Text(
+                                'Continuar como invitado  →',
+                                style: TextStyle(
+                                  color: AppColors.mutedForeground,
+                                  fontWeight: FontWeight.w600,
                                   fontSize: 14,
                                 ),
                               ),
                             ),
-                          ),
 
-                          const SizedBox(height: 12),
-
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _submitLogin,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryBlue,
-                                foregroundColor: AppColors.white,
-                                disabledBackgroundColor:
-                                    AppColors.primaryBlue.withAlpha(120),
-                                elevation: 10,
-                                shadowColor:
-                                    AppColors.primaryBlue.withAlpha(55),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: AppColors.white,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Iniciar Sesión',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    const _OrDivider(),
-
-                    const SizedBox(height: 28),
-
-                    _SocialLoginButton(
-                      label: 'Continuar con Google',
-                      backgroundColor: AppColors.white,
-                      foregroundColor: AppColors.textDark,
-                      borderColor: const Color(0xFFE5E7EB),
-                      isLoading: _isGoogleLoading,
-                      icon: const _GoogleIcon(),
-                      onPressed: _isGoogleLoading ? null : _handleGoogleLogin,
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    _SocialLoginButton(
-                      label: 'Continuar con Apple',
-                      backgroundColor: Colors.black,
-                      foregroundColor: AppColors.white,
-                      borderColor: Colors.black,
-                      isLoading: _isAppleLoading,
-                      icon: const _AppleIcon(),
-                      onPressed: _isAppleLoading ? null : _handleAppleLogin,
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    const Text(
-                      '¿No tienes cuenta?',
-                      style: TextStyle(
-                        color: AppColors.mutedForeground,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: OutlinedButton(
-                        onPressed: _goToCustomerRegister,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryBlue,
-                          side: const BorderSide(
-                            color: AppColors.primaryBlue,
-                            width: 2,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Crear Cuenta',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
+                            const SizedBox(height: 16),
+                          ],
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 16),
-
-                    TextButton(
-                      onPressed: _goToAffiliateRegister,
-                      child: const Text(
-                        'Me interesa ser afiliado',
-                        style: TextStyle(
-                          color: AppColors.primaryRed,
-                          decoration: TextDecoration.underline,
-                          decorationColor: AppColors.primaryRed,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    TextButton(
-                      onPressed: _continueAsGuest,
-                      child: const Text(
-                        'Continuar como invitado →',
-                        style: TextStyle(
-                          color: AppColors.mutedForeground,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-                  ],
+                  ),
                 ),
-              ),
-            ),
 
-            const Padding(
-              padding: EdgeInsets.fromLTRB(24, 10, 24, 20),
-              child: _LegalFooter(),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 6, 24, 14),
+                  child: _LegalFooter(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fondo decorativo con manchas de color desenfocadas (estilo "aurora")
+/// más una ruta discontinua sutil, en línea con la landing page.
+class _AuroraBackground extends StatelessWidget {
+  const _AuroraBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          /// Mancha azul superior izquierda.
+          Positioned(
+            top: -110,
+            left: -90,
+            child: _blurBlob(
+              size: 320,
+              color: AppColors.primaryBlue.withAlpha(60),
+            ),
+          ),
+
+          /// Mancha roja superior derecha.
+          Positioned(
+            top: -60,
+            right: -80,
+            child: _blurBlob(
+              size: 240,
+              color: AppColors.primaryRed.withAlpha(45),
+            ),
+          ),
+
+          /// Mancha azul tenue inferior.
+          Positioned(
+            bottom: -140,
+            right: -70,
+            child: _blurBlob(
+              size: 300,
+              color: AppColors.primaryBlue.withAlpha(30),
+            ),
+          ),
+
+          /// Ruta discontinua de marca en la parte superior.
+          Positioned(
+            top: 90,
+            left: 0,
+            right: 0,
+            height: 120,
+            child: CustomPaint(
+              painter: _RouteMotifPainter(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _blurBlob({required double size, required Color color}) {
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+/// Traza una ruta punteada curva, guiño al motivo de la landing page.
+class _RouteMotifPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.primaryBlue.withAlpha(28)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path()
+      ..moveTo(-20, size.height * 0.7)
+      ..cubicTo(
+        size.width * 0.25,
+        size.height * 0.1,
+        size.width * 0.6,
+        size.height * 1.0,
+        size.width + 20,
+        size.height * 0.35,
+      );
+
+    _drawDashedPath(canvas, path, paint, dash: 7, gap: 7);
+  }
+
+  void _drawDashedPath(
+    Canvas canvas,
+    Path source,
+    Paint paint, {
+    required double dash,
+    required double gap,
+  }) {
+    for (final metric in source.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final next = distance + dash;
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          paint,
+        );
+        distance = next + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Botón principal con degradado azul de marca, sombra y estado de carga.
+class _PrimaryGradientButton extends StatelessWidget {
+  const _PrimaryGradientButton({
+    required this.label,
+    required this.onPressed,
+    this.isLoading = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool disabled = onPressed == null;
+
+    return Opacity(
+      opacity: disabled && !isLoading ? 0.55 : 1,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF2A3FC4),
+              AppColors.primaryBlue,
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withAlpha(90),
+              blurRadius: 22,
+              spreadRadius: -4,
+              offset: const Offset(0, 12),
             ),
           ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onPressed,
+            child: SizedBox(
+              width: double.infinity,
+              height: 58,
+              child: Center(
+                child: isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.white,
+                        ),
+                      )
+                    : Text(
+                        label,
+                        style: const TextStyle(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16.5,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Chip que invita a registrarse como afiliado/proveedor.
+class _AffiliateChip extends StatelessWidget {
+  const _AffiliateChip({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(30),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.primaryRed.withAlpha(18),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: AppColors.primaryRed.withAlpha(70),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(
+                Icons.storefront_outlined,
+                color: AppColors.primaryRed,
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Me interesa ser afiliado',
+                style: TextStyle(
+                  color: AppColors.primaryRed,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -743,8 +1130,11 @@ class _AuthLoginResponse {
   }
 }
 
-/// Campo reusable del formulario de login.
-class _LoginTextField extends StatelessWidget {
+/// Campo reusable del formulario de login con estado de foco.
+///
+/// Cambia el color del borde, del ícono y la sombra al enfocarse
+/// para dar retroalimentación visual clara.
+class _LoginTextField extends StatefulWidget {
   const _LoginTextField({
     required this.label,
     required this.controller,
@@ -754,6 +1144,8 @@ class _LoginTextField extends StatelessWidget {
     this.obscureText = false,
     this.suffixIcon,
     this.validator,
+    this.textInputAction,
+    this.onFieldSubmitted,
   });
 
   final String label;
@@ -764,91 +1156,140 @@ class _LoginTextField extends StatelessWidget {
   final bool obscureText;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
+  final TextInputAction? textInputAction;
+  final void Function(String)? onFieldSubmitted;
+
+  @override
+  State<_LoginTextField> createState() => _LoginTextFieldState();
+}
+
+class _LoginTextFieldState extends State<_LoginTextField> {
+  final FocusNode _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus != _focused) {
+        setState(() {
+          _focused = _focusNode.hasFocus;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final Color activeColor =
+        _focused ? AppColors.primaryBlue : AppColors.mutedForeground;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 14,
+          widget.label,
+          style: TextStyle(
+            color: _focused ? AppColors.primaryBlue : AppColors.textDark,
+            fontSize: 13.5,
             fontWeight: FontWeight.w700,
           ),
         ),
 
         const SizedBox(height: 8),
 
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          validator: validator,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: _focused
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withAlpha(28),
+                      blurRadius: 16,
+                      spreadRadius: -4,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : [],
           ),
-          cursorColor: AppColors.primaryBlue,
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: const TextStyle(
-              color: Color(0xFF8A94A6),
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
+          child: TextFormField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            keyboardType: widget.keyboardType,
+            obscureText: widget.obscureText,
+            validator: widget.validator,
+            textInputAction: widget.textInputAction,
+            onFieldSubmitted: widget.onFieldSubmitted,
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontSize: 15.5,
+              fontWeight: FontWeight.w500,
             ),
-            prefixIcon: Icon(
-              prefixIcon,
-              color: AppColors.mutedForeground,
-              size: 22,
-            ),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 50,
-              minHeight: 56,
-            ),
-            suffixIcon: suffixIcon,
-            suffixIconConstraints: const BoxConstraints(
-              minWidth: 50,
-              minHeight: 56,
-            ),
-            filled: true,
-            fillColor: const Color(0xFFF8F9FA),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 18,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE5E7EB),
+            cursorColor: AppColors.primaryBlue,
+            decoration: InputDecoration(
+              hintText: widget.hintText,
+              hintStyle: const TextStyle(
+                color: Color(0xFF8A94A6),
+                fontSize: 15.5,
+                fontWeight: FontWeight.w400,
               ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE5E7EB),
+              prefixIcon: Icon(
+                widget.prefixIcon,
+                color: activeColor,
+                size: 21,
               ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.primaryBlue,
-                width: 1.4,
+              prefixIconConstraints: const BoxConstraints(
+                minWidth: 50,
+                minHeight: 56,
               ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
+              suffixIcon: widget.suffixIcon,
+              suffixIconConstraints: const BoxConstraints(
+                minWidth: 50,
+                minHeight: 56,
+              ),
+              filled: true,
+              fillColor: _focused ? AppColors.white : const Color(0xFFF6F7FB),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 18,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: AppColors.primaryBlue,
+                  width: 1.6,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.primaryRed),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: AppColors.primaryRed,
+                  width: 1.6,
+                ),
+              ),
+              errorStyle: const TextStyle(
                 color: AppColors.primaryRed,
-              ),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.primaryRed,
-                width: 1.4,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -863,28 +1304,28 @@ class _OrDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      children: [
+    return Row(
+      children: const [
         Expanded(
           child: Divider(
-            color: Color(0xFFE5E7EB),
+            color: Color(0xFFE1E4EC),
             thickness: 1,
           ),
         ),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 14),
           child: Text(
-            'o',
+            'o continúa con',
             style: TextStyle(
               color: AppColors.mutedForeground,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
         Expanded(
           child: Divider(
-            color: Color(0xFFE5E7EB),
+            color: Color(0xFFE1E4EC),
             thickness: 1,
           ),
         ),
@@ -915,16 +1356,15 @@ class _SocialLoginButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
-      height: 56,
+      height: 54,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
-          elevation: backgroundColor == AppColors.white ? 3 : 0,
+          elevation: backgroundColor == AppColors.white ? 2 : 0,
           shadowColor: Colors.black.withAlpha(25),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(
@@ -935,8 +1375,8 @@ class _SocialLoginButton extends StatelessWidget {
         ),
         child: isLoading
             ? SizedBox(
-                width: 22,
-                height: 22,
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   color: foregroundColor,
@@ -946,13 +1386,11 @@ class _SocialLoginButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: Center(
-                      child: icon,
-                    ),
+                    width: 24,
+                    height: 24,
+                    child: Center(child: icon),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Flexible(
                     child: Text(
                       label,
@@ -960,7 +1398,7 @@ class _SocialLoginButton extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: foregroundColor,
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -982,7 +1420,7 @@ class _AppleIcon extends StatelessWidget {
       child: const Icon(
         Icons.apple,
         color: AppColors.white,
-        size: 30,
+        size: 26,
       ),
     );
   }
@@ -994,8 +1432,8 @@ class _GoogleIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SizedBox(
-      width: 24,
-      height: 24,
+      width: 22,
+      height: 22,
       child: CustomPaint(
         painter: _GoogleIconPainter(),
       ),

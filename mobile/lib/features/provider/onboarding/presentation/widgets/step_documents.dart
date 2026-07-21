@@ -27,9 +27,11 @@ class StepDocuments extends StatelessWidget {
     required this.identityCard,
     required this.rncCertificate,
     required this.businessLicense,
+    required this.insurancePolicy,
     required this.onPickIdentityCard,
     required this.onPickRncCertificate,
     required this.onPickBusinessLicense,
+    required this.onPickInsurancePolicy,
   });
 
   /// Archivo de cédula seleccionado.
@@ -43,6 +45,9 @@ class StepDocuments extends StatelessWidget {
   /// Este documento es opcional.
   final PlatformFile? businessLicense;
 
+  /// Documento opcional de poliza de seguro.
+  final PlatformFile? insurancePolicy;
+
   /// Callback para seleccionar cédula.
   final VoidCallback onPickIdentityCard;
 
@@ -51,6 +56,9 @@ class StepDocuments extends StatelessWidget {
 
   /// Callback para seleccionar licencia comercial.
   final VoidCallback onPickBusinessLicense;
+
+  /// Callback para seleccionar la poliza de seguro.
+  final VoidCallback onPickInsurancePolicy;
 
   @override
   Widget build(BuildContext context) {
@@ -72,10 +80,7 @@ class StepDocuments extends StatelessWidget {
         /// Subtítulo.
         const Text(
           'Sube los documentos requeridos para verificación',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppColors.mutedForeground,
-          ),
+          style: TextStyle(fontSize: 14, color: AppColors.mutedForeground),
         ),
 
         const SizedBox(height: 24),
@@ -89,9 +94,7 @@ class StepDocuments extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFFEFF6FF),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color(0xFFBFDBFE),
-            ),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
           ),
           child: const Text(
             '📌 Todos los documentos deben estar vigentes y ser legibles. '
@@ -132,6 +135,16 @@ class StepDocuments extends StatelessWidget {
           file: businessLicense,
           emptyTitle: 'Toca para subir licencia',
           onTap: onPickBusinessLicense,
+        ),
+
+        const SizedBox(height: 20),
+
+        _DocumentUploadCard(
+          label: 'Póliza de seguro para clientes',
+          isRequired: false,
+          file: insurancePolicy,
+          emptyTitle: 'Toca para subir la póliza de seguro',
+          onTap: onPickInsurancePolicy,
         ),
       ],
     );
@@ -201,10 +214,7 @@ class _DocumentUploadCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 26,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 26),
             decoration: BoxDecoration(
               color: hasFile
                   ? const Color(0xFFF0FDF4)

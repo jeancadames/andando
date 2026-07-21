@@ -14,10 +14,7 @@ import '../../../../shared/widgets/provider_bottom_nav.dart';
 /// No usa data quemada.
 /// Toda la información viene desde GET /api/provider/dashboard.
 class ProviderDashboardScreen extends StatefulWidget {
-  const ProviderDashboardScreen({
-    super.key,
-    required this.authController,
-  });
+  const ProviderDashboardScreen({super.key, required this.authController});
 
   /// Controlador global de autenticación.
   ///
@@ -120,21 +117,24 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                         _ActionButtons(
                           onCreateExperience: () =>
                               _goToNamed(RouteNames.providerCreateExperience),
-                          onCatalog: () => _goToNamed(RouteNames.providerCatalog),
+                          onCatalog: () =>
+                              _goToNamed(RouteNames.providerCatalog),
                         ),
 
                         const SizedBox(height: 28),
 
                         _UpcomingBookingsSection(
                           bookings: dashboard.upcomingBookings,
-                          onViewAll: () => _goToNamed(RouteNames.providerBookings),
+                          onViewAll: () =>
+                              _goToNamed(RouteNames.providerBookings),
                         ),
 
                         const SizedBox(height: 28),
 
                         _QuickAnalysisSection(
                           analysis: dashboard.quickAnalysis,
-                          onViewMore: () => _goToNamed(RouteNames.providerAnalytics),
+                          onViewMore: () =>
+                              _goToNamed(RouteNames.providerAnalytics),
                         ),
                       ],
                     ),
@@ -146,12 +146,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         ),
       ),
       bottomNavigationBar: ProviderBottomNav(
-        currentIndex: 0,
         authController: widget.authController,
-        onDashboard: () {},
-        onCatalog: () => _goToNamed(RouteNames.providerCatalog),
-        onMessages: () => _goToNamed(RouteNames.providerMessages),
-        onProfile: () => _goToNamed(RouteNames.providerProfile),
       ),
     );
   }
@@ -169,10 +164,7 @@ class _HeaderSection extends StatelessWidget {
   final ProviderDashboardModel dashboard;
   final VoidCallback onProfileTap;
 
-  const _HeaderSection({
-    required this.dashboard,
-    required this.onProfileTap,
-  });
+  const _HeaderSection({required this.dashboard, required this.onProfileTap});
 
   @override
   Widget build(BuildContext context) {
@@ -248,9 +240,7 @@ class _HeaderSection extends StatelessWidget {
 class _StatsGrid extends StatelessWidget {
   final ProviderDashboardStats stats;
 
-  const _StatsGrid({
-    required this.stats,
-  });
+  const _StatsGrid({required this.stats});
 
   @override
   Widget build(BuildContext context) {
@@ -343,11 +333,7 @@ class _StatCard extends StatelessWidget {
                   color: iconBackground,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 22,
-                ),
+                child: Icon(icon, color: iconColor, size: 22),
               ),
               const Spacer(),
               Text(
@@ -462,18 +448,11 @@ class _DashboardActionButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(22),
             border: borderColor == null
                 ? null
-                : Border.all(
-                    color: borderColor!,
-                    width: 1.5,
-                  ),
+                : Border.all(color: borderColor!, width: 1.5),
           ),
           child: Column(
             children: [
-              Icon(
-                icon,
-                color: foreground,
-                size: 30,
-              ),
+              Icon(icon, color: foreground, size: 30),
               const SizedBox(height: 8),
               Text(
                 label,
@@ -541,9 +520,7 @@ class _UpcomingBookingsSection extends StatelessWidget {
 class _BookingCard extends StatelessWidget {
   final UpcomingBookingModel booking;
 
-  const _BookingCard({
-    required this.booking,
-  });
+  const _BookingCard({required this.booking});
 
   @override
   Widget build(BuildContext context) {
@@ -630,21 +607,14 @@ class _SmallInfo extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _SmallInfo({
-    required this.icon,
-    required this.label,
-  });
+  const _SmallInfo({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 14,
-          color: _DashboardColors.mutedText,
-        ),
+        Icon(icon, size: 14, color: _DashboardColors.mutedText),
         const SizedBox(width: 4),
         Text(
           label,
@@ -724,9 +694,7 @@ class _QuickAnalysisSection extends StatelessWidget {
 class _MiniRevenueChart extends StatelessWidget {
   final List<MonthlyRevenuePointModel> points;
 
-  const _MiniRevenueChart({
-    required this.points,
-  });
+  const _MiniRevenueChart({required this.points});
 
   @override
   Widget build(BuildContext context) {
@@ -817,10 +785,7 @@ class _AnalysisItem extends StatelessWidget {
   final String value;
   final String label;
 
-  const _AnalysisItem({
-    required this.value,
-    required this.label,
-  });
+  const _AnalysisItem({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -875,10 +840,7 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        TextButton(
-          onPressed: onAction,
-          child: Text(actionLabel),
-        ),
+        TextButton(onPressed: onAction, child: Text(actionLabel)),
       ],
     );
   }
@@ -908,11 +870,7 @@ class _EmptyStateCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(
-            icon,
-            size: 42,
-            color: _DashboardColors.primarySoft,
-          ),
+          Icon(icon, size: 42, color: _DashboardColors.primarySoft),
           const SizedBox(height: 10),
           Text(
             title,
@@ -941,9 +899,7 @@ class _EmptyStateCard extends StatelessWidget {
 class _ProviderStatusWarning extends StatelessWidget {
   final String status;
 
-  const _ProviderStatusWarning({
-    required this.status,
-  });
+  const _ProviderStatusWarning({required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -957,10 +913,7 @@ class _ProviderStatusWarning extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.info_outline,
-            color: Color(0xFFA16207),
-          ),
+          const Icon(Icons.info_outline, color: Color(0xFFA16207)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -978,131 +931,6 @@ class _ProviderStatusWarning extends StatelessWidget {
   }
 }
 
-/// Bottom nav del flujo de afiliado.
-class _ProviderBottomNav extends StatelessWidget {
-  final VoidCallback onDashboard;
-  final VoidCallback onCatalog;
-  final VoidCallback onMessages;
-  final VoidCallback onProfile;
-
-  const _ProviderBottomNav({
-    required this.onDashboard,
-    required this.onCatalog,
-    required this.onMessages,
-    required this.onProfile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: _DashboardColors.border),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              _BottomNavItem(
-                label: 'Dashboard',
-                icon: Icons.trending_up,
-                isActive: true,
-                onTap: onDashboard,
-              ),
-              _BottomNavItem(
-                label: 'Catálogo',
-                icon: Icons.calendar_month_outlined,
-                onTap: onCatalog,
-              ),
-              _BottomNavItem(
-                label: 'Mensajes',
-                icon: Icons.chat_bubble_outline,
-                showDot: true,
-                onTap: onMessages,
-              ),
-              _BottomNavItem(
-                label: 'Perfil',
-                icon: Icons.person_outline,
-                onTap: onProfile,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Item individual del bottom nav.
-class _BottomNavItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final bool showDot;
-  final VoidCallback onTap;
-
-  const _BottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.isActive = false,
-    this.showDot = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        isActive ? _DashboardColors.primary : _DashboardColors.mutedText;
-
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  color: color,
-                  size: 24,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 11,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            if (showDot)
-              Positioned(
-                top: 0,
-                right: 28,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: _DashboardColors.secondary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Loading inicial.
 class _DashboardLoading extends StatelessWidget {
   const _DashboardLoading();
@@ -1110,9 +938,7 @@ class _DashboardLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: CircularProgressIndicator(
-        color: _DashboardColors.primary,
-      ),
+      child: CircularProgressIndicator(color: _DashboardColors.primary),
     );
   }
 }
@@ -1122,10 +948,7 @@ class _DashboardError extends StatelessWidget {
   final String message;
   final Future<void> Function() onRetry;
 
-  const _DashboardError({
-    required this.message,
-    required this.onRetry,
-  });
+  const _DashboardError({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {

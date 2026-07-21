@@ -1,9 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/router/route_names.dart';
 import '../../../../shared/widgets/provider_bottom_nav.dart';
 import '../../../../shared/widgets/inputs/app_select_field.dart';
 import '../../../auth/application/auth_controller.dart';
@@ -24,10 +22,7 @@ import '../../../../core/theme/app_colors.dart';
 /// - Las recomendaciones vienen del backend, generadas por reglas.
 /// - Usa el navbar real compartido del afiliado: ProviderBottomNav.
 class ProviderAnalyticsScreen extends StatefulWidget {
-  const ProviderAnalyticsScreen({
-    super.key,
-    required this.authController,
-  });
+  const ProviderAnalyticsScreen({super.key, required this.authController});
 
   /// Controlador global de autenticación.
   ///
@@ -122,19 +117,6 @@ class _ProviderAnalyticsScreenState extends State<ProviderAnalyticsScreen> {
     });
   }
 
-  /// Navega a otra pantalla principal del afiliado.
-  ///
-  /// Usamos RouteNames porque tu proyecto ya centraliza los nombres de rutas.
-  ///
-  /// Así evitamos escribir rutas como texto suelto, por ejemplo:
-  /// /provider/dashboard
-  ///
-  /// y navegamos de forma más mantenible:
-  /// RouteNames.providerDashboard
-  void _goToNamed(String routeName) {
-    context.goNamed(routeName);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -183,9 +165,7 @@ class _ProviderAnalyticsScreenState extends State<ProviderAnalyticsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (analytics.warnings.lowData)
-                          _LowDataWarning(
-                            message: analytics.warnings.message,
-                          ),
+                          _LowDataWarning(message: analytics.warnings.message),
 
                         const SizedBox(height: 16),
 
@@ -225,8 +205,7 @@ class _ProviderAnalyticsScreenState extends State<ProviderAnalyticsScreen> {
 
                         _SectionTitle(
                           title: 'Ocupación y fechas',
-                          subtitle:
-                              'Próximas salidas y uso real de los cupos.',
+                          subtitle: 'Próximas salidas y uso real de los cupos.',
                         ),
                         const SizedBox(height: 12),
                         _UpcomingSchedulesCard(
@@ -241,8 +220,7 @@ class _ProviderAnalyticsScreenState extends State<ProviderAnalyticsScreen> {
 
                         _SectionTitle(
                           title: 'Mejor momento para publicar',
-                          subtitle:
-                              'Mapa simple por día y horario de reserva.',
+                          subtitle: 'Mapa simple por día y horario de reserva.',
                         ),
                         const SizedBox(height: 12),
                         _BookingHeatmapCard(
@@ -302,12 +280,7 @@ class _ProviderAnalyticsScreenState extends State<ProviderAnalyticsScreen> {
       /// Analytics no es una pestaña principal en tu navbar actual.
       /// Por eso usamos currentIndex: -1 para no marcar ninguna opción activa.
       bottomNavigationBar: ProviderBottomNav(
-        currentIndex: -1,
         authController: widget.authController,
-        onDashboard: () => _goToNamed(RouteNames.providerDashboard),
-        onCatalog: () => _goToNamed(RouteNames.providerCatalog),
-        onMessages: () => _goToNamed(RouteNames.providerMessages),
-        onProfile: () => _goToNamed(RouteNames.providerProfile),
       ),
     );
   }
@@ -386,10 +359,7 @@ class _AnalyticsHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            _AnalyticsColors.ultramar,
-            _AnalyticsColors.ultramarDark,
-          ],
+          colors: [_AnalyticsColors.ultramar, _AnalyticsColors.ultramarDark],
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(28),
@@ -584,21 +554,12 @@ class _FilterPillButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Container(
-          constraints: const BoxConstraints(
-            minWidth: 76,
-            minHeight: 38,
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 10,
-          ),
+          constraints: const BoxConstraints(minWidth: 76, minHeight: 38),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: borderColor,
-              width: 1,
-            ),
+            border: Border.all(color: borderColor, width: 1),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -616,6 +577,7 @@ class _FilterPillButton extends StatelessWidget {
     );
   }
 }
+
 /// Dropdown para filtrar por experiencia.
 ///
 /// Incluye una opción null:
@@ -678,14 +640,14 @@ class _ExperienceSelector extends StatelessWidget {
       },
     );
   }
-}/// Aviso cuando hay pocos datos.
+}
+
+/// Aviso cuando hay pocos datos.
 ///
 /// Esto evita que el afiliado interprete como definitivo un análisis basado
 /// en pocas reservas.
 class _LowDataWarning extends StatelessWidget {
-  const _LowDataWarning({
-    required this.message,
-  });
+  const _LowDataWarning({required this.message});
 
   final String? message;
 
@@ -721,9 +683,7 @@ class _LowDataWarning extends StatelessWidget {
 
 /// Grid de KPIs principales.
 class _SummaryGrid extends StatelessWidget {
-  const _SummaryGrid({
-    required this.summary,
-  });
+  const _SummaryGrid({required this.summary});
 
   final AnalyticsSummary summary;
 
@@ -794,9 +754,7 @@ class _KpiData {
 
 /// Tarjeta individual de KPI.
 class _KpiCard extends StatelessWidget {
-  const _KpiCard({
-    required this.data,
-  });
+  const _KpiCard({required this.data});
 
   final _KpiData data;
 
@@ -807,11 +765,7 @@ class _KpiCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            data.icon,
-            color: _AnalyticsColors.ultramar,
-            size: 22,
-          ),
+          Icon(data.icon, color: _AnalyticsColors.ultramar, size: 22),
           const Spacer(),
           Text(
             data.label,
@@ -841,10 +795,7 @@ class _KpiCard extends StatelessWidget {
 
 /// Título reutilizable de sección.
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.title,
-    required this.subtitle,
-  });
+  const _SectionTitle({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
@@ -880,9 +831,7 @@ class _SectionTitle extends StatelessWidget {
 
 /// Lista de insights generados por backend.
 class _InsightsList extends StatelessWidget {
-  const _InsightsList({
-    required this.insights,
-  });
+  const _InsightsList({required this.insights});
 
   final List<AnalyticsInsight> insights;
 
@@ -911,17 +860,16 @@ class _InsightsList extends StatelessWidget {
 
 /// Card visual de una recomendación.
 class _InsightCard extends StatelessWidget {
-  const _InsightCard({
-    required this.insight,
-  });
+  const _InsightCard({required this.insight});
 
   final AnalyticsInsight insight;
 
   @override
   Widget build(BuildContext context) {
     final isHigh = insight.priority == 'high';
-    final color =
-        isHigh ? _AnalyticsColors.vermilion : _AnalyticsColors.ultramar;
+    final color = isHigh
+        ? _AnalyticsColors.vermilion
+        : _AnalyticsColors.ultramar;
 
     return _AnalyticsCard(
       child: Row(
@@ -994,9 +942,7 @@ class _InsightCard extends StatelessWidget {
 
 /// Sección de perfil de público.
 class _AudienceSection extends StatelessWidget {
-  const _AudienceSection({
-    required this.audience,
-  });
+  const _AudienceSection({required this.audience});
 
   final AnalyticsAudience audience;
 
@@ -1028,16 +974,15 @@ class _AudienceSection extends StatelessWidget {
 
 /// Gráfica de barras para rangos de edad.
 class _AgeChartCard extends StatelessWidget {
-  const _AgeChartCard({
-    required this.items,
-  });
+  const _AgeChartCard({required this.items});
 
   final List<AnalyticsRankingItem> items;
 
   @override
   Widget build(BuildContext context) {
-    final visibleItems =
-        items.where((item) => item.label != 'Sin edad').toList();
+    final visibleItems = items
+        .where((item) => item.label != 'Sin edad')
+        .toList();
 
     final hasData = visibleItems.any((item) => item.count > 0);
 
@@ -1142,10 +1087,7 @@ class _RankingCard extends StatelessWidget {
     final validItems = items.where((item) => item.count > 0).toList();
 
     if (validItems.isEmpty) {
-      return _EmptyAnalyticsCard(
-        title: emptyTitle,
-        message: emptyMessage,
-      );
+      return _EmptyAnalyticsCard(title: emptyTitle, message: emptyMessage);
     }
 
     return _AnalyticsCard(
@@ -1157,9 +1099,7 @@ class _RankingCard extends StatelessWidget {
             subtitle: 'Top ${validItems.length} según reservas confirmadas.',
           ),
           const SizedBox(height: 14),
-          ...validItems.map(
-            (item) => _PercentageBar(item: item),
-          ),
+          ...validItems.map((item) => _PercentageBar(item: item)),
         ],
       ),
     );
@@ -1168,9 +1108,7 @@ class _RankingCard extends StatelessWidget {
 
 /// Barra porcentual simple.
 class _PercentageBar extends StatelessWidget {
-  const _PercentageBar({
-    required this.item,
-  });
+  const _PercentageBar({required this.item});
 
   final AnalyticsRankingItem item;
 
@@ -1222,9 +1160,7 @@ class _PercentageBar extends StatelessWidget {
 
 /// Card de conversión.
 class _ConversionCard extends StatelessWidget {
-  const _ConversionCard({
-    required this.conversion,
-  });
+  const _ConversionCard({required this.conversion});
 
   final AnalyticsConversion conversion;
 
@@ -1284,9 +1220,7 @@ class _ConversionCard extends StatelessWidget {
 
 /// Card de próximas salidas.
 class _UpcomingSchedulesCard extends StatelessWidget {
-  const _UpcomingSchedulesCard({
-    required this.schedules,
-  });
+  const _UpcomingSchedulesCard({required this.schedules});
 
   final List<AnalyticsUpcomingSchedule> schedules;
 
@@ -1320,9 +1254,7 @@ class _UpcomingSchedulesCard extends StatelessWidget {
 
 /// Fila visual de una fecha.
 class _UpcomingScheduleRow extends StatelessWidget {
-  const _UpcomingScheduleRow({
-    required this.schedule,
-  });
+  const _UpcomingScheduleRow({required this.schedule});
 
   final AnalyticsUpcomingSchedule schedule;
 
@@ -1415,9 +1347,7 @@ class _UpcomingScheduleRow extends StatelessWidget {
 
 /// Gráfica de ocupación por día de semana.
 class _WeekdayOccupancyChart extends StatelessWidget {
-  const _WeekdayOccupancyChart({
-    required this.items,
-  });
+  const _WeekdayOccupancyChart({required this.items});
 
   final List<AnalyticsWeekdayOccupancy> items;
 
@@ -1503,9 +1433,7 @@ class _WeekdayOccupancyChart extends StatelessWidget {
 /// No usamos librería aquí porque es una cuadrícula simple.
 /// Cada celda usa intensidad 0-5 enviada por backend.
 class _BookingHeatmapCard extends StatelessWidget {
-  const _BookingHeatmapCard({
-    required this.cells,
-  });
+  const _BookingHeatmapCard({required this.cells});
 
   final List<AnalyticsHeatmapCell> cells;
 
@@ -1559,33 +1487,31 @@ class _BookingHeatmapCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  ...days.map(
-                    (day) {
-                      final cell = cells.firstWhere(
-                        (item) =>
-                            item.dayLabel == day && item.blockLabel == block,
-                        orElse: () => AnalyticsHeatmapCell(
-                          day: '',
-                          dayLabel: day,
-                          block: '',
-                          blockLabel: block,
-                          count: 0,
-                          intensity: 0,
-                        ),
-                      );
+                  ...days.map((day) {
+                    final cell = cells.firstWhere(
+                      (item) =>
+                          item.dayLabel == day && item.blockLabel == block,
+                      orElse: () => AnalyticsHeatmapCell(
+                        day: '',
+                        dayLabel: day,
+                        block: '',
+                        blockLabel: block,
+                        count: 0,
+                        intensity: 0,
+                      ),
+                    );
 
-                      return Expanded(
-                        child: Container(
-                          height: 24,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: _heatmapColor(cell.intensity),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                    return Expanded(
+                      child: Container(
+                        height: 24,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          color: _heatmapColor(cell.intensity),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -1623,9 +1549,7 @@ class _BookingHeatmapCard extends StatelessWidget {
 
 /// Card de anticipación de reserva.
 class _LeadTimeCard extends StatelessWidget {
-  const _LeadTimeCard({
-    required this.leadTime,
-  });
+  const _LeadTimeCard({required this.leadTime});
 
   final AnalyticsBookingLeadTime leadTime;
 
@@ -1641,9 +1565,7 @@ class _LeadTimeCard extends StatelessWidget {
                 'Tus clientes reservan en promedio ${leadTime.averageDays} días antes.',
           ),
           const SizedBox(height: 14),
-          ...leadTime.ranges.map(
-            (item) => _PercentageBar(item: item),
-          ),
+          ...leadTime.ranges.map((item) => _PercentageBar(item: item)),
         ],
       ),
     );
@@ -1652,9 +1574,7 @@ class _LeadTimeCard extends StatelessWidget {
 
 /// Ranking de experiencias.
 class _ExperienceRankingCard extends StatelessWidget {
-  const _ExperienceRankingCard({
-    required this.items,
-  });
+  const _ExperienceRankingCard({required this.items});
 
   final List<AnalyticsExperiencePerformance> items;
 
@@ -1677,11 +1597,9 @@ class _ExperienceRankingCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ...items.asMap().entries.map(
-                (entry) => _ExperienceRankingRow(
-                  index: entry.key + 1,
-                  item: entry.value,
-                ),
-              ),
+            (entry) =>
+                _ExperienceRankingRow(index: entry.key + 1, item: entry.value),
+          ),
         ],
       ),
     );
@@ -1690,10 +1608,7 @@ class _ExperienceRankingCard extends StatelessWidget {
 
 /// Fila del ranking de experiencias.
 class _ExperienceRankingRow extends StatelessWidget {
-  const _ExperienceRankingRow({
-    required this.index,
-    required this.item,
-  });
+  const _ExperienceRankingRow({required this.index, required this.item});
 
   final int index;
   final AnalyticsExperiencePerformance item;
@@ -1764,9 +1679,7 @@ class _ExperienceRankingRow extends StatelessWidget {
 
 /// Card de clientes y lealtad.
 class _LoyaltyCard extends StatelessWidget {
-  const _LoyaltyCard({
-    required this.loyalty,
-  });
+  const _LoyaltyCard({required this.loyalty});
 
   final AnalyticsLoyalty loyalty;
 
@@ -1861,10 +1774,7 @@ class _LoyaltyCard extends StatelessWidget {
 
 /// Métrica pequeña reutilizable.
 class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({
-    required this.label,
-    required this.value,
-  });
+  const _MiniMetric({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1906,10 +1816,7 @@ class _MiniMetric extends StatelessWidget {
 
 /// Header pequeño para cards internas.
 class _CardHeader extends StatelessWidget {
-  const _CardHeader({
-    required this.title,
-    required this.subtitle,
-  });
+  const _CardHeader({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
@@ -1978,10 +1885,7 @@ class _AnalyticsCard extends StatelessWidget {
 
 /// Empty state reutilizable para secciones sin data.
 class _EmptyAnalyticsCard extends StatelessWidget {
-  const _EmptyAnalyticsCard({
-    required this.title,
-    required this.message,
-  });
+  const _EmptyAnalyticsCard({required this.title, required this.message});
 
   final String title;
   final String message;
@@ -2006,10 +1910,7 @@ class _EmptyAnalyticsCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _CardHeader(
-              title: title,
-              subtitle: message,
-            ),
+            child: _CardHeader(title: title, subtitle: message),
           ),
         ],
       ),
@@ -2024,19 +1925,14 @@ class _AnalyticsLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: CircularProgressIndicator(
-        color: _AnalyticsColors.ultramar,
-      ),
+      child: CircularProgressIndicator(color: _AnalyticsColors.ultramar),
     );
   }
 }
 
 /// Estado de error.
 class _AnalyticsError extends StatelessWidget {
-  const _AnalyticsError({
-    required this.message,
-    required this.onRetry,
-  });
+  const _AnalyticsError({required this.message, required this.onRetry});
 
   final String message;
   final Future<void> Function() onRetry;

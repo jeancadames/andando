@@ -80,10 +80,7 @@ class ProviderAuthApi {
         /// si no reconoce que es una petición API.
         'Accept': 'application/json',
       },
-      body: {
-        'email': email,
-        'password': password,
-      },
+      body: {'email': email, 'password': password},
     );
 
     return _handleAuthResponse(response);
@@ -114,9 +111,7 @@ class ProviderAuthApi {
 
     final request = http.MultipartRequest('POST', uri);
 
-    request.headers.addAll({
-      'Accept': 'application/json',
-    });
+    request.headers.addAll({'Accept': 'application/json'});
 
     /// Campos normales del formulario.
     ///
@@ -142,10 +137,7 @@ class ProviderAuthApi {
     ///
     /// El nombre identity_card debe coincidir con Laravel.
     request.files.add(
-      _fileToMultipart(
-        fieldName: 'identity_card',
-        file: data.identityCard!,
-      ),
+      _fileToMultipart(fieldName: 'identity_card', file: data.identityCard!),
     );
 
     /// Archivo obligatorio: certificado RNC.
@@ -166,6 +158,15 @@ class ProviderAuthApi {
         _fileToMultipart(
           fieldName: 'business_license',
           file: data.businessLicense!,
+        ),
+      );
+    }
+
+    if (data.insurancePolicy != null) {
+      request.files.add(
+        _fileToMultipart(
+          fieldName: 'insurance_policy',
+          file: data.insurancePolicy!,
         ),
       );
     }
@@ -200,9 +201,7 @@ class ProviderAuthApi {
   /// - approved
   /// - rejected
   /// - suspended
-  Future<String> getCurrentProviderStatus({
-    required String token,
-  }) async {
+  Future<String> getCurrentProviderStatus({required String token}) async {
     final uri = Uri.parse('${Environment.apiBaseUrl}/provider/me');
 
     final response = await http.get(
@@ -220,7 +219,8 @@ class ProviderAuthApi {
 
     final body = _decodeJson(response);
 
-    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+    final isSuccessful =
+        response.statusCode >= 200 && response.statusCode < 300;
 
     if (!isSuccessful) {
       throw Exception(
@@ -276,20 +276,16 @@ class ProviderAuthApi {
   /// }
   ///
   /// await authController.logout();
-  Future<void> logout({
-    required String token,
-  }) async {
+  Future<void> logout({required String token}) async {
     final uri = Uri.parse('${Environment.apiBaseUrl}/provider/logout');
 
     final response = await http.post(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
     );
 
-    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+    final isSuccessful =
+        response.statusCode >= 200 && response.statusCode < 300;
 
     /// Si el backend responde error, lanzamos excepción.
     ///
@@ -298,7 +294,8 @@ class ProviderAuthApi {
       final body = _decodeJson(response);
 
       throw Exception(
-        body['message']?.toString() ?? 'No se pudo cerrar sesión en el servidor.',
+        body['message']?.toString() ??
+            'No se pudo cerrar sesión en el servidor.',
       );
     }
   }
@@ -384,7 +381,8 @@ class ProviderAuthApi {
   ProviderAuthResponse _handleAuthResponse(http.Response response) {
     final body = _decodeJson(response);
 
-    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+    final isSuccessful =
+        response.statusCode >= 200 && response.statusCode < 300;
 
     if (isSuccessful) {
       return ProviderAuthResponse.fromJson(body);

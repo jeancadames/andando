@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ExperienceDifficulty;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,10 +38,13 @@ class ProviderExperience extends Model
         'location',
         'province',
         'experience_address',
+        'experience_place_id',
         'experience_latitude',
         'experience_longitude',
         'pickup_points',
         'price',
+        'allows_discount',
+        'discount_percentage',
         'currency',
         'capacity',
         'itinerary',
@@ -56,6 +60,8 @@ class ProviderExperience extends Model
         'published_at',
         'is_active',
         'includes_transport',
+        'allows_minors',
+        'difficulty_level',
     ];
 
     /**
@@ -74,10 +80,14 @@ class ProviderExperience extends Model
         'not_included' => 'array',
         'requirements' => 'array',
         'price' => 'decimal:2',
+        'allows_discount' => 'boolean',
+        'discount_percentage' => 'decimal:2',
         'capacity' => 'integer',
         'is_active' => 'boolean',
         'published_at' => 'datetime',
         'includes_transport' => 'boolean',
+        'allows_minors' => 'boolean',
+        'difficulty_level' => ExperienceDifficulty::class,
         'cancellation_penalty_hours' => 'integer',
         'cancellation_penalty_percentage' => 'integer',
     ];

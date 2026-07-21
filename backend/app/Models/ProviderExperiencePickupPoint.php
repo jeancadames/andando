@@ -19,6 +19,7 @@ class ProviderExperiencePickupPoint extends Model
         'provider_experience_id',
         'name',
         'address',
+        'place_id',
         'latitude',
         'longitude',
         'instructions',

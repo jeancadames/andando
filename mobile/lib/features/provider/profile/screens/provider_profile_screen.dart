@@ -9,7 +9,6 @@ import '../../dashboard/services/provider_dashboard_service.dart';
 
 import '../../../../shared/widgets/provider_bottom_nav.dart';
 
-
 /// Pantalla principal del perfil del afiliado/proveedor.
 ///
 /// Responsabilidades:
@@ -29,10 +28,7 @@ import '../../../../shared/widgets/provider_bottom_nav.dart';
 class ProviderProfileScreen extends StatefulWidget {
   final AuthController authController;
 
-  const ProviderProfileScreen({
-    super.key,
-    required this.authController,
-  });
+  const ProviderProfileScreen({super.key, required this.authController});
 
   @override
   State<ProviderProfileScreen> createState() => _ProviderProfileScreenState();
@@ -50,9 +46,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     super.initState();
 
     /// Carga los datos del perfil usando el token actual del afiliado.
-    _profileFuture = _service.getDashboard(
-      token: widget.authController.token,
-    );
+    _profileFuture = _service.getDashboard(token: widget.authController.token);
   }
 
   /// Recarga el perfil desde el backend.
@@ -131,9 +125,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceFirst('Exception: ', ''),
-          ),
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
         ),
       );
     }
@@ -169,9 +161,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                child: CircularProgressIndicator(
-                  color: _ProfileColors.primary,
-                ),
+                child: CircularProgressIndicator(color: _ProfileColors.primary),
               );
             }
 
@@ -197,10 +187,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  _ProfileHero(
-                    dashboard: dashboard,
-                    onBack: _goToDashboard,
-                  ),
+                  _ProfileHero(dashboard: dashboard, onBack: _goToDashboard),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
                     child: Column(
@@ -209,9 +196,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                           offset: const Offset(0, -34),
                           child: Column(
                             children: [
-                              _ProfileStatsGrid(
-                                stats: dashboard.stats,
-                              ),
+                              _ProfileStatsGrid(stats: dashboard.stats),
                               const SizedBox(height: 18),
 
                               /// Menú homologado visualmente con CustomerProfile.
@@ -247,13 +232,8 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           },
         ),
       ),
-        bottomNavigationBar: ProviderBottomNav(
+      bottomNavigationBar: ProviderBottomNav(
         authController: widget.authController,
-        currentIndex: 3,
-        onDashboard: () => context.goNamed(RouteNames.providerDashboard),
-        onCatalog: () => context.goNamed(RouteNames.providerCatalog),
-        onMessages: () => context.goNamed(RouteNames.providerMessages),
-        onProfile: () {},
       ),
     );
   }
@@ -271,10 +251,7 @@ class _ProfileHero extends StatelessWidget {
   final ProviderDashboardModel dashboard;
   final VoidCallback onBack;
 
-  const _ProfileHero({
-    required this.dashboard,
-    required this.onBack,
-  });
+  const _ProfileHero({required this.dashboard, required this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -290,9 +267,7 @@ class _ProfileHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 72),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: _ProfileColors.border),
-        ),
+        border: Border(bottom: BorderSide(color: _ProfileColors.border)),
       ),
       child: Column(
         children: [
@@ -340,10 +315,7 @@ class _ProfileHero extends StatelessWidget {
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      _ProfileColors.primary,
-                      Color(0xFF0756A5),
-                    ],
+                    colors: [_ProfileColors.primary, Color(0xFF0756A5)],
                   ),
                   borderRadius: BorderRadius.circular(32),
                   boxShadow: [
@@ -402,10 +374,7 @@ class _ProfileHero extends StatelessWidget {
                         ? const Color(0xFF22C55E)
                         : const Color(0xFFF59E0B),
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 3,
-                    ),
+                    border: Border.all(color: Colors.white, width: 3),
                   ),
                 ),
               ),
@@ -464,29 +433,19 @@ class _VerificationPill extends StatelessWidget {
   final bool isVerified;
   final String? status;
 
-  const _VerificationPill({
-    required this.isVerified,
-    required this.status,
-  });
+  const _VerificationPill({required this.isVerified, required this.status});
 
   @override
   Widget build(BuildContext context) {
     final label = isVerified ? 'Afiliado verificado' : _statusLabel(status);
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 9,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        color: isVerified
-            ? const Color(0xFFE8F8EF)
-            : const Color(0xFFFFFBEB),
+        color: isVerified ? const Color(0xFFE8F8EF) : const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: isVerified
-              ? const Color(0xFFBBF7D0)
-              : const Color(0xFFFDE68A),
+          color: isVerified ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A),
         ),
       ),
       child: Row(
@@ -538,9 +497,7 @@ class _VerificationPill extends StatelessWidget {
 class _ProfileStatsGrid extends StatelessWidget {
   final ProviderDashboardStats stats;
 
-  const _ProfileStatsGrid({
-    required this.stats,
-  });
+  const _ProfileStatsGrid({required this.stats});
 
   @override
   Widget build(BuildContext context) {
@@ -623,11 +580,7 @@ class _ProfileStatCard extends StatelessWidget {
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(17),
             ),
-            child: Icon(
-              icon,
-              color: _ProfileColors.primary,
-              size: 23,
-            ),
+            child: Icon(icon, color: _ProfileColors.primary, size: 23),
           ),
           const Spacer(),
           Text(
@@ -654,11 +607,7 @@ class _ProfileStatCard extends StatelessWidget {
           const SizedBox(height: 7),
           Row(
             children: [
-              const Icon(
-                Icons.trending_up,
-                size: 13,
-                color: Color(0xFF15803D),
-              ),
+              const Icon(Icons.trending_up, size: 13, color: Color(0xFF15803D)),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
@@ -762,10 +711,7 @@ class _ProfileMenuItem extends StatelessWidget {
       ),
       child: ListTile(
         onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           width: 42,
           height: 42,
@@ -773,11 +719,7 @@ class _ProfileMenuItem extends StatelessWidget {
             color: const Color(0xFFEFF6FF),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(
-            icon,
-            color: _ProfileColors.primary,
-            size: 23,
-          ),
+          child: Icon(icon, color: _ProfileColors.primary, size: 23),
         ),
         title: Text(
           title,
@@ -817,10 +759,7 @@ class _LogoutButton extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onTap;
 
-  const _LogoutButton({
-    required this.isLoading,
-    required this.onTap,
-  });
+  const _LogoutButton({required this.isLoading, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -838,161 +777,15 @@ class _LogoutButton extends StatelessWidget {
                 ),
               )
             : const Icon(Icons.logout_rounded),
-        label: Text(
-          isLoading ? 'Cerrando sesión...' : 'Cerrar sesión',
-        ),
+        label: Text(isLoading ? 'Cerrando sesión...' : 'Cerrar sesión'),
         style: OutlinedButton.styleFrom(
           foregroundColor: const Color(0xFFDC2626),
-          side: const BorderSide(
-            color: Color(0xFFFCA5A5),
-          ),
-          padding: const EdgeInsets.symmetric(
-            vertical: 15,
-          ),
+          side: const BorderSide(color: Color(0xFFFCA5A5)),
+          padding: const EdgeInsets.symmetric(vertical: 15),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Bottom navigation del flujo de proveedor.
-///
-/// Se deja igual que estaba.
-class _ProviderBottomNav extends StatelessWidget {
-  final int currentIndex;
-  final VoidCallback onDashboard;
-  final VoidCallback onCatalog;
-  final VoidCallback onMessages;
-  final VoidCallback onProfile;
-
-  const _ProviderBottomNav({
-    required this.currentIndex,
-    required this.onDashboard,
-    required this.onCatalog,
-    required this.onMessages,
-    required this.onProfile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: _ProfileColors.border),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            children: [
-              _BottomNavItem(
-                label: 'Dashboard',
-                icon: Icons.trending_up,
-                isActive: currentIndex == 0,
-                onTap: onDashboard,
-              ),
-              _BottomNavItem(
-                label: 'Catálogo',
-                icon: Icons.calendar_month_outlined,
-                isActive: currentIndex == 1,
-                onTap: onCatalog,
-              ),
-              _BottomNavItem(
-                label: 'Mensajes',
-                icon: Icons.chat_bubble_outline,
-                isActive: currentIndex == 2,
-                showDot: true,
-                onTap: onMessages,
-              ),
-              _BottomNavItem(
-                label: 'Perfil',
-                icon: Icons.person_outline,
-                isActive: currentIndex == 3,
-                onTap: onProfile,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Item individual del bottom navigation.
-///
-/// Se deja igual que estaba.
-class _BottomNavItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final bool showDot;
-  final VoidCallback onTap;
-
-  const _BottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.isActive = false,
-    this.showDot = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        isActive ? _ProfileColors.primary : _ProfileColors.mutedText;
-
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    color: color,
-                    size: 24,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight:
-                          isActive ? FontWeight.w800 : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (showDot)
-              Positioned(
-                top: 13,
-                right: 28,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: _ProfileColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -1006,10 +799,7 @@ class _ProfileError extends StatelessWidget {
   final String message;
   final Future<void> Function() onRetry;
 
-  const _ProfileError({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ProfileError({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {

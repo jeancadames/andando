@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
@@ -25,8 +26,57 @@ class AppTheme {
 
   /// Tema claro principal de la aplicación.
   static ThemeData get lightTheme {
+    final interTextTheme = GoogleFonts.interTextTheme(
+      const TextTheme(
+        displayLarge: TextStyle(color: AppColors.textDark),
+        displayMedium: TextStyle(color: AppColors.textDark),
+        displaySmall: TextStyle(color: AppColors.textDark),
+
+        headlineLarge: TextStyle(color: AppColors.textDark),
+        headlineMedium: TextStyle(color: AppColors.textDark),
+        headlineSmall: TextStyle(color: AppColors.textDark),
+
+        titleLarge: TextStyle(color: AppColors.textDark),
+        titleMedium: TextStyle(color: AppColors.textDark),
+        titleSmall: TextStyle(color: AppColors.textDark),
+
+        bodyLarge: TextStyle(color: AppColors.textDark),
+        bodyMedium: TextStyle(color: AppColors.textDark),
+        bodySmall: TextStyle(color: AppColors.mutedForeground),
+
+        labelLarge: TextStyle(color: AppColors.textDark),
+        labelMedium: TextStyle(color: AppColors.textDark),
+        labelSmall: TextStyle(color: AppColors.mutedForeground),
+      ),
+    );
+
+    final textTheme = interTextTheme.copyWith(
+      displayLarge: GoogleFonts.bricolageGrotesque(
+        textStyle: interTextTheme.displayLarge,
+      ),
+      displayMedium: GoogleFonts.bricolageGrotesque(
+        textStyle: interTextTheme.displayMedium,
+      ),
+      displaySmall: GoogleFonts.bricolageGrotesque(
+        textStyle: interTextTheme.displaySmall,
+      ),
+      headlineLarge: GoogleFonts.bricolageGrotesque(
+        textStyle: interTextTheme.headlineLarge,
+      ),
+      headlineMedium: GoogleFonts.bricolageGrotesque(
+        textStyle: interTextTheme.headlineMedium,
+      ),
+      headlineSmall: GoogleFonts.bricolageGrotesque(
+        textStyle: interTextTheme.headlineSmall,
+      ),
+      titleLarge: GoogleFonts.bricolageGrotesque(
+        textStyle: interTextTheme.titleLarge,
+      ),
+    );
+
     return ThemeData(
       useMaterial3: true,
+      fontFamily: GoogleFonts.inter().fontFamily,
 
       /// Color base de pantallas.
       scaffoldBackgroundColor: AppColors.white,
@@ -59,27 +109,7 @@ class AppTheme {
       ///
       /// Todos deben ser oscuros por defecto.
       /// Nunca pongas blanco aquí como color global.
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(color: AppColors.textDark),
-        displayMedium: TextStyle(color: AppColors.textDark),
-        displaySmall: TextStyle(color: AppColors.textDark),
-
-        headlineLarge: TextStyle(color: AppColors.textDark),
-        headlineMedium: TextStyle(color: AppColors.textDark),
-        headlineSmall: TextStyle(color: AppColors.textDark),
-
-        titleLarge: TextStyle(color: AppColors.textDark),
-        titleMedium: TextStyle(color: AppColors.textDark),
-        titleSmall: TextStyle(color: AppColors.textDark),
-
-        bodyLarge: TextStyle(color: AppColors.textDark),
-        bodyMedium: TextStyle(color: AppColors.textDark),
-        bodySmall: TextStyle(color: AppColors.mutedForeground),
-
-        labelLarge: TextStyle(color: AppColors.textDark),
-        labelMedium: TextStyle(color: AppColors.textDark),
-        labelSmall: TextStyle(color: AppColors.mutedForeground),
-      ),
+      textTheme: textTheme,
 
       /// Tema global de inputs.
       ///
@@ -113,15 +143,11 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFFE5E7EB),
-          ),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFFE5E7EB),
-          ),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -132,16 +158,11 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: AppColors.primaryRed,
-          ),
+          borderSide: const BorderSide(color: AppColors.primaryRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: AppColors.primaryRed,
-            width: 1.4,
-          ),
+          borderSide: const BorderSide(color: AppColors.primaryRed, width: 1.4),
         ),
       ),
 
@@ -155,10 +176,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
 
@@ -167,17 +185,11 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primaryBlue,
           minimumSize: const Size(double.infinity, 56),
-          side: const BorderSide(
-            color: AppColors.primaryBlue,
-            width: 2,
-          ),
+          side: const BorderSide(color: AppColors.primaryBlue, width: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
 
@@ -185,9 +197,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primaryBlue,
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
 
@@ -201,9 +211,7 @@ class AppTheme {
           return AppColors.white;
         }),
         checkColor: WidgetStateProperty.all(AppColors.white),
-        side: const BorderSide(
-          color: Color(0xFFD1D5DB),
-        ),
+        side: const BorderSide(color: Color(0xFFD1D5DB)),
       ),
     );
   }

@@ -39,6 +39,7 @@ import '../../features/provider/experiences/screens/provider_experience_reviews_
 import '../../features/provider/onboarding/presentation/screens/provider_register_screen.dart';
 import '../../features/provider/onboarding/presentation/screens/provider_verification_pending_screen.dart';
 import '../../features/provider/profile/screens/provider_profile_screen.dart';
+import '../../features/provider/profile/screens/provider_settings_screen.dart';
 import '../../features/provider/bookings/screens/provider_bookings_screen.dart';
 import '../../features/provider/analytics/screens/provider_analytics_screen.dart';
 import '../../features/provider/chat/presentation/screens/provider_chat_list_screen.dart';
@@ -577,9 +578,8 @@ class AppRouter {
         path: '/provider/settings',
         name: RouteNames.providerSettings,
         builder: (context, state) {
-          return const _SimpleProviderPlaceholder(
-            title: 'Configuración',
-            message: 'Pantalla de configuración pendiente.',
+          return ProviderSettingsScreen(
+            authController: _authController,
           );
         },
       ),

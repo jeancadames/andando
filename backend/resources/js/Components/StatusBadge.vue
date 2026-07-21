@@ -22,6 +22,17 @@ const map: Record<string, { label: string; classes: string }> = {
     published: { label: 'Publicada', classes: 'bg-emerald-100 text-emerald-800' },
     paused: { label: 'Pausada', classes: 'bg-amber-100 text-amber-800' },
 
+    // AndanDO Admin Payments UI
+    scheduled: { label: 'Programado', classes: 'bg-amber-100 text-amber-800' },
+    processing: { label: 'Procesando', classes: 'bg-sky-100 text-sky-800' },
+    pending_verification: { label: 'Requiere verificación', classes: 'bg-violet-100 text-violet-800' },
+    paid: { label: 'Pagado', classes: 'bg-emerald-100 text-emerald-800' },
+    failed: { label: 'Fallido', classes: 'bg-rose-100 text-rose-800' },
+    cancelled: { label: 'Cancelado', classes: 'bg-slate-200 text-slate-700' },
+    refunded: { label: 'Reembolsado', classes: 'bg-indigo-100 text-indigo-800' },
+    partially_refunded: { label: 'Reembolso parcial', classes: 'bg-fuchsia-100 text-fuchsia-800' },
+    succeeded: { label: 'Completado', classes: 'bg-emerald-100 text-emerald-800' },
+
     // Documentos
     active: { label: 'Activo', classes: 'bg-emerald-100 text-emerald-800' },
 };

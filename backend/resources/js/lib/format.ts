@@ -50,6 +50,7 @@ const documentLabels: Record<string, string> = {
     identity_card: 'Cédula / Identidad',
     rnc_certificate: 'Certificado RNC',
     business_license: 'Licencia comercial',
+    insurance_policy: 'Póliza de seguro / viaje',
 };
 
 export function documentLabel(type: string): string {

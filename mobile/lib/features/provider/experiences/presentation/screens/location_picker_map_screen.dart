@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../models/map_pickup_point.dart';
 import '../../models/place_search_result.dart';
@@ -10,10 +9,12 @@ import '../../widgets/place_search_field.dart';
 
 class LocationPickerMapScreen extends StatefulWidget {
   final String? token;
+  final MapPickupPoint? initialPoint;
 
   const LocationPickerMapScreen({
     super.key,
     required this.token,
+    this.initialPoint,
   });
 
   @override
@@ -22,22 +23,50 @@ class LocationPickerMapScreen extends StatefulWidget {
 }
 
 class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
-  final MapController _mapController = MapController();
-  final ProviderExperienceService _service = ProviderExperienceService();
+  static const LatLng _santoDomingo = LatLng(18.4861, -69.9312);
 
+  final ProviderExperienceService _service = ProviderExperienceService();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _instructionsController = TextEditingController();
 
-  LatLng _selectedLocation = const LatLng(18.4861, -69.9312);
+  GoogleMapController? _mapController;
+  late LatLng _selectedLocation;
+  late LatLng _cameraTarget;
+  String? _selectedPlaceId;
+  bool _preservePlaceIdOnNextIdle = false;
   bool _loadingLocation = false;
 
   @override
+  void initState() {
+    super.initState();
+
+    final initial = widget.initialPoint;
+    _selectedLocation = initial == null
+        ? _santoDomingo
+        : LatLng(initial.latitude, initial.longitude);
+    _cameraTarget = _selectedLocation;
+    _selectedPlaceId = initial?.placeId;
+    _preservePlaceIdOnNextIdle = _selectedPlaceId?.trim().isNotEmpty == true;
+    _nameController.text = initial?.name ?? '';
+    _addressController.text = initial?.address ?? '';
+    _instructionsController.text = initial?.instructions ?? '';
+  }
+
+  @override
   void dispose() {
+    _mapController?.dispose();
     _nameController.dispose();
     _addressController.dispose();
     _instructionsController.dispose();
     super.dispose();
+  }
+
+  Future<void> _moveCamera(LatLng target) async {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    await controller.animateCamera(CameraUpdate.newLatLngZoom(target, 16));
   }
 
   Future<void> _goToCurrentLocation() async {
@@ -47,7 +76,7 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
-        _showSnack('Activa la ubicación del dispositivo.');
+        _showSnack('Activa la ubicacion del dispositivo.');
         return;
       }
 
@@ -59,23 +88,23 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        _showSnack('No tenemos permiso para acceder a tu ubicación.');
+        _showSnack('No tenemos permiso para acceder a tu ubicacion.');
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
+      final position = await Geolocator.getCurrentPosition();
       final current = LatLng(position.latitude, position.longitude);
 
       setState(() {
         _selectedLocation = current;
+        _cameraTarget = current;
+        _selectedPlaceId = null;
+        _preservePlaceIdOnNextIdle = false;
       });
 
-      _mapController.move(current, 16);
+      await _moveCamera(current);
     } catch (_) {
-      _showSnack('No pudimos obtener tu ubicación.');
+      _showSnack('No pudimos obtener tu ubicacion.');
     } finally {
       if (mounted) {
         setState(() => _loadingLocation = false);
@@ -83,21 +112,38 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
     }
   }
 
-  void _selectPlace(PlaceSearchResult place) {
+  Future<void> _selectPlace(PlaceSearchResult place) async {
     final location = LatLng(place.latitude, place.longitude);
 
     setState(() {
       _selectedLocation = location;
-
-      _addressController.text =
-          place.address.isNotEmpty ? place.address : place.name;
+      _cameraTarget = location;
+      _selectedPlaceId = place.placeId;
+      _preservePlaceIdOnNextIdle = true;
+      _addressController.text = place.address.isNotEmpty
+          ? place.address
+          : place.name;
 
       if (_nameController.text.trim().isEmpty) {
         _nameController.text = place.name;
       }
     });
 
-    _mapController.move(location, 16);
+    await _moveCamera(location);
+  }
+
+  void _onCameraIdle() {
+    if (!mounted) return;
+
+    setState(() {
+      _selectedLocation = _cameraTarget;
+
+      if (_preservePlaceIdOnNextIdle) {
+        _preservePlaceIdOnNextIdle = false;
+      } else {
+        _selectedPlaceId = null;
+      }
+    });
   }
 
   void _confirmLocation() {
@@ -111,7 +157,7 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
     }
 
     if (address.isEmpty) {
-      _showSnack('Escribe una dirección o referencia.');
+      _showSnack('Escribe una direccion o referencia.');
       return;
     }
 
@@ -121,6 +167,7 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
         address: address,
         latitude: _selectedLocation.latitude,
         longitude: _selectedLocation.longitude,
+        placeId: _selectedPlaceId,
         instructions: instructions.isEmpty ? null : instructions,
       ),
     );
@@ -129,9 +176,9 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
   void _showSnack(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -139,7 +186,11 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        title: const Text('Seleccionar punto de recogida'),
+        title: Text(
+          widget.initialPoint == null
+              ? 'Seleccionar punto de recogida'
+              : 'Editar punto de recogida',
+        ),
       ),
       body: Column(
         children: [
@@ -147,33 +198,25 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _selectedLocation,
-                    initialZoom: 14,
-                    onPositionChanged: (position, hasGesture) {
-                      final center = position.center;
-
-                      setState(() {
-                        _selectedLocation = center;
-                      });
-                    },
+                GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _selectedLocation,
+                    zoom: 14,
                   ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.andando.app',
-                    ),
-                  ],
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                  },
+                  onCameraMove: (position) {
+                    _cameraTarget = position.target;
+                  },
+                  onCameraIdle: _onCameraIdle,
+                  myLocationButtonEnabled: false,
+                  mapToolbarEnabled: false,
+                  zoomControlsEnabled: false,
+                  compassEnabled: true,
                 ),
                 const IgnorePointer(
-                  child: Icon(
-                    Icons.location_pin,
-                    size: 52,
-                    color: Colors.red,
-                  ),
+                  child: Icon(Icons.location_pin, size: 52, color: Colors.red),
                 ),
                 Positioned(
                   right: 16,
@@ -220,16 +263,14 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     PlaceSearchField(
                       service: _service,
                       token: widget.token,
                       label: 'Buscar punto de recogida',
-                      hint: 'Ej: Agora Mall, Parque Colón',
+                      hint: 'Ej: Agora Mall, Parque Colon',
                       onSelected: _selectPlace,
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: _nameController,
                       decoration: const InputDecoration(
@@ -239,17 +280,17 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: _addressController,
                       decoration: const InputDecoration(
-                        labelText: 'Dirección o referencia',
+                        labelText: 'Direccion o referencia',
                         hintText: 'Ej: Frente a la entrada principal',
+                        helperText:
+                            'Si mueves el mapa, ajusta la referencia si es necesario.',
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: _instructionsController,
                       maxLines: 2,
@@ -260,13 +301,16 @@ class _LocationPickerMapScreenState extends State<LocationPickerMapScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: _confirmLocation,
                         icon: const Icon(Icons.check),
-                        label: const Text('Confirmar ubicación'),
+                        label: Text(
+                          widget.initialPoint == null
+                              ? 'Confirmar ubicacion'
+                              : 'Guardar cambios',
+                        ),
                       ),
                     ),
                   ],

@@ -1,62 +1,22 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/provider/chat/data/services/provider_chat_service.dart';
 
-/// Navbar inferior reutilizable para el flujo del afiliado/proveedor.
+/// Navbar inferior unica para el flujo del afiliado.
 ///
-/// Este widget nace del mismo navbar que ya tienes en:
-/// - ProviderDashboardScreen
-/// - ProviderProfileScreen
-///
-/// La idea es NO crear un navbar distinto para cada pantalla.
-/// En vez de duplicar código, usamos este componente compartido.
-///
-/// Sirve para navegar entre las secciones principales del afiliado:
-/// - Dashboard
-/// - Catálogo
-/// - Mensajes
-/// - Perfil
-///
-/// Importante:
-/// Este widget NO decide rutas.
-/// Solo dibuja el navbar y ejecuta las funciones que recibe.
-///
-/// Eso permite que cada pantalla decida cómo navegar usando GoRouter,
-/// por ejemplo:
-///
-/// context.goNamed(RouteNames.providerDashboard);
+/// La ruta actual determina automaticamente la opcion activa.
+/// Este widget tambien centraliza la navegacion principal.
 class ProviderBottomNav extends StatefulWidget {
   const ProviderBottomNav({
     super.key,
-    required this.currentIndex,
-    required this.onDashboard,
-    required this.onCatalog,
-    required this.onMessages,
-    required this.onProfile,
     this.authController,
     this.messagesUnreadCount,
   });
-
-  /// Índice activo del navbar.
-  ///
-  /// Valores:
-  /// 0 = Dashboard
-  /// 1 = Catálogo
-  /// 2 = Mensajes
-  /// 3 = Perfil
-  ///
-  /// Si una pantalla no pertenece directamente a una pestaña,
-  /// como Analytics, puede enviar -1 para no marcar ninguna activa.
-  final int currentIndex;
-
-  final VoidCallback onDashboard;
-  final VoidCallback onCatalog;
-  final VoidCallback onMessages;
-  final VoidCallback onProfile;
 
   /// AuthController opcional.
   ///
@@ -160,14 +120,51 @@ class _ProviderBottomNavState extends State<ProviderBottomNav> {
     }
   }
 
+  int _currentIndexForPath(String path) {
+    if (path == '/provider/catalog' ||
+        path.startsWith('/provider/create-experience') ||
+        path.startsWith('/provider/edit-experience/') ||
+        path.startsWith('/provider/experience-calendar/') ||
+        path.startsWith('/provider/experiences/')) {
+      return 1;
+    }
+
+    if (path.startsWith('/provider/messages')) {
+      return 2;
+    }
+
+    if (path == '/provider/profile' || path.startsWith('/provider/settings')) {
+      return 3;
+    }
+
+    if (path == '/provider/dashboard' ||
+        path == '/provider/analytics' ||
+        path == '/provider/bookings') {
+      return 0;
+    }
+
+    return -1;
+  }
+
+  void _goTo(BuildContext context, String destination) {
+    final currentPath = GoRouterState.of(context).uri.path;
+
+    if (currentPath == destination) {
+      return;
+    }
+
+    context.go(destination);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
+    final currentIndex = _currentIndexForPath(currentPath);
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: _ProviderBottomNavColors.border),
-        ),
+        border: Border(top: BorderSide(color: _ProviderBottomNavColors.border)),
       ),
       child: SafeArea(
         top: false,
@@ -178,27 +175,27 @@ class _ProviderBottomNavState extends State<ProviderBottomNav> {
               _ProviderBottomNavItem(
                 label: 'Dashboard',
                 icon: Icons.trending_up,
-                isActive: widget.currentIndex == 0,
-                onTap: widget.onDashboard,
+                isActive: currentIndex == 0,
+                onTap: () => _goTo(context, '/provider/dashboard'),
               ),
               _ProviderBottomNavItem(
                 label: 'Catálogo',
                 icon: Icons.calendar_month_outlined,
-                isActive: widget.currentIndex == 1,
-                onTap: widget.onCatalog,
+                isActive: currentIndex == 1,
+                onTap: () => _goTo(context, '/provider/catalog'),
               ),
               _ProviderBottomNavItem(
                 label: 'Mensajes',
                 icon: Icons.chat_bubble_outline,
-                isActive: widget.currentIndex == 2,
+                isActive: currentIndex == 2,
                 badgeCount: _effectiveUnreadCount,
-                onTap: widget.onMessages,
+                onTap: () => _goTo(context, '/provider/messages'),
               ),
               _ProviderBottomNavItem(
                 label: 'Perfil',
                 icon: Icons.person_outline,
-                isActive: widget.currentIndex == 3,
-                onTap: widget.onProfile,
+                isActive: currentIndex == 3,
+                onTap: () => _goTo(context, '/provider/profile'),
               ),
             ],
           ),
@@ -250,19 +247,14 @@ class _ProviderBottomNavItem extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    icon,
-                    color: color,
-                    size: 24,
-                  ),
+                  Icon(icon, color: color, size: 24),
                   const SizedBox(height: 4),
                   Text(
                     label,
                     style: TextStyle(
                       color: color,
                       fontSize: 11,
-                      fontWeight:
-                          isActive ? FontWeight.w800 : FontWeight.w500,
+                      fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
                     ),
                   ),
                 ],
@@ -281,10 +273,7 @@ class _ProviderBottomNavItem extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFFDC2626),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 1.5,
-                    ),
+                    border: Border.all(color: Colors.white, width: 1.5),
                   ),
                   alignment: Alignment.center,
                   child: Text(

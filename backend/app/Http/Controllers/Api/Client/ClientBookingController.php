@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Client;
 
 use App\Services\Payments\CancelBookingPaymentService;
 use App\Services\Payments\CreateBookingPaymentTransactionService;
+use App\Services\Experiences\ExperiencePricingService;
 
 use App\Notifications\Booking\BookingCancelledNotification;
 use App\Notifications\Booking\NewBookingNotification;
@@ -59,7 +60,19 @@ class ClientBookingController extends Controller
                         ?? $booking->booking_date?->toIso8601String(),
                     'ends_at' => $schedule?->ends_at?->toIso8601String(),
                     'guests_count' => (int) $booking->guests_count,
+                    'original_unit_price' => (float) (
+                        $booking->original_unit_price ?? $booking->unit_price
+                    ),
                     'unit_price' => (float) $booking->unit_price,
+                    'discount_percentage' => $booking->discount_percentage !== null
+                        ? (float) $booking->discount_percentage
+                        : null,
+                    'discount_amount' => (float) ($booking->discount_amount ?? 0),
+                    'original_total_amount' => round(
+                        (float) ($booking->original_unit_price ?? $booking->unit_price)
+                            * (int) $booking->guests_count,
+                        2,
+                    ),
                     'total_amount' => (float) $booking->total_amount,
                     'currency' => $experience?->currency ?? 'DOP',
 
@@ -102,6 +115,7 @@ class ClientBookingController extends Controller
     public function store(
         Request $request,
         CreateBookingPaymentTransactionService $paymentTransactionService,
+        ExperiencePricingService $experiencePricingService,
     ): JsonResponse
     {
         $data = $request->validate([
@@ -136,7 +150,13 @@ class ClientBookingController extends Controller
             ], 422);
         }
 
-        $booking = DB::transaction(function () use ($data, $user, $defaultPaymentMethod, $paymentTransactionService) {
+        $booking = DB::transaction(function () use (
+            $data,
+            $user,
+            $defaultPaymentMethod,
+            $paymentTransactionService,
+            $experiencePricingService,
+        ) {
             $schedule = ProviderExperienceSchedule::query()
                 ->with('experience.provider')
                 ->where('id', $data['provider_experience_schedule_id'])
@@ -184,8 +204,22 @@ class ClientBookingController extends Controller
                 abort(422, 'No hay cupos suficientes para esta fecha.');
             }
 
-            $unitPrice = $schedule->price ?? $experience->price;
-            $totalAmount = $unitPrice * $data['guests_count'];
+            $originalUnitPrice = round((float) (
+                $schedule->price ?? $experience->price
+            ), 2);
+
+            $pricing = $experiencePricingService->calculate(
+                $experience,
+                $originalUnitPrice,
+            );
+
+            $guestsCount = (int) $data['guests_count'];
+            $unitPrice = $pricing['final_price'];
+            $originalTotalAmount = round($originalUnitPrice * $guestsCount, 2);
+            $totalAmount = round($unitPrice * $guestsCount, 2);
+            $discountAmount = round($originalTotalAmount - $totalAmount, 2);
+            $commissionRate = $experience->provider?->commissionRate()
+                ?? (float) config('payments.rules.andando_commission_rate', 0.15);
 
             $booking = ProviderBooking::create([
                 'provider_id' => $schedule->provider_id,
@@ -200,10 +234,15 @@ class ClientBookingController extends Controller
                 'pickup_point' => $includesTransport
                     ? trim((string) ($data['pickup_point'] ?? ''))
                     : null,
-                'guests_count' => $data['guests_count'],
+                'guests_count' => $guestsCount,
+                'original_unit_price' => $originalUnitPrice,
+                'discount_percentage' => $pricing['has_discount']
+                    ? $pricing['discount_percentage']
+                    : null,
+                'discount_amount' => $discountAmount,
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
-                'provider_earning' => round($totalAmount * (1 - (float) config('payments.rules.andando_commission_rate', 0.15)), 2),
+                'provider_earning' => round($totalAmount * (1 - $commissionRate), 2),
                 'status' => ProviderBooking::STATUS_PENDING,
                 'customer_payment_method_id' => $defaultPaymentMethod->id,
                 'payment_status' => ProviderBooking::PAYMENT_STATUS_SCHEDULED,
@@ -244,6 +283,18 @@ class ClientBookingController extends Controller
                 'id' => $booking->id,
                 'booking_code' => $booking->booking_code,
                 'status' => $booking->status,
+                'guests_count' => (int) $booking->guests_count,
+                'original_unit_price' => (float) $booking->original_unit_price,
+                'unit_price' => (float) $booking->unit_price,
+                'discount_percentage' => $booking->discount_percentage !== null
+                    ? (float) $booking->discount_percentage
+                    : null,
+                'discount_amount' => (float) $booking->discount_amount,
+                'original_total_amount' => round(
+                    (float) $booking->original_unit_price
+                        * (int) $booking->guests_count,
+                    2,
+                ),
                 'total_amount' => (float) $booking->total_amount,
             ],
         ], 201);
