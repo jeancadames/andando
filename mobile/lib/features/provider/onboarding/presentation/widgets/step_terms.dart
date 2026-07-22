@@ -1,173 +1,144 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../customer/auth/data/models/legal_document.dart';
 
-/// Paso 4 del registro de proveedor.
-///
-/// En este paso el proveedor:
-/// - revisa un resumen de términos.
-/// - acepta términos y condiciones.
-/// - acepta política de privacidad.
-/// - ve los próximos pasos.
-///
-/// Este paso es importante legalmente porque el backend debe recibir:
-/// - accept_terms = true
-/// - accept_privacy = true
-///
-/// En Laravel guardaremos también:
-/// - terms_accepted_at
-/// - privacy_accepted_at
-/// - terms_version
-/// - privacy_version
+/// Paso legal del onboarding del afiliado.
 class StepTerms extends StatelessWidget {
   const StepTerms({
     super.key,
+    required this.termsDocument,
+    required this.standardsDocument,
+    required this.privacyDocument,
+    required this.isLoading,
+    required this.errorMessage,
     required this.acceptTerms,
+    required this.acceptStandards,
     required this.acceptPrivacy,
+    required this.onRetry,
+    required this.onOpenDocument,
     required this.onTermsChanged,
+    required this.onStandardsChanged,
     required this.onPrivacyChanged,
   });
 
-  /// Indica si el usuario aceptó términos.
-  final bool acceptTerms;
+  final LegalDocument? termsDocument;
+  final LegalDocument? standardsDocument;
+  final LegalDocument? privacyDocument;
 
-  /// Indica si el usuario aceptó privacidad.
+  final bool isLoading;
+  final String? errorMessage;
+
+  final bool acceptTerms;
+  final bool acceptStandards;
   final bool acceptPrivacy;
 
-  /// Callback cuando cambia el checkbox de términos.
-  final ValueChanged<bool?> onTermsChanged;
+  final VoidCallback onRetry;
+  final ValueChanged<LegalDocument> onOpenDocument;
 
-  /// Callback cuando cambia el checkbox de privacidad.
+  final ValueChanged<bool?> onTermsChanged;
+  final ValueChanged<bool?> onStandardsChanged;
   final ValueChanged<bool?> onPrivacyChanged;
+
+  bool get _documentsReady {
+    return termsDocument != null &&
+        standardsDocument != null &&
+        privacyDocument != null &&
+        !isLoading;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        /// Título del paso.
         const Text(
-          'Términos y Condiciones',
+          'Documentos legales',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: AppColors.textDark,
           ),
         ),
-
         const SizedBox(height: 8),
-
-        /// Subtítulo.
         const Text(
-          'Revisa y acepta nuestras políticas',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppColors.mutedForeground,
-          ),
+          'Revisa los documentos vigentes antes de enviar tu solicitud.',
+          style: TextStyle(fontSize: 14, color: AppColors.mutedForeground),
         ),
-
         const SizedBox(height: 24),
 
-        /// Caja scrollable con resumen de términos.
-        ///
-        /// Tiene altura fija para simular el comportamiento del diseño:
-        /// el usuario puede hacer scroll dentro del resumen.
-        Container(
-          width: double.infinity,
-          height: 210,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FA),
-            borderRadius: BorderRadius.circular(16),
+        if (isLoading) const _LoadingLegalDocuments(),
+
+        if (!isLoading && errorMessage != null)
+          _LegalDocumentsError(message: errorMessage!, onRetry: onRetry),
+
+        if (_documentsReady) ...[
+          _LegalDocumentCard(
+            document: termsDocument!,
+            icon: Icons.description_outlined,
+            onPressed: () {
+              onOpenDocument(termsDocument!);
+            },
           ),
-          child: const SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Resumen de Términos',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                SizedBox(height: 14),
-                _TermsParagraph(
-                  text:
-                      '• Como afiliado verificado, te comprometes a ofrecer experiencias de calidad y seguras.',
-                ),
-                _TermsParagraph(
-                  text:
-                      '• Debes mantener tus experiencias actualizadas con información precisa.',
-                ),
-                _TermsParagraph(
-                  text:
-                      '• AndanDO cobra una comisión del 15% por reserva confirmada.',
-                ),
-                _TermsParagraph(
-                  text:
-                      '• Los pagos se procesan 48 horas después de completar la experiencia.',
-                ),
-                _TermsParagraph(
-                  text:
-                      '• Debes responder a consultas de clientes en menos de 24 horas.',
-                ),
-                _TermsParagraph(
-                  text:
-                      '• Mantienes la propiedad de tu contenido, pero otorgas licencia a AndanDO para mostrarlo.',
-                ),
-                _TermsParagraph(
-                  text:
-                      '• Debes cumplir con todas las regulaciones turísticas locales.',
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          _LegalDocumentCard(
+            document: standardsDocument!,
+            icon: Icons.health_and_safety_outlined,
+            onPressed: () {
+              onOpenDocument(standardsDocument!);
+            },
           ),
-        ),
+          const SizedBox(height: 12),
+          _LegalDocumentCard(
+            document: privacyDocument!,
+            icon: Icons.privacy_tip_outlined,
+            onPressed: () {
+              onOpenDocument(privacyDocument!);
+            },
+          ),
+          const SizedBox(height: 22),
 
-        const SizedBox(height: 18),
+          _PolicyCheckbox(
+            value: acceptTerms,
+            enabled: _documentsReady,
+            onChanged: onTermsChanged,
+            prefix: 'He leído y acepto los ',
+            linkText: 'Términos y Condiciones para Afiliados',
+            suffix: '.',
+            onLinkTap: () {
+              onOpenDocument(termsDocument!);
+            },
+          ),
+          const SizedBox(height: 14),
 
-        /// Checkbox de términos.
-        _PolicyCheckbox(
-          value: acceptTerms,
-          onChanged: onTermsChanged,
-          children: const [
-            TextSpan(text: 'Acepto los '),
-            TextSpan(
-              text: 'Términos y Condiciones',
-              style: TextStyle(
-                color: AppColors.primaryBlue,
-                decoration: TextDecoration.underline,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            TextSpan(text: ' de AndanDO'),
-          ],
-        ),
+          _PolicyCheckbox(
+            value: acceptStandards,
+            enabled: _documentsReady,
+            onChanged: onStandardsChanged,
+            prefix: 'He leído y acepto los ',
+            linkText: 'Estándares de Publicación, Operación y Seguridad',
+            suffix: '.',
+            onLinkTap: () {
+              onOpenDocument(standardsDocument!);
+            },
+          ),
+          const SizedBox(height: 14),
 
-        const SizedBox(height: 12),
-
-        /// Checkbox de privacidad.
-        _PolicyCheckbox(
-          value: acceptPrivacy,
-          onChanged: onPrivacyChanged,
-          children: const [
-            TextSpan(text: 'Acepto la '),
-            TextSpan(
-              text: 'Política de Privacidad',
-              style: TextStyle(
-                color: AppColors.primaryBlue,
-                decoration: TextDecoration.underline,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            TextSpan(text: ' y el tratamiento de mis datos'),
-          ],
-        ),
+          _PolicyCheckbox(
+            value: acceptPrivacy,
+            enabled: _documentsReady,
+            onChanged: onPrivacyChanged,
+            prefix: 'Confirmo que he leído la ',
+            linkText: 'Política de Privacidad',
+            suffix: ' y comprendo el tratamiento de mis datos.',
+            onLinkTap: () {
+              onOpenDocument(privacyDocument!);
+            },
+          ),
+        ],
 
         const SizedBox(height: 28),
 
-        /// Tarjeta de próximos pasos.
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(22),
@@ -203,16 +174,18 @@ class StepTerms extends StatelessWidget {
               ),
               SizedBox(height: 16),
               _NextStepText(
-                text: '1. Verificaremos tus documentos en 24-48 horas',
+                text:
+                    '1. Revisaremos la información y los documentos suministrados.',
               ),
               _NextStepText(
-                text: '2. Recibirás un correo de confirmación',
+                text: '2. Recibirás una notificación con el resultado.',
               ),
               _NextStepText(
-                text: '3. Podrás crear tu primera experiencia',
+                text: '3. Cuando seas aprobado podrás publicar experiencias.',
               ),
               _NextStepText(
-                text: '4. ¡Comienza a recibir reservas!',
+                text:
+                    '4. Tus publicaciones también deberán cumplir los estándares aceptados.',
               ),
             ],
           ),
@@ -222,44 +195,116 @@ class StepTerms extends StatelessWidget {
   }
 }
 
-/// Párrafo dentro del resumen de términos.
-class _TermsParagraph extends StatelessWidget {
-  const _TermsParagraph({
-    required this.text,
+class _LegalDocumentCard extends StatelessWidget {
+  const _LegalDocumentCard({
+    required this.document,
+    required this.icon,
+    required this.onPressed,
   });
 
-  final String text;
+  final LegalDocument document;
+  final IconData icon;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.mutedForeground,
-          fontSize: 13,
-          height: 1.35,
+    final summary = document.summary?.trim();
+
+    return Material(
+      color: const Color(0xFFF8F9FA),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withAlpha(18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppColors.primaryBlue),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      document.title,
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Versión ${document.version} · '
+                      'Vigente desde ${document.effectiveDateLabel}',
+                      style: const TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (summary != null && summary.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        summary,
+                        style: const TextStyle(
+                          color: AppColors.mutedForeground,
+                          fontSize: 13,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Abrir documento completo',
+                      style: TextStyle(
+                        color: AppColors.primaryBlue,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Checkbox reutilizable para aceptación legal.
-///
-/// Usa RichText para poder mezclar texto normal
-/// con texto azul subrayado.
 class _PolicyCheckbox extends StatelessWidget {
   const _PolicyCheckbox({
     required this.value,
+    required this.enabled,
     required this.onChanged,
-    required this.children,
+    required this.prefix,
+    required this.linkText,
+    required this.suffix,
+    required this.onLinkTap,
   });
 
   final bool value;
+  final bool enabled;
   final ValueChanged<bool?> onChanged;
-  final List<TextSpan> children;
+
+  final String prefix;
+  final String linkText;
+  final String suffix;
+  final VoidCallback onLinkTap;
 
   @override
   Widget build(BuildContext context) {
@@ -271,29 +316,68 @@ class _PolicyCheckbox extends StatelessWidget {
           height: 24,
           child: Checkbox(
             value: value,
-            onChanged: onChanged,
+            onChanged: enabled ? onChanged : null,
             activeColor: AppColors.primaryBlue,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ),
-
         const SizedBox(width: 12),
-
         Expanded(
-          child: GestureDetector(
-            onTap: () {
-              /// Permite marcar/desmarcar tocando también el texto.
-              onChanged(!value);
-            },
-            child: RichText(
-              text: TextSpan(
-                style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 14,
-                  height: 1.35,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: enabled
+                      ? () {
+                          onChanged(!value);
+                        }
+                      : null,
+                  child: Text(
+                    prefix,
+                    style: TextStyle(
+                      color: enabled
+                          ? AppColors.textDark
+                          : AppColors.mutedForeground,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
                 ),
-                children: children,
-              ),
+                GestureDetector(
+                  onTap: enabled ? onLinkTap : null,
+                  child: Text(
+                    linkText,
+                    style: TextStyle(
+                      color: enabled
+                          ? AppColors.primaryBlue
+                          : AppColors.mutedForeground,
+                      fontSize: 14,
+                      height: 1.4,
+                      fontWeight: FontWeight.w800,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: enabled
+                      ? () {
+                          onChanged(!value);
+                        }
+                      : null,
+                  child: Text(
+                    suffix,
+                    style: TextStyle(
+                      color: enabled
+                          ? AppColors.textDark
+                          : AppColors.mutedForeground,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -302,11 +386,75 @@ class _PolicyCheckbox extends StatelessWidget {
   }
 }
 
-/// Línea dentro de la tarjeta "Próximos pasos".
+class _LoadingLegalDocuments extends StatelessWidget {
+  const _LoadingLegalDocuments();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Cargando documentos legales vigentes...',
+              style: TextStyle(color: AppColors.mutedForeground),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegalDocumentsError extends StatelessWidget {
+  const _LegalDocumentsError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: const TextStyle(color: Color(0xFF991B1B), fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NextStepText extends StatelessWidget {
-  const _NextStepText({
-    required this.text,
-  });
+  const _NextStepText({required this.text});
 
   final String text;
 
@@ -316,10 +464,7 @@ class _NextStepText extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 9),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppColors.mutedForeground,
-          fontSize: 13,
-        ),
+        style: const TextStyle(color: AppColors.mutedForeground, fontSize: 13),
       ),
     );
   }

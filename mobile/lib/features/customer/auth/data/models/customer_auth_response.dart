@@ -1,8 +1,3 @@
-/// Modelo que representa la respuesta del backend
-/// cuando un cliente se registra correctamente.
-///
-/// Este modelo convierte el JSON recibido desde Laravel
-/// en un objeto Dart fácil de usar dentro de Flutter.
 class CustomerAuthResponse {
   const CustomerAuthResponse({
     required this.token,
@@ -10,40 +5,54 @@ class CustomerAuthResponse {
     required this.userName,
     required this.userEmail,
     required this.userType,
+    required this.requiresLegalOnboarding,
     this.userPhone,
+    this.birthDate,
   });
 
-  /// Token Sanctum generado por Laravel.
-  /// Se guarda en sesión para futuras peticiones autenticadas.
   final String token;
-
-  /// ID del usuario creado en la tabla users.
   final int userId;
-
-  /// Nombre del cliente.
   final String userName;
-
-  /// Correo del cliente.
   final String userEmail;
-
-  /// Tipo de usuario.
-  /// Para este flujo debe ser: customer.
   final String userType;
-
-  /// Teléfono opcional del cliente.
+  final bool requiresLegalOnboarding;
   final String? userPhone;
+  final String? birthDate;
 
-  /// Convierte la respuesta JSON del backend en CustomerAuthResponse.
   factory CustomerAuthResponse.fromJson(Map<String, dynamic> json) {
-    final user = json['user'] as Map<String, dynamic>;
+    final user = json['user'];
+
+    if (user is! Map<String, dynamic>) {
+      throw const FormatException(
+        'El servidor respondió con datos de usuario inválidos.',
+      );
+    }
 
     return CustomerAuthResponse(
-      token: json['token'] as String,
-      userId: user['id'] as int,
-      userName: user['name'] as String,
-      userEmail: user['email'] as String,
-      userType: user['type'] as String,
+      token: json['token']?.toString() ?? '',
+      userId: _parseUserId(user['id']),
+      userName: user['name']?.toString() ?? '',
+      userEmail: user['email']?.toString() ?? '',
+      userType: user['type']?.toString() ?? '',
       userPhone: user['phone']?.toString(),
+      birthDate: user['birth_date']?.toString(),
+      requiresLegalOnboarding: json['requires_legal_onboarding'] == true,
     );
+  }
+
+  static int _parseUserId(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+
+    final parsed = int.tryParse(value?.toString() ?? '');
+
+    if (parsed == null) {
+      throw const FormatException(
+        'El servidor respondió con un identificador de usuario inválido.',
+      );
+    }
+
+    return parsed;
   }
 }

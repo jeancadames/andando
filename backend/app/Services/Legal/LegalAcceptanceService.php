@@ -4,6 +4,7 @@ namespace App\Services\Legal;
 
 use App\Models\LegalAcceptance;
 use App\Models\LegalDocument;
+use App\Models\Provider;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -64,10 +65,23 @@ class LegalAcceptanceService
             $request,
             $context
         ): LegalAcceptance {
-            $acceptance = LegalAcceptance::query()
+            $acceptanceQuery = LegalAcceptance::query()
                 ->where('user_id', $user->id)
                 ->where('legal_document_id', $document->id)
-                ->where('document_checksum', $document->checksum)
+                ->where('document_checksum', $document->checksum);
+
+            if (in_array($document->type, [
+                'waiver',
+                'minors',
+                'payment_policy',
+            ], true)) {
+                $acceptanceQuery
+                    ->where('booking_id', $context['booking_id'] ?? null)
+                    ->where('experience_id', $context['experience_id'] ?? null)
+                    ->where('schedule_id', $context['schedule_id'] ?? null);
+            }
+
+            $acceptance = $acceptanceQuery
                 ->latest('accepted_at')
                 ->first();
 
@@ -98,6 +112,76 @@ class LegalAcceptanceService
         });
     }
 
+    public function acceptForProvider(
+        Provider $provider,
+        int $documentId,
+        string $checksum,
+        Request $request,
+        array $context = []
+    ): LegalAcceptance {
+        $document = $this->legalDocumentService
+            ->findCurrentById($documentId);
+
+        if ($document === null) {
+            throw ValidationException::withMessages([
+                'document_id' => [
+                    'El documento legal indicado no está vigente o no superó la validación de integridad.',
+                ],
+            ]);
+        }
+
+        if ($document->audience !== 'provider') {
+            throw ValidationException::withMessages([
+                'document_id' => [
+                    'El documento indicado no corresponde a proveedores.',
+                ],
+            ]);
+        }
+
+        if (! $this->legalDocumentService->checksumMatches(
+            $document,
+            $checksum
+        )) {
+            throw ValidationException::withMessages([
+                'checksum' => [
+                    'La versión del documento legal no coincide con la versión publicada.',
+                ],
+            ]);
+        }
+
+        $acceptance = LegalAcceptance::query()
+            ->where('provider_id', $provider->id)
+            ->where('legal_document_id', $document->id)
+            ->where('document_checksum', $document->checksum)
+            ->latest('accepted_at')
+            ->first();
+
+        if ($acceptance !== null) {
+            return $acceptance;
+        }
+
+        return LegalAcceptance::query()->create([
+            'legal_document_id' => $document->id,
+            'user_id' => $provider->user_id,
+            'provider_id' => $provider->id,
+            'booking_id' => null,
+            'experience_id' => null,
+            'schedule_id' => null,
+            'accepted_at' => now(),
+            'document_checksum' => $document->checksum,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'platform' => $this->sanitizeNullableString(
+                $request->header('X-Platform')
+            ),
+            'app_version' => $this->sanitizeNullableString(
+                $request->header('X-App-Version')
+            ),
+            'locale' => $this->resolveLocale($request),
+            'metadata' => $context['metadata'] ?? null,
+        ]);
+    }
+
     private function validateContext(
         LegalDocument $document,
         array $context
@@ -105,6 +189,7 @@ class LegalAcceptanceService
         if (in_array($document->type, [
             'waiver',
             'minors',
+            'payment_policy',
         ], true)) {
             foreach ([
                 'booking_id',

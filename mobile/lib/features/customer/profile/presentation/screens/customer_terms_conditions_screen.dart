@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../auth/data/datasources/customer_auth_api.dart';
+import '../../../auth/data/models/legal_document.dart';
 
 import '../../data/datasources/customer_profile_remote_datasource.dart';
 import '../../data/models/customer_legal_settings_model.dart';
@@ -18,64 +20,10 @@ class _CustomerTermsConditionsScreenState
   final CustomerProfileRemoteDataSource _dataSource =
       CustomerProfileRemoteDataSource();
 
-  int? _openSection = 0;
-  final bool _accepted = true;
+  final CustomerAuthApi _customerAuthApi = const CustomerAuthApi();
 
   bool _isLoadingLegalSettings = true;
   CustomerLegalSettingsModel? _legalSettings;
-
-  final List<_TermsSection> _sections = const [
-    _TermsSection(
-      title: '1. Aceptación de Términos',
-      content:
-          'Al descargar, instalar o usar la aplicación AndanDO, usted acepta quedar vinculado por estos Términos y Condiciones. Si no está de acuerdo con alguno de los términos, no podrá usar la aplicación. AndanDO se reserva el derecho de modificar estos términos en cualquier momento, notificando a los usuarios con 30 días de anticipación.',
-    ),
-    _TermsSection(
-      title: '2. Descripción del Servicio',
-      content:
-          'AndanDO es un marketplace digital que conecta a viajeros con proveedores de experiencias turísticas en la República Dominicana. Actuamos como intermediarios y no somos responsables de la ejecución directa de las experiencias. La responsabilidad de la calidad del servicio recae en los afiliados verificados.',
-    ),
-    _TermsSection(
-      title: '3. Registro y Cuenta de Usuario',
-      content:
-          'Para usar AndanDO debe crear una cuenta con información verídica. Es responsable de mantener la confidencialidad de su contraseña. Debe notificarnos inmediatamente de cualquier uso no autorizado.',
-    ),
-    _TermsSection(
-      title: '4. Reservas y Cancelaciones',
-      content:
-          'Las reservas se confirman al completar el pago. El cliente puede cancelar sin cargo hasta 24 horas antes de la experiencia. Las cancelaciones posteriores estarán sujetas a las políticas aplicables.',
-    ),
-    _TermsSection(
-      title: '5. Política de Pagos y Reembolsos',
-      content:
-          'Los pagos se procesan mediante sistemas certificados PCI DSS. Los reembolsos se procesan al método de pago original según las condiciones de cada experiencia.',
-    ),
-    _TermsSection(
-      title: '6. Responsabilidades del Usuario',
-      content:
-          'El usuario se compromete a participar en las experiencias con respeto, seguir instrucciones de seguridad y no utilizar la plataforma para actividades ilegales.',
-    ),
-    _TermsSection(
-      title: '7. Propiedad Intelectual',
-      content:
-          'Todo el contenido de AndanDO incluyendo diseño, logotipo, textos e imágenes es propiedad de AndanDO SRL y está protegido por la legislación aplicable.',
-    ),
-    _TermsSection(
-      title: '8. Privacidad y Datos Personales',
-      content:
-          'AndanDO recopila y procesa datos personales conforme a la legislación vigente de República Dominicana y a nuestra Política de Privacidad.',
-    ),
-    _TermsSection(
-      title: '9. Limitación de Responsabilidad',
-      content:
-          'AndanDO no será responsable por daños indirectos, incidentales o consecuentes derivados del uso de la plataforma.',
-    ),
-    _TermsSection(
-      title: '10. Legislación Aplicable',
-      content:
-          'Estos términos se rigen por las leyes de la República Dominicana y cualquier disputa será sometida a los tribunales competentes de Santo Domingo.',
-    ),
-  ];
 
   @override
   void initState() {
@@ -100,6 +48,165 @@ class _CustomerTermsConditionsScreenState
         _isLoadingLegalSettings = false;
       });
     }
+  }
+
+  Future<void> _openLegalDocument(
+    CustomerLegalDocumentModel documentSummary,
+  ) async {
+    try {
+      _showLoadingDialog();
+
+      final document = await _customerAuthApi.getLegalDocument(
+        type: documentSummary.type,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context, rootNavigator: true).pop();
+
+      await _showLegalDocument(document);
+    } catch (error) {
+      if (!mounted) return;
+
+      final navigator = Navigator.of(context, rootNavigator: true);
+
+      if (navigator.canPop()) {
+        navigator.pop();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showLoadingDialog() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) {
+        return const Center(
+          child: CircularProgressIndicator(),
+        );
+      },
+    );
+  }
+
+  Future<void> _showLegalDocument(LegalDocument document) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      builder: (modalContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.92,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDADDE2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  document.title,
+                  style: const TextStyle(
+                    color: Color(0xFF003B73),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Versión ${document.version} · Vigente desde '
+                  '${document.effectiveDateLabel}',
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(
+                        right: 12,
+                        bottom: 16,
+                      ),
+                      child: SelectableText(
+                        _cleanMarkdown(document.content),
+                        style: const TextStyle(
+                          color: Color(0xFF374151),
+                          fontSize: 14,
+                          height: 1.55,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(modalContext).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF003B73),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Entendido'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _cleanMarkdown(String content) {
+    return content
+        .replaceAll(
+          RegExp(r'^#{1,6}\s+', multiLine: true),
+          '',
+        )
+        .replaceAll('**', '')
+        .replaceAll('__', '')
+        .replaceAll(
+          RegExp(r'^\s*---\s*$', multiLine: true),
+          '',
+        )
+        .replaceAll(
+          RegExp(r'^\s*-\s+', multiLine: true),
+          '• ',
+        )
+        .replaceAll(
+          RegExp(r'\n{3,}'),
+          '\n\n',
+        )
+        .trim();
   }
 
   @override
@@ -128,7 +235,7 @@ class _CustomerTermsConditionsScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Términos y Condiciones',
+                'Centro Legal',
                 style: TextStyle(
                   color: Color(0xFF111827),
                   fontWeight: FontWeight.w900,
@@ -138,7 +245,7 @@ class _CustomerTermsConditionsScreenState
               ),
               SizedBox(height: 3),
               Text(
-                'Última actualización: 1 de junio de 2026',
+                'Documentos legales de AndanDO',
                 style: TextStyle(
                   color: Color(0xFF9CA3AF),
                   fontSize: 12,
@@ -155,54 +262,49 @@ class _CustomerTermsConditionsScreenState
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
           children: [
             _AcceptanceBanner(
-              accepted: _accepted,
+              accepted: settings?.termsAccepted ?? false,
               acceptedLabel: settings?.termsAcceptedLabel,
               isLoading: _isLoadingLegalSettings,
             ),
             const SizedBox(height: 20),
             _DocumentsSection(
-              termsVersion: settings?.termsVersion ?? 'v1.0',
-              privacyVersion: settings?.privacyVersion ?? 'v1.0',
-              cookiesVersion: settings?.cookiesVersion ?? 'v1.0',
+              documents: settings?.documents ?? const [],
+              isLoading: _isLoadingLegalSettings,
+              onDocumentTap: _openLegalDocument,
             ),
             const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: const Color(0xFFE5E7EB),
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x0D000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 5),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFFBFDBFE),
                   ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: List.generate(
-                  _sections.length,
-                  (index) {
-                    final section = _sections[index];
-                    final isOpen = _openSection == index;
-
-                    return _TermsTile(
-                      section: section,
-                      isOpen: isOpen,
-                      showDivider: index != _sections.length - 1,
-                      onTap: () {
-                        setState(() {
-                          _openSection = isOpen ? null : index;
-                        });
-                      },
-                    );
-                  },
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Color(0xFF003B73),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Selecciona cualquiera de los documentos anteriores para consultar su contenido completo y vigente.',
+                        style: TextStyle(
+                          color: Color(0xFF1E3A5F),
+                          fontSize: 13,
+                          height: 1.45,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
             const SizedBox(height: 24),
             _LegalFooter(
               rnc: settings?.rnc,
@@ -231,19 +333,55 @@ class _AcceptanceBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = isLoading
+    final bool showPositiveStyle = isLoading || accepted;
+
+    final String title = isLoading
+        ? 'Consultando aceptación'
+        : accepted
+            ? 'Términos aceptados'
+            : 'Pendiente de aceptación';
+
+    final String subtitle = isLoading
         ? 'Cargando fecha de aceptación...'
         : accepted
-            ? 'Aceptaste los términos el ${acceptedLabel ?? 'crear tu cuenta'}'
-            : 'Lee y acepta para continuar usando la app';
+            ? acceptedLabel != null && acceptedLabel!.trim().isNotEmpty
+                ? 'Aceptaste los términos el $acceptedLabel'
+                : 'Aceptaste los términos al crear tu cuenta'
+            : 'Debes aceptar los términos durante el registro';
+
+    final Color backgroundColor = showPositiveStyle
+        ? const Color(0xFFF0FDF4)
+        : const Color(0xFFFFFBEB);
+
+    final Color borderColor = showPositiveStyle
+        ? const Color(0xFFBBF7D0)
+        : const Color(0xFFFDE68A);
+
+    final Color circleColor = showPositiveStyle
+        ? const Color(0xFFDCFCE7)
+        : const Color(0xFFFEF3C7);
+
+    final Color primaryColor = showPositiveStyle
+        ? const Color(0xFF166534)
+        : const Color(0xFF92400E);
+
+    final Color secondaryColor = showPositiveStyle
+        ? const Color(0xFF16A34A)
+        : const Color(0xFFD97706);
+
+    final IconData icon = isLoading
+        ? Icons.hourglass_top_rounded
+        : accepted
+            ? Icons.shield_outlined
+            : Icons.warning_amber_rounded;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: accepted ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: accepted ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A),
+          color: borderColor,
         ),
       ),
       child: Row(
@@ -252,14 +390,12 @@ class _AcceptanceBanner extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color:
-                  accepted ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+              color: circleColor,
               shape: BoxShape.circle,
             ),
             child: Icon(
-              accepted ? Icons.shield_outlined : Icons.warning_amber_rounded,
-              color:
-                  accepted ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+              icon,
+              color: secondaryColor,
             ),
           ),
           const SizedBox(width: 14),
@@ -268,11 +404,9 @@ class _AcceptanceBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  accepted ? 'Términos aceptados' : 'Pendiente de aceptación',
+                  title,
                   style: TextStyle(
-                    color: accepted
-                        ? const Color(0xFF166534)
-                        : const Color(0xFF92400E),
+                    color: primaryColor,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -280,9 +414,7 @@ class _AcceptanceBanner extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: accepted
-                        ? const Color(0xFF16A34A)
-                        : const Color(0xFFD97706),
+                    color: secondaryColor,
                     fontSize: 12,
                   ),
                 ),
@@ -297,44 +429,104 @@ class _AcceptanceBanner extends StatelessWidget {
 
 class _DocumentsSection extends StatelessWidget {
   const _DocumentsSection({
-    required this.termsVersion,
-    required this.privacyVersion,
-    required this.cookiesVersion,
+    required this.documents,
+    required this.isLoading,
+    required this.onDocumentTap,
   });
 
-  final String termsVersion;
-  final String privacyVersion;
-  final String cookiesVersion;
+  final List<CustomerLegalDocumentModel> documents;
+  final bool isLoading;
+  final ValueChanged<CustomerLegalDocumentModel> onDocumentTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (documents.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: const Text(
+          'No se pudieron cargar los documentos legales.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF6B7280),
+            fontSize: 13,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: _DocumentCard(
-            icon: Icons.description_outlined,
-            title: 'Términos de Servicio',
-            subtitle: termsVersion,
+        const Text(
+          'Documentos legales',
+          style: TextStyle(
+            color: Color(0xFF111827),
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _DocumentCard(
-            icon: Icons.shield_outlined,
-            title: 'Política de Privacidad',
-            subtitle: privacyVersion,
+        const SizedBox(height: 12),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: documents.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.35,
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _DocumentCard(
-            icon: Icons.article_outlined,
-            title: 'Política de Cookies',
-            subtitle: cookiesVersion,
-          ),
+          itemBuilder: (context, index) {
+            final document = documents[index];
+
+            return _DocumentCard(
+              icon: _iconForDocument(document.type),
+              title: document.title,
+              subtitle: document.version,
+              accepted: document.accepted,
+              acceptanceScope: document.acceptanceScope,
+              onTap: () => onDocumentTap(document),
+            );
+          },
         ),
       ],
     );
+  }
+
+  IconData _iconForDocument(String type) {
+    switch (type) {
+      case 'terms_user':
+        return Icons.description_outlined;
+      case 'privacy':
+        return Icons.shield_outlined;
+      case 'cookies':
+        return Icons.cookie_outlined;
+      case 'payment_policy':
+        return Icons.payments_outlined;
+      case 'waiver':
+        return Icons.health_and_safety_outlined;
+      case 'minors':
+        return Icons.family_restroom_outlined;
+      default:
+        return Icons.article_outlined;
+    }
   }
 }
 
@@ -343,144 +535,103 @@ class _DocumentCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.accepted,
+    required this.onTap,
+    required this.acceptanceScope,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 104,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              icon,
-              color: const Color(0xFF003B73),
-              size: 18,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            style: const TextStyle(
-              color: Color(0xFF374151),
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: Color(0xFF9CA3AF),
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TermsTile extends StatelessWidget {
-  const _TermsTile({
-    required this.section,
-    required this.isOpen,
-    required this.showDivider,
-    required this.onTap,
-  });
-
-  final _TermsSection section;
-  final bool isOpen;
-  final bool showDivider;
+  final bool accepted;
   final VoidCallback onTap;
+  final String acceptanceScope;
+
+  String _statusLabel() {
+    if (accepted) {
+      return 'Aceptado';
+    }
+
+    switch (acceptanceScope) {
+      case 'booking':
+        return 'Se acepta al reservar';
+      case 'booking_with_minors':
+        return 'Aplica con menores';
+      case 'account':
+        return 'Pendiente';
+      default:
+        return 'Documento informativo';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeInOut,
-      alignment: Alignment.topCenter,
-      child: Container(
-        decoration: BoxDecoration(
-          border: showDivider
-              ? const Border(
-                  bottom: BorderSide(color: Color(0xFFF3F4F6)),
-                )
-              : null,
-        ),
-        child: Column(
-          children: [
-            InkWell(
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        section.title,
-                        style: TextStyle(
-                          color: isOpen
-                              ? const Color(0xFF003B73)
-                              : const Color(0xFF374151),
-                          fontWeight:
-                              isOpen ? FontWeight.w900 : FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      isOpen
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      color: isOpen
-                          ? const Color(0xFF003B73)
-                          : const Color(0xFF9CA3AF),
-                    ),
-                  ],
-                ),
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: 118,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFFE5E7EB),
             ),
-            if (isOpen)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF6F7F9),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    section.content,
-                    style: const TextStyle(
-                      color: Color(0xFF4B5563),
-                      height: 1.45,
-                      fontSize: 13,
-                    ),
-                  ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: const Color(0xFF003B73),
+                  size: 18,
                 ),
               ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF374151),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: Color(0xFF9CA3AF),
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _statusLabel(),
+                style: TextStyle(
+                  color: accepted
+                    ? const Color(0xFF16A34A)
+                    : acceptanceScope == 'account'
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF003B73),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -498,11 +649,16 @@ class _LegalFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasRnc = rnc != null && rnc!.trim().isNotEmpty;
+
     return Center(
       child: Column(
         children: [
           Text(
-            'AndanDO SRL · RNC: ${rnc ?? ''}',
+            hasRnc
+                ? 'ABC VANTEK GROUP, S.R.L. · RNC: $rnc'
+                : 'ABC VANTEK GROUP, S.R.L. · RNC en proceso',
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: Color(0xFF9CA3AF),
               fontSize: 12,
@@ -511,6 +667,7 @@ class _LegalFooter extends StatelessWidget {
           const SizedBox(height: 4),
           const Text(
             'Santo Domingo, República Dominicana',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: Color(0xFF9CA3AF),
               fontSize: 12,
@@ -518,7 +675,8 @@ class _LegalFooter extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            supportEmail ?? 'soporte@andando.com.do',
+            supportEmail ?? 'soporte@andando.do',
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: Color(0xFF9CA3AF),
               fontSize: 12,
@@ -528,14 +686,4 @@ class _LegalFooter extends StatelessWidget {
       ),
     );
   }
-}
-
-class _TermsSection {
-  const _TermsSection({
-    required this.title,
-    required this.content,
-  });
-
-  final String title;
-  final String content;
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Legal\CustomerLegalOnboardingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,11 @@ use Throwable;
 
 class GoogleAuthController extends Controller
 {
+    public function __construct(
+        private readonly CustomerLegalOnboardingService $onboardingService
+    ) {
+    }
+
     public function __invoke(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -24,13 +30,17 @@ class GoogleAuthController extends Controller
         try {
             $firebaseAuth = app('firebase.auth');
 
-            $verifiedToken = $firebaseAuth->verifyIdToken($validated['id_token']);
+            $verifiedToken = $firebaseAuth->verifyIdToken(
+                $validated['id_token']
+            );
 
             $firebaseUid = $verifiedToken->claims()->get('sub');
             $email = $verifiedToken->claims()->get('email');
             $name = $verifiedToken->claims()->get('name');
             $picture = $verifiedToken->claims()->get('picture');
-            $emailVerified = (bool) $verifiedToken->claims()->get('email_verified');
+            $emailVerified = (bool) $verifiedToken
+                ->claims()
+                ->get('email_verified');
         } catch (Throwable $exception) {
             report($exception);
 
@@ -39,8 +49,13 @@ class GoogleAuthController extends Controller
             ], 401);
         }
 
-        $email = $email ? strtolower(trim((string) $email)) : null;
-        $firebaseUid = $firebaseUid ? trim((string) $firebaseUid) : null;
+        $email = $email
+            ? strtolower(trim((string) $email))
+            : null;
+
+        $firebaseUid = $firebaseUid
+            ? trim((string) $firebaseUid)
+            : null;
 
         if (! $email) {
             return response()->json([
@@ -63,9 +78,9 @@ class GoogleAuthController extends Controller
             ->first();
 
         if (
-            $userByFirebaseUid &&
-            $userByEmail &&
-            (int) $userByFirebaseUid->id !== (int) $userByEmail->id
+            $userByFirebaseUid
+            && $userByEmail
+            && (int) $userByFirebaseUid->id !== (int) $userByEmail->id
         ) {
             return response()->json([
                 'message' => 'Esta cuenta de Google ya está vinculada a otro usuario.',
@@ -87,7 +102,7 @@ class GoogleAuthController extends Controller
             $picture,
             $firebaseUid,
             $emailVerified
-        ) {
+        ): User {
             if (! $existingUser) {
                 $user = User::query()->create([
                     'name' => $name ?: Str::before($email, '@'),
@@ -116,18 +131,30 @@ class GoogleAuthController extends Controller
             return $user;
         });
 
-        $token = $user->createToken('customer-google')->plainTextToken;
+        $user->refresh();
+
+        $requiresLegalOnboarding = ! $this->onboardingService
+            ->isComplete($user);
+
+        $token = $user
+            ->createToken('customer-google')
+            ->plainTextToken;
 
         return response()->json([
-            'message' => 'Inicio de sesión con Google exitoso.',
+            'message' => $requiresLegalOnboarding
+                ? 'Cuenta de Google validada. Completa tu información legal para continuar.'
+                : 'Inicio de sesión con Google exitoso.',
 
             'token' => $token,
+
+            'requires_legal_onboarding' => $requiresLegalOnboarding,
 
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
+                'birth_date' => $user->birth_date?->format('Y-m-d'),
                 'type' => $user->type,
                 'avatar_url' => $user->avatar_url,
                 'firebase_uid' => $user->firebase_uid,

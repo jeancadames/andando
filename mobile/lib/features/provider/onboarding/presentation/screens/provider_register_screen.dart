@@ -5,26 +5,16 @@ import 'package:go_router/go_router.dart';
 import '../../../../../core/router/route_names.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../auth/application/auth_controller.dart';
+import '../../../../customer/auth/data/models/legal_document.dart';
 import '../../data/datasources/provider_auth_api.dart';
 import '../../data/models/provider_register_form_data.dart';
-
-import '../widgets/step_personal_info.dart';
 import '../widgets/step_business_info.dart';
 import '../widgets/step_documents.dart';
+import '../widgets/step_personal_info.dart';
 import '../widgets/step_terms.dart';
 
-/// Pantalla de registro de proveedor.
-///
-/// Esta pantalla maneja 4 pasos:
-/// 1. Información personal
-/// 2. Información del negocio
-/// 3. Documentación
-/// 4. Términos y condiciones
 class ProviderRegisterScreen extends StatefulWidget {
-  const ProviderRegisterScreen({
-    super.key,
-    required this.authController,
-  });
+  const ProviderRegisterScreen({super.key, required this.authController});
 
   final AuthController authController;
 
@@ -34,13 +24,20 @@ class ProviderRegisterScreen extends StatefulWidget {
 
 class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
   final _api = const ProviderAuthApi();
-
   final _formData = ProviderRegisterFormData();
 
   int _currentStep = 1;
+
   bool _isSubmitting = false;
+  bool _loadingLegalDocuments = true;
   bool _showPassword = false;
   bool _showConfirmPassword = false;
+
+  String? _legalDocumentsError;
+
+  LegalDocument? _termsDocument;
+  LegalDocument? _standardsDocument;
+  LegalDocument? _privacyDocument;
 
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -52,6 +49,12 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
   final _rncController = TextEditingController();
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLegalDocuments();
+  }
 
   @override
   void dispose() {
@@ -69,13 +72,83 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
     super.dispose();
   }
 
-  String _normalizeDominicanPhone(String value) {
-  final digits = value.replaceAll(RegExp(r'\D'), '');
+  Future<void> _loadLegalDocuments() async {
+    setState(() {
+      _loadingLegalDocuments = true;
+      _legalDocumentsError = null;
 
-  // Permite formato internacional: +1 809 123 4567
-  if (digits.length == 11 && digits.startsWith('1')) {
-    return digits.substring(1);
+      _formData.acceptTerms = false;
+      _formData.acceptStandards = false;
+      _formData.acceptPrivacy = false;
+    });
+
+    try {
+      final results = await Future.wait([
+        _api.getLegalDocument(type: 'terms_provider'),
+        _api.getLegalDocument(type: 'provider_standards'),
+        _api.getLegalDocument(type: 'privacy'),
+      ]);
+
+      if (!mounted) return;
+
+      final termsDocument = results[0];
+      final standardsDocument = results[1];
+      final privacyDocument = results[2];
+
+      setState(() {
+        _termsDocument = termsDocument;
+        _standardsDocument = standardsDocument;
+        _privacyDocument = privacyDocument;
+
+        _formData.termsDocumentId = termsDocument.id;
+        _formData.termsDocumentChecksum = termsDocument.checksum;
+
+        _formData.standardsDocumentId = standardsDocument.id;
+        _formData.standardsDocumentChecksum = standardsDocument.checksum;
+
+        _formData.privacyDocumentId = privacyDocument.id;
+        _formData.privacyDocumentChecksum = privacyDocument.checksum;
+
+        _loadingLegalDocuments = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _termsDocument = null;
+        _standardsDocument = null;
+        _privacyDocument = null;
+
+        _formData.termsDocumentId = null;
+        _formData.termsDocumentChecksum = null;
+
+        _formData.standardsDocumentId = null;
+        _formData.standardsDocumentChecksum = null;
+
+        _formData.privacyDocumentId = null;
+        _formData.privacyDocumentChecksum = null;
+
+        _loadingLegalDocuments = false;
+
+        _legalDocumentsError = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
+
+  bool get _legalDocumentsReady {
+    return !_loadingLegalDocuments &&
+        _termsDocument != null &&
+        _standardsDocument != null &&
+        _privacyDocument != null &&
+        _formData.hasLegalDocuments;
+  }
+
+  String _normalizeDominicanPhone(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+
+    if (digits.length == 11 && digits.startsWith('1')) {
+      return digits.substring(1);
+    }
 
     return digits;
   }
@@ -93,30 +166,36 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
   bool _isValidDominicanPhone(String value) {
     final phone = _normalizeDominicanPhone(value);
 
-    // RD: 809, 829 o 849 + 7 dígitos.
-    // El primer dígito después del código de área debe ser 2-9.
     return RegExp(r'^(809|829|849)[2-9]\d{6}$').hasMatch(phone);
   }
 
   String _dominicanPhoneForApi(String value) {
     final phone = _normalizeDominicanPhone(value);
+
     return '+1$phone';
   }
 
   void _syncControllersToFormData() {
     _formData.fullName = _fullNameController.text.trim();
+
     _formData.email = _emailController.text.trim();
+
     final rawPhone = _phoneController.text.trim();
 
     _formData.phone = _isValidDominicanPhone(rawPhone)
         ? _dominicanPhoneForApi(rawPhone)
         : rawPhone;
+
     _formData.password = _passwordController.text;
+
     _formData.confirmPassword = _confirmPasswordController.text;
 
     _formData.businessName = _businessNameController.text.trim();
+
     _formData.rnc = _rncController.text.trim();
+
     _formData.address = _addressController.text.trim();
+
     _formData.city = _cityController.text.trim();
   }
 
@@ -144,23 +223,24 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> {
             _formData.rncCertificate != null;
 
       case 4:
-        return _formData.acceptTerms && _formData.acceptPrivacy;
+        return _legalDocumentsReady && _formData.hasAcceptedLegalDocuments;
 
       default:
         return false;
     }
   }
 
-void _goBack() {
-  if (_currentStep == 1) {
-    context.goNamed(RouteNames.login);
-    return;
-  }
+  void _goBack() {
+    if (_currentStep == 1) {
+      context.goNamed(RouteNames.login);
 
-  setState(() {
-    _currentStep--;
-  });
-}
+      return;
+    }
+
+    setState(() {
+      _currentStep--;
+    });
+  }
 
   void _handleContinue() {
     if (!_canProceed()) {
@@ -170,14 +250,18 @@ void _goBack() {
           _phoneController.text.trim().isNotEmpty &&
           !_isValidDominicanPhone(_phoneController.text)) {
         message =
-            'Ingresa un teléfono dominicano válido. Ej: 809-123-4567, 829-123-4567 o +1 849-123-4567.';
+            'Ingresa un teléfono dominicano válido. '
+            'Ej: 809-123-4567, 829-123-4567 '
+            'o +1 849-123-4567.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-        ),
-      );
+      if (_currentStep == 4 && !_legalDocumentsReady) {
+        message = 'Los documentos legales todavía no están disponibles.';
+      } else if (_currentStep == 4 && !_formData.hasAcceptedLegalDocuments) {
+        message = 'Debes completar las tres confirmaciones legales.';
+      }
+
+      _showMessage(message);
       return;
     }
 
@@ -185,13 +269,17 @@ void _goBack() {
       setState(() {
         _currentStep++;
       });
-    } else {
-      _submit();
+
+      return;
     }
+
+    _submit();
   }
 
   Future<void> _submit() async {
-    if (!_canProceed()) return;
+    if (!_canProceed()) {
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -211,14 +299,10 @@ void _goBack() {
       if (!mounted) return;
 
       context.goNamed(RouteNames.providerVerificationPending);
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() {
@@ -226,6 +310,12 @@ void _goBack() {
         });
       }
     }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pickFile({
@@ -237,24 +327,118 @@ void _goBack() {
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
     );
 
-    if (result == null || result.files.isEmpty) return;
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
 
     final file = result.files.first;
 
     if (file.size > 5 * 1024 * 1024) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('El archivo no puede superar los 5MB.'),
-        ),
-      );
+      _showMessage('El archivo no puede superar los 5MB.');
+
       return;
     }
 
     setState(() {
       onSelected(file);
     });
+  }
+
+  String _cleanMarkdown(String content) {
+    return content
+        .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
+        .replaceAll('**', '')
+        .replaceAll('__', '')
+        .replaceAll(RegExp(r'^\s*---\s*$', multiLine: true), '')
+        .replaceAll(RegExp(r'^\s*-\s+', multiLine: true), '• ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+  }
+
+  Future<void> _showLegalDocument(LegalDocument document) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (modalContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.92,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDADDE2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  document.title,
+                  style: const TextStyle(
+                    color: AppColors.primaryBlue,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Versión ${document.version} · '
+                  'Vigente desde ${document.effectiveDateLabel}',
+                  style: const TextStyle(
+                    color: AppColors.mutedForeground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(right: 12, bottom: 16),
+                      child: SelectableText(
+                        _cleanMarkdown(document.content),
+                        style: const TextStyle(
+                          color: Color(0xFF374151),
+                          fontSize: 14,
+                          height: 1.55,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(modalContext).pop();
+                    },
+                    child: const Text('Entendido'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -266,36 +450,31 @@ void _goBack() {
       body: SafeArea(
         child: Column(
           children: [
-            _RegisterHeader(
-              currentStep: _currentStep,
-              onBack: _goBack,
-            ),
-
+            _RegisterHeader(currentStep: _currentStep, onBack: _goBack),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
                 child: _buildCurrentStep(),
               ),
             ),
-
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
                 color: AppColors.white,
-                border: Border(
-                  top: BorderSide(color: Color(0xFFE5E7EB)),
-                ),
+                border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
               ),
               child: SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed:
-                      canProceed && !_isSubmitting ? _handleContinue : null,
+                  onPressed: canProceed && !_isSubmitting
+                      ? _handleContinue
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryBlue,
-                    disabledBackgroundColor:
-                        AppColors.primaryBlue.withAlpha(120),
+                    disabledBackgroundColor: AppColors.primaryBlue.withAlpha(
+                      120,
+                    ),
                     foregroundColor: AppColors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -312,7 +491,7 @@ void _goBack() {
                           ),
                         )
                       : Text(
-                          _currentStep == 4 ? 'Enviar Solicitud' : 'Continuar',
+                          _currentStep == 4 ? 'Enviar solicitud' : 'Continuar',
                         ),
                 ),
               ),
@@ -334,10 +513,12 @@ void _goBack() {
           confirmPasswordController: _confirmPasswordController,
           showPassword: _showPassword,
           showConfirmPassword: _showConfirmPassword,
-          emailErrorText: _emailController.text.trim().isNotEmpty &&
-              !_isValidEmail(_emailController.text)
-          ? 'Ingresa un correo válido. Ej: nombre@dominio.com.'
-          : null,
+          emailErrorText:
+              _emailController.text.trim().isNotEmpty &&
+                  !_isValidEmail(_emailController.text)
+              ? 'Ingresa un correo válido. '
+                    'Ej: nombre@dominio.com.'
+              : null,
           onTogglePassword: () {
             setState(() {
               _showPassword = !_showPassword;
@@ -406,11 +587,24 @@ void _goBack() {
 
       case 4:
         return StepTerms(
+          termsDocument: _termsDocument,
+          standardsDocument: _standardsDocument,
+          privacyDocument: _privacyDocument,
+          isLoading: _loadingLegalDocuments,
+          errorMessage: _legalDocumentsError,
           acceptTerms: _formData.acceptTerms,
+          acceptStandards: _formData.acceptStandards,
           acceptPrivacy: _formData.acceptPrivacy,
+          onRetry: _loadLegalDocuments,
+          onOpenDocument: _showLegalDocument,
           onTermsChanged: (value) {
             setState(() {
               _formData.acceptTerms = value ?? false;
+            });
+          },
+          onStandardsChanged: (value) {
+            setState(() {
+              _formData.acceptStandards = value ?? false;
             });
           },
           onPrivacyChanged: (value) {
@@ -426,19 +620,8 @@ void _goBack() {
   }
 }
 
-class _OptionItem {
-  const _OptionItem(this.value, this.label);
-
-  final String value;
-  final String label;
-}
-
-/// Header del registro con progreso.
 class _RegisterHeader extends StatelessWidget {
-  const _RegisterHeader({
-    required this.currentStep,
-    required this.onBack,
-  });
+  const _RegisterHeader({required this.currentStep, required this.onBack});
 
   final int currentStep;
   final VoidCallback onBack;
@@ -449,9 +632,7 @@ class _RegisterHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       decoration: const BoxDecoration(
         color: AppColors.white,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE5E7EB)),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,9 +650,7 @@ class _RegisterHeader extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Paso $currentStep de 4',
-            style: const TextStyle(
-              color: AppColors.mutedForeground,
-            ),
+            style: const TextStyle(color: AppColors.mutedForeground),
           ),
           const SizedBox(height: 24),
           Row(
@@ -482,9 +661,7 @@ class _RegisterHeader extends StatelessWidget {
               return Expanded(
                 child: Container(
                   height: 5,
-                  margin: EdgeInsets.only(
-                    right: index == 3 ? 0 : 8,
-                  ),
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 8),
                   decoration: BoxDecoration(
                     color: isActive
                         ? AppColors.primaryBlue
@@ -502,9 +679,7 @@ class _RegisterHeader extends StatelessWidget {
 }
 
 class _BackButtonCircle extends StatelessWidget {
-  const _BackButtonCircle({
-    required this.onPressed,
-  });
+  const _BackButtonCircle({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -520,10 +695,7 @@ class _BackButtonCircle extends StatelessWidget {
           color: AppColors.primaryBlue.withAlpha(20),
           shape: BoxShape.circle,
         ),
-        child: const Icon(
-          Icons.arrow_back,
-          color: AppColors.primaryBlue,
-        ),
+        child: const Icon(Icons.arrow_back, color: AppColors.primaryBlue),
       ),
     );
   }

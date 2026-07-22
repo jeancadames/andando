@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Provider\ProviderLegalSettingsController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\LegalDocumentController;
 use App\Http\Controllers\Api\LegalAcceptanceController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Api\Client\ClientLegalSettingsController;
 use App\Http\Controllers\Api\Auth\GoogleAuthController;
 use App\Http\Controllers\Api\Auth\AppleAuthController;
 use App\Http\Controllers\Api\Auth\LoginController;
+use App\Http\Controllers\Api\Auth\SocialLegalOnboardingController;
 
 use App\Http\Controllers\Api\Client\ClientReviewCommentController;
 use App\Http\Controllers\Api\Client\ClientReviewController;
@@ -163,6 +165,11 @@ Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 Route::post('/auth/google', GoogleAuthController::class);
 Route::post('/auth/apple', AppleAuthController::class);
 
+Route::middleware('auth:sanctum')->post(
+    '/auth/social/legal-onboarding',
+    SocialLegalOnboardingController::class
+)->middleware('throttle:10,1');
+
 Route::middleware('auth:sanctum')->group(function () {
 
    Route::post(
@@ -198,6 +205,12 @@ Route::prefix('provider')->group(function () {
 
     Route::middleware(['auth:sanctum', 'provider.active'])->group(function () {
         Route::get('/me', [ProviderAuthController::class, 'me']);
+
+        Route::get(
+            '/legal-settings',
+            ProviderLegalSettingsController::class
+        );
+        
         Route::post('/logout', [ProviderAuthController::class, 'logout']);
 
         Route::get('/pricing-settings', [ProviderPricingSettingController::class, 'index']);
@@ -293,11 +306,20 @@ Route::prefix('client/explore')->group(function () {
     | Rutas protegidas del cliente
     |--------------------------------------------------------------------------
     */
-    Route::middleware('auth:sanctum')->prefix('client')->group(function () {
+
+    Route::middleware('auth:sanctum')
+    ->prefix('client')
+    ->group(function () {
+        Route::post('/logout', [ClientProfileController::class, 'logout']);
+    });
+
+    Route::middleware([
+        'auth:sanctum',
+        'customer.legal.complete',
+    ])->prefix('client')->group(function () {
         Route::get('/profile', [ClientProfileController::class, 'show']);
         Route::put('/profile', [ClientProfileController::class, 'update']);
         Route::post('/profile/photo', [ClientProfileController::class, 'updatePhoto']);
-        Route::post('/logout', [ClientProfileController::class, 'logout']);
         Route::put('/profile/password', [ClientPasswordController::class, 'update']);
         
         Route::get('/bookings', [ClientBookingController::class, 'index']);

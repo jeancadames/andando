@@ -16,19 +16,17 @@ import '../../customer/auth/data/datasources/customer_auth_api.dart';
 ///
 /// - todavía está revisando si hay sesión guardada.
 /// - el usuario ya tiene sesión activa.
+/// - el usuario tiene sesión social, pero debe completar requisitos legales.
 /// - el usuario no tiene sesión.
-///
-/// Este estado será usado por el router para decidir si mostrar:
-/// - WelcomeScreen
-/// - ProviderVerificationPendingScreen
-/// - ProviderDashboard
-/// - ClientExplore
 enum AuthStatus {
   /// Estado inicial mientras la app lee el token guardado.
   checking,
 
-  /// El usuario tiene un token guardado.
+  /// El usuario tiene una sesión completa.
   authenticated,
+
+  /// El usuario tiene token, pero debe completar el onboarding legal.
+  legalOnboardingRequired,
 
   /// No hay token guardado.
   unauthenticated,
@@ -42,8 +40,9 @@ enum AuthStatus {
 /// - cierre de sesión.
 /// - datos mínimos del usuario autenticado.
 /// - estado del proveedor.
+/// - estado del onboarding legal.
 /// - registro del FCM token en backend.
-/// - login de cliente con Google.
+/// - login de cliente con Google y Apple.
 class AuthController extends ChangeNotifier {
   AuthController({
     required SecureStorage secureStorage,
@@ -52,15 +51,15 @@ class AuthController extends ChangeNotifier {
     FirebaseGoogleAuthService? firebaseGoogleAuthService,
     FirebaseAppleAuthService? firebaseAppleAuthService,
     CustomerAuthApi? customerAuthApi,
-  })  : _secureStorage = secureStorage,
-        _firebasePushService = firebasePushService ?? FirebasePushService(),
-        _deviceTokenApiService =
-            deviceTokenApiService ?? const DeviceTokenApiService(),
-        _firebaseGoogleAuthService =
-            firebaseGoogleAuthService ?? FirebaseGoogleAuthService(),
-        _firebaseAppleAuthService =
-            firebaseAppleAuthService ?? FirebaseAppleAuthService(),    
-        _customerAuthApi = customerAuthApi ?? const CustomerAuthApi();
+  }) : _secureStorage = secureStorage,
+       _firebasePushService = firebasePushService ?? FirebasePushService(),
+       _deviceTokenApiService =
+           deviceTokenApiService ?? const DeviceTokenApiService(),
+       _firebaseGoogleAuthService =
+           firebaseGoogleAuthService ?? FirebaseGoogleAuthService(),
+       _firebaseAppleAuthService =
+           firebaseAppleAuthService ?? FirebaseAppleAuthService(),
+       _customerAuthApi = customerAuthApi ?? const CustomerAuthApi();
 
   /// Servicio encargado de leer/escribir datos sensibles.
   final SecureStorage _secureStorage;
@@ -109,6 +108,9 @@ class AuthController extends ChangeNotifier {
   /// Email del usuario autenticado.
   String? _userEmail;
 
+  /// Indica si una sesión social todavía debe completar requisitos legales.
+  bool _requiresLegalOnboarding = false;
+
   AuthStatus get status => _status;
 
   String? get token => _token;
@@ -121,9 +123,14 @@ class AuthController extends ChangeNotifier {
 
   String? get userEmail => _userEmail;
 
+  bool get requiresLegalOnboarding => _requiresLegalOnboarding;
+
   bool get isChecking => _status == AuthStatus.checking;
 
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+
+  bool get isLegalOnboardingRequired =>
+      _status == AuthStatus.legalOnboardingRequired;
 
   bool get isUnauthenticated => _status == AuthStatus.unauthenticated;
 
@@ -149,20 +156,24 @@ class AuthController extends ChangeNotifier {
     _userName = await _secureStorage.read(StorageKeys.userName);
     _userEmail = await _secureStorage.read(StorageKeys.userEmail);
 
-    _status = AuthStatus.authenticated;
+    final savedLegalOnboarding = await _secureStorage.read(
+      StorageKeys.requiresLegalOnboarding,
+    );
+
+    _requiresLegalOnboarding = savedLegalOnboarding == 'true';
+
+    _status = _requiresLegalOnboarding
+        ? AuthStatus.legalOnboardingRequired
+        : AuthStatus.authenticated;
+
     notifyListeners();
 
-    unawaited(_registerDeviceTokenForSession(savedToken));
+    if (!_requiresLegalOnboarding) {
+      unawaited(_registerDeviceTokenForSession(savedToken));
+    }
   }
 
-  /// Login/registro de cliente usando Google.
-  ///
-  /// Flujo:
-  /// 1. Firebase Auth abre Google.
-  /// 2. Firebase devuelve un ID token.
-  /// 3. Laravel valida ese ID token.
-  /// 4. Laravel devuelve token Sanctum.
-  /// 5. Guardamos sesión igual que login/register normal.
+  /// Login o registro de cliente usando Google.
   Future<void> loginWithGoogle() async {
     try {
       final googleResult = await _firebaseGoogleAuthService.signInWithGoogle();
@@ -176,6 +187,7 @@ class AuthController extends ChangeNotifier {
         userType: response.userType,
         name: response.userName,
         email: response.userEmail,
+        requiresLegalOnboarding: response.requiresLegalOnboarding,
       );
     } catch (_) {
       await _firebaseGoogleAuthService.signOutFromFirebase();
@@ -183,6 +195,7 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  /// Login o registro de cliente usando Apple.
   Future<void> loginWithApple() async {
     try {
       final appleResult = await _firebaseAppleAuthService.signInWithApple();
@@ -196,6 +209,7 @@ class AuthController extends ChangeNotifier {
         userType: response.userType,
         name: response.userName,
         email: response.userEmail,
+        requiresLegalOnboarding: response.requiresLegalOnboarding,
       );
     } catch (_) {
       await _firebaseAppleAuthService.signOutFromFirebase();
@@ -210,26 +224,15 @@ class AuthController extends ChangeNotifier {
     required String name,
     required String email,
     String? providerStatus,
+    bool requiresLegalOnboarding = false,
   }) async {
-    await _secureStorage.write(
-      key: StorageKeys.authToken,
-      value: token,
-    );
+    await _secureStorage.write(key: StorageKeys.authToken, value: token);
 
-    await _secureStorage.write(
-      key: StorageKeys.userType,
-      value: userType,
-    );
+    await _secureStorage.write(key: StorageKeys.userType, value: userType);
 
-    await _secureStorage.write(
-      key: StorageKeys.userName,
-      value: name,
-    );
+    await _secureStorage.write(key: StorageKeys.userName, value: name);
 
-    await _secureStorage.write(
-      key: StorageKeys.userEmail,
-      value: email,
-    );
+    await _secureStorage.write(key: StorageKeys.userEmail, value: email);
 
     if (providerStatus != null) {
       await _secureStorage.write(
@@ -240,24 +243,58 @@ class AuthController extends ChangeNotifier {
       await _secureStorage.delete(StorageKeys.providerStatus);
     }
 
+    await _secureStorage.write(
+      key: StorageKeys.requiresLegalOnboarding,
+      value: requiresLegalOnboarding ? 'true' : 'false',
+    );
+
     _token = token;
     _userType = userType;
     _providerStatus = providerStatus;
     _userName = name;
     _userEmail = email;
+    _requiresLegalOnboarding = requiresLegalOnboarding;
+
+    _status = requiresLegalOnboarding
+        ? AuthStatus.legalOnboardingRequired
+        : AuthStatus.authenticated;
+
+    notifyListeners();
+
+    if (!requiresLegalOnboarding) {
+      unawaited(_registerDeviceTokenForSession(token));
+    }
+  }
+
+  /// Marca el onboarding legal como completado.
+  ///
+  /// Este método debe llamarse después de que Laravel confirme que guardó
+  /// la fecha de nacimiento, los Términos y la Política de Privacidad.
+  Future<void> completeLegalOnboarding() async {
+    final currentToken = _token;
+
+    if (currentToken == null || currentToken.trim().isEmpty) {
+      throw StateError(
+        'No existe una sesión autenticada para completar el onboarding legal.',
+      );
+    }
+
+    await _secureStorage.write(
+      key: StorageKeys.requiresLegalOnboarding,
+      value: 'false',
+    );
+
+    _requiresLegalOnboarding = false;
     _status = AuthStatus.authenticated;
 
     notifyListeners();
 
-    unawaited(_registerDeviceTokenForSession(token));
+    unawaited(_registerDeviceTokenForSession(currentToken));
   }
 
   /// Actualiza únicamente el estado del proveedor.
   Future<void> updateProviderStatus(String status) async {
-    await _secureStorage.write(
-      key: StorageKeys.providerStatus,
-      value: status,
-    );
+    await _secureStorage.write(key: StorageKeys.providerStatus, value: status);
 
     _providerStatus = status;
 
@@ -339,5 +376,6 @@ class AuthController extends ChangeNotifier {
     _providerStatus = null;
     _userName = null;
     _userEmail = null;
+    _requiresLegalOnboarding = false;
   }
 }

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckProviderActive;
 use App\Http\Middleware\CorsForStorage;
+use App\Http\Middleware\EnsureCustomerLegalOnboardingComplete;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -55,6 +56,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'storage.cors' => CorsForStorage::class,
             'provider.active' => CheckProviderActive::class,
+            'customer.legal.complete' =>
+                EnsureCustomerLegalOnboardingComplete::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

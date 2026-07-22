@@ -10,6 +10,9 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../application/auth_controller.dart';
 
+import '../../../customer/auth/data/datasources/customer_auth_api.dart';
+import '../../../customer/auth/data/models/legal_document.dart';
+
 /// Pantalla de login general de AndanDO.
 ///
 /// Esta pantalla permite:
@@ -27,10 +30,7 @@ import '../../application/auth_controller.dart';
 /// - provider/affiliate approved → /provider/dashboard
 /// - provider/affiliate pending/rejected → /provider/verification-pending
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({
-    super.key,
-    required this.authController,
-  });
+  const LoginScreen({super.key, required this.authController});
 
   /// Controlador global de autenticación.
   ///
@@ -132,11 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
       if (mounted) {
@@ -249,11 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
       if (mounted) {
@@ -282,6 +274,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
+      if (widget.authController.isLegalOnboardingRequired) {
+        final redirect = _safeRedirectFromQuery();
+
+        context.goNamed(
+          RouteNames.socialLegalOnboarding,
+          queryParameters: redirect == null ? const {} : {'redirect': redirect},
+        );
+
+        return;
+      }
+
       final normalizedUserType = _normalizeUserType(
         widget.authController.userType ?? 'customer',
       );
@@ -294,11 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
       if (mounted) {
@@ -325,9 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     context.goNamed(
       RouteNames.register,
-      queryParameters: {
-        'redirect': redirect,
-      },
+      queryParameters: {'redirect': redirect},
     );
   }
 
@@ -357,9 +354,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 310,
-                        ),
+                        constraints: const BoxConstraints(maxWidth: 310),
                         child: Image.asset(
                           'assets/images/logos/andando_logo.png',
                           fit: BoxFit.contain,
@@ -462,11 +457,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primaryBlue,
                                 foregroundColor: AppColors.white,
-                                disabledBackgroundColor:
-                                    AppColors.primaryBlue.withAlpha(120),
+                                disabledBackgroundColor: AppColors.primaryBlue
+                                    .withAlpha(120),
                                 elevation: 10,
-                                shadowColor:
-                                    AppColors.primaryBlue.withAlpha(55),
+                                shadowColor: AppColors.primaryBlue.withAlpha(
+                                  55,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -626,13 +622,8 @@ class _GeneralAuthApi {
 
     final response = await http.post(
       uri,
-      headers: {
-        'Accept': 'application/json',
-      },
-      body: {
-        'email': email,
-        'password': password,
-      },
+      headers: {'Accept': 'application/json'},
+      body: {'email': email, 'password': password},
     );
 
     return _handleResponse(response);
@@ -647,7 +638,8 @@ class _GeneralAuthApi {
       throw Exception('El servidor respondió con un formato inválido.');
     }
 
-    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+    final isSuccessful =
+        response.statusCode >= 200 && response.statusCode < 300;
 
     if (isSuccessful) {
       return _AuthLoginResponse.fromJson(body);
@@ -730,8 +722,8 @@ class _AuthLoginResponse {
     final inferredType = rawType.trim().isNotEmpty
         ? rawType
         : provider != null
-            ? 'provider'
-            : 'customer';
+        ? 'provider'
+        : 'customer';
 
     return _AuthLoginResponse(
       token: json['token']?.toString() ?? '',
@@ -821,15 +813,11 @@ class _LoginTextField extends StatelessWidget {
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE5E7EB),
-              ),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE5E7EB),
-              ),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -840,9 +828,7 @@ class _LoginTextField extends StatelessWidget {
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.primaryRed,
-              ),
+              borderSide: const BorderSide(color: AppColors.primaryRed),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -865,12 +851,7 @@ class _OrDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Row(
       children: [
-        Expanded(
-          child: Divider(
-            color: Color(0xFFE5E7EB),
-            thickness: 1,
-          ),
-        ),
+        Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Text(
@@ -882,12 +863,7 @@ class _OrDivider extends StatelessWidget {
             ),
           ),
         ),
-        Expanded(
-          child: Divider(
-            color: Color(0xFFE5E7EB),
-            thickness: 1,
-          ),
-        ),
+        Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
       ],
     );
   }
@@ -927,10 +903,7 @@ class _SocialLoginButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: borderColor,
-              width: 1.4,
-            ),
+            side: BorderSide(color: borderColor, width: 1.4),
           ),
         ),
         child: isLoading
@@ -945,13 +918,7 @@ class _SocialLoginButton extends StatelessWidget {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: Center(
-                      child: icon,
-                    ),
-                  ),
+                  SizedBox(width: 30, height: 30, child: Center(child: icon)),
                   const SizedBox(width: 12),
                   Flexible(
                     child: Text(
@@ -979,11 +946,7 @@ class _AppleIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Transform.translate(
       offset: const Offset(0.0, -1.5),
-      child: const Icon(
-        Icons.apple,
-        color: AppColors.white,
-        size: 30,
-      ),
+      child: const Icon(Icons.apple, color: AppColors.white, size: 30),
     );
   }
 }
@@ -996,9 +959,7 @@ class _GoogleIcon extends StatelessWidget {
     return const SizedBox(
       width: 24,
       height: 24,
-      child: CustomPaint(
-        painter: _GoogleIconPainter(),
-      ),
+      child: CustomPaint(painter: _GoogleIconPainter()),
     );
   }
 }
@@ -1091,46 +1052,205 @@ class _GoogleIconPainter extends CustomPainter {
   }
 }
 
-class _LegalFooter extends StatelessWidget {
+class _LegalFooter extends StatefulWidget {
   const _LegalFooter();
+
+  @override
+  State<_LegalFooter> createState() => _LegalFooterState();
+}
+
+class _LegalFooterState extends State<_LegalFooter> {
+  final CustomerAuthApi _api = const CustomerAuthApi();
+
+  bool _loadingTerms = false;
+  bool _loadingPrivacy = false;
+
+  Future<void> _openDocument({required String type}) async {
+    final isTerms = type == 'terms_user';
+
+    if (_loadingTerms || _loadingPrivacy) {
+      return;
+    }
+
+    setState(() {
+      if (isTerms) {
+        _loadingTerms = true;
+      } else {
+        _loadingPrivacy = true;
+      }
+    });
+
+    try {
+      final document = await _api.getLegalDocument(type: type);
+
+      if (!mounted) {
+        return;
+      }
+
+      await _showLegalModal(document: document);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (isTerms) {
+            _loadingTerms = false;
+          } else {
+            _loadingPrivacy = false;
+          }
+        });
+      }
+    }
+  }
+
+  String _cleanMarkdown(String content) {
+    return content
+        .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
+        .replaceAll('**', '')
+        .replaceAll('__', '')
+        .replaceAll(RegExp(r'^\s*---\s*$', multiLine: true), '')
+        .replaceAll(RegExp(r'^\s*-\s+', multiLine: true), '• ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+  }
+
+  Future<void> _showLegalModal({required LegalDocument document}) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (modalContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.92,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDADDE2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  document.title,
+                  style: const TextStyle(
+                    color: AppColors.primaryBlue,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Versión ${document.version} · Vigente desde '
+                  '${document.effectiveDateLabel}',
+                  style: const TextStyle(
+                    color: AppColors.mutedForeground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(right: 12, bottom: 16),
+                      child: SelectableText(
+                        _cleanMarkdown(document.content),
+                        style: const TextStyle(
+                          color: Color(0xFF374151),
+                          fontSize: 14,
+                          height: 1.55,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(modalContext).pop();
+                    },
+                    child: const Text('Entendido'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
-      children: const [
-        Text(
+      children: [
+        const Text(
           'Al continuar, aceptas nuestros ',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.mutedForeground,
-            fontSize: 12,
+          style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
+        ),
+        GestureDetector(
+          onTap: _loadingTerms
+              ? null
+              : () {
+                  _openDocument(type: 'terms_user');
+                },
+          child: Text(
+            _loadingTerms ? 'Cargando...' : 'Términos',
+            style: const TextStyle(
+              color: AppColors.primaryBlue,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              decoration: TextDecoration.underline,
+            ),
           ),
         ),
-        Text(
-          'Términos',
-          style: TextStyle(
-            color: AppColors.primaryBlue,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            decoration: TextDecoration.underline,
-          ),
-        ),
-        Text(
+        const Text(
           ' y ',
-          style: TextStyle(
-            color: AppColors.mutedForeground,
-            fontSize: 12,
-          ),
+          style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
         ),
-        Text(
-          'Política de Privacidad',
-          style: TextStyle(
-            color: AppColors.primaryBlue,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            decoration: TextDecoration.underline,
+        GestureDetector(
+          onTap: _loadingPrivacy
+              ? null
+              : () {
+                  _openDocument(type: 'privacy');
+                },
+          child: Text(
+            _loadingPrivacy ? 'Cargando...' : 'Política de Privacidad',
+            style: const TextStyle(
+              color: AppColors.primaryBlue,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              decoration: TextDecoration.underline,
+            ),
           ),
         ),
       ],

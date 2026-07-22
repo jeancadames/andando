@@ -1,74 +1,70 @@
 import 'package:file_picker/file_picker.dart';
 
-/// Modelo local para guardar los datos del formulario de registro.
-///
-/// Importante:
-/// Este modelo NO representa una tabla de base de datos.
-/// Este modelo solo vive en Flutter mientras el usuario completa los pasos.
-///
-/// El registro tiene 4 pasos:
-///
-/// 1. Información personal.
-/// 2. Información del negocio.
-/// 3. Documentación.
-/// 4. Términos y condiciones.
-///
-/// Al final, este objeto se usa para construir un request multipart
-/// hacia Laravel.
+/// Mantiene localmente la información del formulario de registro
+/// mientras el afiliado completa sus cuatro pasos.
 class ProviderRegisterFormData {
-  /// Paso 1: nombre completo del proveedor.
+  /*
+   * Paso 1: información personal.
+   */
   String fullName = '';
-
-  /// Paso 1: correo electrónico.
   String email = '';
-
-  /// Paso 1: teléfono de contacto.
   String phone = '';
-
-  /// Paso 1: contraseña.
   String password = '';
-
-  /// Paso 1: confirmación de contraseña.
   String confirmPassword = '';
 
-  /// Paso 2: nombre comercial del negocio.
+  /*
+   * Paso 2: información comercial.
+   */
   String businessName = '';
-
-  /// Paso 2: slug del tipo de negocio.
-  ///
-  /// Ejemplo:
-  /// - tourism_agency
-  /// - tour_operator
-  /// - tour_guide
   String businessTypeSlug = '';
-
-  /// Paso 2: RNC o identificador tributario.
   String rnc = '';
-
-  /// Paso 2: dirección física del negocio.
   String address = '';
-
-  /// Paso 2: ciudad.
   String city = '';
-
-  /// Paso 2: provincia.
   String province = '';
 
-  /// Paso 3: archivo de cédula.
-  ///
-  /// Usamos PlatformFile porque viene del paquete file_picker.
-  /// Este objeto contiene nombre, tamaño, extensión y bytes del archivo.
+  /*
+   * Paso 3: documentos de verificación.
+   */
   PlatformFile? identityCard;
-
-  /// Paso 3: archivo de certificado RNC.
   PlatformFile? rncCertificate;
-
-  /// Paso 3: licencia comercial opcional.
   PlatformFile? businessLicense;
 
-  /// Paso 4: aceptación de términos.
+  /*
+   * Paso 4: confirmaciones legales.
+   */
   bool acceptTerms = false;
-
-  /// Paso 4: aceptación de política de privacidad.
+  bool acceptStandards = false;
   bool acceptPrivacy = false;
+
+  /*
+   * Documento vigente de Términos para Afiliados.
+   */
+  int? termsDocumentId;
+  String? termsDocumentChecksum;
+
+  /*
+   * Documento vigente de Estándares de Publicación,
+   * Operación y Seguridad.
+   */
+  int? standardsDocumentId;
+  String? standardsDocumentChecksum;
+
+  /*
+   * Documento vigente de Política de Privacidad.
+   */
+  int? privacyDocumentId;
+  String? privacyDocumentChecksum;
+
+  bool get hasLegalDocuments {
+    return termsDocumentId != null &&
+        (termsDocumentChecksum?.isNotEmpty ?? false) &&
+        standardsDocumentId != null &&
+        (standardsDocumentChecksum?.isNotEmpty ?? false) &&
+        privacyDocumentId != null &&
+        (privacyDocumentChecksum?.isNotEmpty ?? false);
+  }
+
+  bool get hasAcceptedLegalDocuments {
+    return acceptTerms && acceptStandards && acceptPrivacy;
+  }
 }

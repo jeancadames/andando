@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../auth/data/datasources/customer_auth_api.dart';
+import '../../../auth/data/models/legal_document.dart';
 import '../../../reviews/presentation/widgets/experience_reviews_section.dart';
 import '../../data/models/customer_experience_model.dart';
 import '../../../booking/data/datasources/customer_booking_remote_datasource.dart';
@@ -43,16 +45,26 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   late int _currentReviewsCount;
 
   int travelers = 1;
+  bool includesMinors = false;
+  int minorCount = 0;
   bool isReserving = false;
 
   CustomerExperienceScheduleModel? selectedSchedule;
-  String? selectedPickupPoint; 
+  String? selectedPickupPoint;
 
   late List<CustomerExperienceScheduleModel> _availableSchedules;
 
   late final TextEditingController _travelersController;
   late final CustomerBookingRemoteDataSource _bookingDataSource;
   late final CustomerPaymentMethodsController _paymentMethodsController;
+
+  final CustomerAuthApi _customerAuthApi = const CustomerAuthApi();
+
+  LegalDocument? _paymentPolicyDocument;
+  LegalDocument? _waiverDocument;
+  LegalDocument? _minorsDocument;
+
+  bool _isLoadingBookingDocuments = false;
 
   final CustomerChatService _chatService = CustomerChatService();
 
@@ -75,14 +87,16 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   }
 
   bool get canReserve {
-    final hasRequiredPickupPoint = !widget.experience.includesTransport ||
+    final hasRequiredPickupPoint =
+        !widget.experience.includesTransport ||
         (selectedPickupPoint != null && selectedPickupPoint!.trim().isNotEmpty);
 
     return selectedSchedule != null &&
-        travelers >= 1 &&
-        travelers <= maxTravelers &&
-        hasRequiredPickupPoint &&
-        !isReserving;
+      travelers >= 1 &&
+      totalParticipants <= maxTravelers &&
+      (!includesMinors || minorCount >= 1) &&
+      hasRequiredPickupPoint &&
+      !isReserving;
   }
 
   double get unitPrice {
@@ -93,7 +107,11 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     return selectedSchedule?.currency ?? widget.experience.currency;
   }
 
-  double get totalPrice => unitPrice * travelers;
+  int get totalParticipants {
+    return travelers + (includesMinors ? minorCount : 0);
+  }
+
+  double get totalPrice => unitPrice * totalParticipants;
 
   String get formattedUnitPrice {
     final formatter = NumberFormat('#,###', 'en_US');
@@ -104,6 +122,70 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     }
 
     return '$unitCurrency $formatted';
+  }
+
+  Future<bool> _loadBookingLegalDocuments() async {
+    if (_paymentPolicyDocument != null &&
+        _waiverDocument != null &&
+        (!includesMinors || _minorsDocument != null)) {
+      return true;
+    }
+
+    if (_isLoadingBookingDocuments) {
+      return false;
+    }
+
+    setState(() {
+      _isLoadingBookingDocuments = true;
+    });
+
+    try {
+      final paymentPolicyFuture = _customerAuthApi.getLegalDocument(
+        type: 'payment_policy',
+      );
+
+      final waiverFuture = _customerAuthApi.getLegalDocument(type: 'waiver');
+
+      final minorsFuture = includesMinors
+          ? _customerAuthApi.getLegalDocument(type: 'minors')
+          : Future<LegalDocument?>.value(null);
+
+      final results = await Future.wait<dynamic>([
+        paymentPolicyFuture,
+        waiverFuture,
+        minorsFuture,
+      ]);
+
+      if (!mounted) {
+        return false;
+      }
+
+      setState(() {
+        _paymentPolicyDocument = results[0] as LegalDocument;
+        _waiverDocument = results[1] as LegalDocument;
+        _minorsDocument = results[2] as LegalDocument?;
+      });
+
+      return true;
+    } catch (error) {
+      if (!mounted) {
+        return false;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingBookingDocuments = false;
+        });
+      }
+    }
   }
 
   Future<void> _showCustomerRequiredForChatDialog() async {
@@ -129,10 +211,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
             isProvider
                 ? 'Estás conectado como afiliado. Para contactar a otro afiliado necesitas entrar con una cuenta de cliente.'
                 : 'Para comunicarte con el afiliado necesitas crear una cuenta o iniciar sesión como cliente.',
-            style: const TextStyle(
-              height: 1.4,
-              color: Color(0xFF475569),
-            ),
+            style: const TextStyle(height: 1.4, color: Color(0xFF475569)),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
           actions: [
@@ -154,9 +233,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
                 context.goNamed(
                   RouteNames.login,
-                  queryParameters: {
-                    'redirect': redirectPath,
-                  },
+                  queryParameters: {'redirect': redirectPath},
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -167,9 +244,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: Text(
-                isProvider ? 'Cambiar a cliente' : 'Iniciar sesión',
-              ),
+              child: Text(isProvider ? 'Cambiar a cliente' : 'Iniciar sesión'),
             ),
           ],
         );
@@ -197,16 +272,13 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
       if (!mounted) return;
 
-      context.push(
-        '/client/messages/${conversation.id}',
-        extra: conversation,
-      );
+      context.push('/client/messages/${conversation.id}', extra: conversation);
     } on CustomerChatException catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
 
@@ -360,9 +432,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
 
     context.goNamed(
       RouteNames.login,
-      queryParameters: {
-        'redirect': redirectPath,
-      },
+      queryParameters: {'redirect': redirectPath},
     );
   }
 
@@ -389,10 +459,7 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
             isProvider
                 ? 'Estás conectado como afiliado. Para reservar una experiencia necesitas entrar o crear una cuenta de cliente.'
                 : 'Para reservar esta experiencia necesitas crear una cuenta o iniciar sesión como cliente. Mantendremos la fecha y la cantidad de viajeros que seleccionaste.',
-            style: const TextStyle(
-              height: 1.4,
-              color: Color(0xFF475569),
-            ),
+            style: const TextStyle(height: 1.4, color: Color(0xFF475569)),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
           actions: [
@@ -432,10 +499,17 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
   }
 
   void _updateTravelers(int value) {
-    final safeValue = value.clamp(1, maxTravelers);
+    final reservedForMinors = includesMinors ? minorCount : 0;
+    final maximumAdults = (maxTravelers - reservedForMinors).clamp(
+      1,
+      maxTravelers,
+    );
+
+    final safeValue = value.clamp(1, maximumAdults);
 
     setState(() {
       travelers = safeValue;
+
       _travelersController.text = safeValue.toString();
       _travelersController.selection = TextSelection.fromPosition(
         TextPosition(offset: _travelersController.text.length),
@@ -443,322 +517,421 @@ class _ExperienceDetailScreenState extends State<ExperienceDetailScreen> {
     });
   }
 
+  void _updateIncludesMinors(bool value) {
+    setState(() {
+      includesMinors = value;
+
+      if (!includesMinors) {
+        minorCount = 0;
+        return;
+      }
+
+      final availableForMinors = maxTravelers - travelers;
+
+      if (availableForMinors < 1) {
+        includesMinors = false;
+        minorCount = 0;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No quedan cupos disponibles para agregar menores.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      minorCount = 1;
+    });
+  }
+
+  void _updateMinorCount(int value) {
+    final maximumMinors = maxTravelers - travelers;
+
+    if (maximumMinors < 1) {
+      return;
+    }
+
+    final safeValue = value.clamp(1, maximumMinors);
+
+    setState(() {
+      minorCount = safeValue;
+    });
+  }
+
   void _onScheduleChanged(CustomerExperienceScheduleModel? schedule) {
     setState(() {
       selectedSchedule = schedule;
 
-      if (schedule != null && travelers > schedule.availableSpots) {
-        travelers = schedule.availableSpots;
-        _travelersController.text = travelers.toString();
-        _travelersController.selection = TextSelection.fromPosition(
-          TextPosition(offset: _travelersController.text.length),
-        );
+      if (schedule != null) {
+      final availableSpots = schedule.availableSpots;
+
+      if (travelers > availableSpots) {
+        travelers = availableSpots;
       }
+
+      final availableForMinors = availableSpots - travelers;
+
+      if (includesMinors && availableForMinors < 1) {
+        includesMinors = false;
+        minorCount = 0;
+      } else if (includesMinors && minorCount > availableForMinors) {
+        minorCount = availableForMinors;
+      }
+
+      _travelersController.text = travelers.toString();
+      _travelersController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _travelersController.text.length),
+      );
+    }
     });
   }
 
   void _decreaseAvailableSpotsAfterBooking() {
-  final schedule = selectedSchedule;
+    final schedule = selectedSchedule;
 
-  if (schedule == null) return;
+    if (schedule == null) return;
 
-  final newAvailableSpots = schedule.availableSpots - travelers;
+    final newAvailableSpots =
+    schedule.availableSpots - totalParticipants;
 
-  final updatedSchedule = CustomerExperienceScheduleModel(
-    id: schedule.id,
-    startsAt: schedule.startsAt,
-    capacity: schedule.capacity,
-    availableSpots: newAvailableSpots,
-    price: schedule.price,
-    currency: schedule.currency,
-  );
+    final updatedSchedule = CustomerExperienceScheduleModel(
+      id: schedule.id,
+      startsAt: schedule.startsAt,
+      capacity: schedule.capacity,
+      availableSpots: newAvailableSpots,
+      price: schedule.price,
+      currency: schedule.currency,
+    );
 
-  setState(() {
-    if (newAvailableSpots <= 0) {
-      _availableSchedules = _availableSchedules
-          .where((item) => item.id != schedule.id)
-          .toList();
+    setState(() {
+      if (newAvailableSpots <= 0) {
+        _availableSchedules = _availableSchedules
+            .where((item) => item.id != schedule.id)
+            .toList();
 
-      selectedSchedule = null;
-      travelers = 1;
-    } else {
-      _availableSchedules = _availableSchedules.map((item) {
-        if (item.id == schedule.id) {
-          return updatedSchedule;
+        selectedSchedule = null;
+        travelers = 1;
+      } else {
+        _availableSchedules = _availableSchedules.map((item) {
+          if (item.id == schedule.id) {
+            return updatedSchedule;
+          }
+
+          return item;
+        }).toList();
+
+        selectedSchedule = updatedSchedule;
+
+        if (travelers > updatedSchedule.availableSpots) {
+          travelers = updatedSchedule.availableSpots;
         }
+      }
 
-        return item;
-      }).toList();
+      _travelersController.text = travelers.toString();
+      _travelersController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _travelersController.text.length),
+      );
+    });
+  }
 
-      selectedSchedule = updatedSchedule;
+  Future<bool> _openAddCardForBooking() async {
+    _paymentMethodsController.errorMessage = null;
 
-      if (travelers > updatedSchedule.availableSpots) {
-        travelers = updatedSchedule.availableSpots;
+    final added = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return AddCardSheet(
+          isBookingFlow: true,
+          onSubmit:
+              ({
+                required type,
+                required cardNumber,
+                required holderName,
+                required expiryMonth,
+                required expiryYear,
+                required cvv,
+              }) {
+                return _paymentMethodsController.createPaymentMethod(
+                  type: type,
+                  cardNumber: cardNumber,
+                  holderName: holderName,
+                  expiryMonth: expiryMonth,
+                  expiryYear: expiryYear,
+                  cvv: cvv,
+                );
+              },
+        );
+      },
+    );
+
+    if (!mounted) return false;
+
+    if (added == true) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            icon: const CircleAvatar(
+              radius: 30,
+              backgroundColor: Color(0xFFE8F8EE),
+              child: Icon(
+                Icons.check_rounded,
+                color: Color(0xFF16A34A),
+                size: 36,
+              ),
+            ),
+            title: const Text(
+              'Tarjeta registrada',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            content: const Text(
+              'Tu tarjeta fue registrada exitosamente. Ahora continuaremos automáticamente con tu reserva.',
+              textAlign: TextAlign.center,
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Continuar'),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+
+      return true;
+    }
+
+    final errorMessage = _paymentMethodsController.errorMessage;
+
+    if (errorMessage != null && errorMessage.trim().isNotEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            icon: const CircleAvatar(
+              radius: 30,
+              backgroundColor: Color(0xFFFEECEC),
+              child: Icon(
+                Icons.close_rounded,
+                color: Color(0xFFDC2626),
+                size: 36,
+              ),
+            ),
+            title: const Text(
+              'No pudimos registrar la tarjeta',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            content: Text(
+              errorMessage.replaceFirst('Exception: ', ''),
+              textAlign: TextAlign.center,
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Intentar nuevamente'),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    return false;
+  }
+
+  Future<void> _reserveExperience({bool skipReview = false}) async {
+    if (!canReserve || selectedSchedule == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona una fecha y cantidad válida de viajeros.'),
+        ),
+      );
+      return;
+    }
+
+    if (widget.experience.includesTransport &&
+        (selectedPickupPoint == null || selectedPickupPoint!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona un punto de recogida antes de reservar.'),
+        ),
+      );
+      return;
+    }
+
+    if (!_isLoggedAsCustomer) {
+      await _showCustomerRequiredDialog();
+      return;
+    }
+
+    final legalDocumentsLoaded = await _loadBookingLegalDocuments();
+
+    if (!legalDocumentsLoaded) {
+      return;
+    }
+
+    final paymentPolicyDocument = _paymentPolicyDocument;
+    final waiverDocument = _waiverDocument;
+    final minorsDocument = _minorsDocument;
+
+    if (paymentPolicyDocument == null || waiverDocument == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudieron cargar los documentos legales de la reserva.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (includesMinors && minorsDocument == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo cargar la declaración para participación de menores.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!skipReview) {
+      final shouldConfirm = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return _BookingReviewDialog(
+            experienceTitle: widget.experience.title,
+            date: selectedSchedule!.formattedDateTime,
+            travelers: totalParticipants,
+            includesMinors: includesMinors,
+            minorCount: includesMinors ? minorCount : 0,
+            duration: widget.experience.displayDuration,
+            unitPrice: formattedUnitPrice,
+            totalPrice: formattedTotal,
+            includedItems: widget.experience.displayAmenities,
+            cancellationPolicy: widget.experience.cancellationPolicy,
+            paymentPolicyDocument: paymentPolicyDocument,
+            waiverDocument: waiverDocument,
+            minorsDocument: minorsDocument,
+          );
+        },
+      );
+
+      if (shouldConfirm != true) {
+        return;
       }
     }
 
-    _travelersController.text = travelers.toString();
-    _travelersController.selection = TextSelection.fromPosition(
-      TextPosition(offset: _travelersController.text.length),
-    );
-  });
-}
+    setState(() {
+      isReserving = true;
+    });
 
-Future<bool> _openAddCardForBooking() async {
-  _paymentMethodsController.errorMessage = null;
+    try {
+      final reservedTotal = formattedTotal;
 
-  final added = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) {
-      return AddCardSheet(
-        isBookingFlow: true,
-        onSubmit:
-            ({
-              required type,
-              required cardNumber,
-              required holderName,
-              required expiryMonth,
-              required expiryYear,
-              required cvv,
-            }) {
-              return _paymentMethodsController.createPaymentMethod(
-                type: type,
-                cardNumber: cardNumber,
-                holderName: holderName,
-                expiryMonth: expiryMonth,
-                expiryYear: expiryYear,
-                cvv: cvv,
-              );
-            },
+      final booking = await _bookingDataSource.createBooking(
+        scheduleId: selectedSchedule!.id,
+        guestsCount: totalParticipants,
+        includesMinors: includesMinors,
+        minorCount: includesMinors ? minorCount : 0,
+        paymentPolicyDocumentId: paymentPolicyDocument.id,
+        paymentPolicyChecksum: paymentPolicyDocument.checksum,
+        paymentPolicyAccepted: true,
+        waiverDocumentId: waiverDocument.id,
+        waiverChecksum: waiverDocument.checksum,
+        waiverAccepted: true,
+        minorsDocumentId: minorsDocument?.id,
+        minorsChecksum: minorsDocument?.checksum,
+        minorsAccepted: includesMinors,
+        pickupPoint: widget.experience.includesTransport
+            ? selectedPickupPoint
+            : null,
       );
-    },
-  );
 
-  if (!mounted) return false;
+      _decreaseAvailableSpotsAfterBooking();
 
-  if (added == true) {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          icon: const CircleAvatar(
-            radius: 30,
-            backgroundColor: Color(0xFFE8F8EE),
-            child: Icon(
-              Icons.check_rounded,
-              color: Color(0xFF16A34A),
-              size: 36,
-            ),
-          ),
-          title: const Text(
-            'Tarjeta registrada',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          content: const Text(
-            'Tu tarjeta fue registrada exitosamente. Ahora continuaremos automáticamente con tu reserva.',
-            textAlign: TextAlign.center,
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                },
-                child: const Text('Continuar'),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+      if (!mounted) return;
 
-    return true;
-  }
+      final goToBooking = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return _BookingSuccessDialog(
+            bookingCode: booking.bookingCode,
+            totalPrice: reservedTotal,
+          );
+        },
+      );
 
-  final errorMessage = _paymentMethodsController.errorMessage;
+      if (goToBooking == true && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          context.go('/client/bookings?bookingCode=${booking.bookingCode}');
+        });
+      }
+    } on CustomerBookingException catch (error) {
+      if (!mounted) return;
 
-  if (errorMessage != null && errorMessage.trim().isNotEmpty) {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          icon: const CircleAvatar(
-            radius: 30,
-            backgroundColor: Color(0xFFFEECEC),
-            child: Icon(
-              Icons.close_rounded,
-              color: Color(0xFFDC2626),
-              size: 36,
-            ),
-          ),
-          title: const Text(
-            'No pudimos registrar la tarjeta',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          content: Text(
-            errorMessage.replaceFirst('Exception: ', ''),
-            textAlign: TextAlign.center,
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                },
-                child: const Text('Intentar nuevamente'),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+      if (error.code == 'CARD_REQUIRED') {
+        final cardCreated = await _openAddCardForBooking();
 
-  return false;
-}
+        if (!mounted || !cardCreated) return;
 
-Future<void> _reserveExperience({
-    bool skipReview = false,
-  }) async {
-  if (!canReserve || selectedSchedule == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Selecciona una fecha y cantidad válida de viajeros.'),
-      ),
-    );
-    return;
-  }
+        setState(() {
+          isReserving = false;
+        });
 
-  if (widget.experience.includesTransport &&
-    (selectedPickupPoint == null || selectedPickupPoint!.trim().isEmpty)) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Selecciona un punto de recogida antes de reservar.'),
-      ),
-    );
-    return;
-  }
+        await _reserveExperience(skipReview: true);
+        return;
+      }
 
-  if (!_isLoggedAsCustomer) {
-    await _showCustomerRequiredDialog();
-    return;
-  }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) return;
 
-  if (!skipReview) {
-    final shouldConfirm = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return _BookingReviewDialog(
-          experienceTitle: widget.experience.title,
-          date: selectedSchedule!.formattedDate,
-          travelers: travelers,
-          duration: widget.experience.displayDuration,
-          unitPrice: formattedUnitPrice,
-          totalPrice: formattedTotal,
-          includedItems: widget.experience.displayAmenities,
-          cancellationPolicy: widget.experience.cancellationPolicy,
-        );
-      },
-    );
-
-    if (shouldConfirm != true) return;
-  }
-
-  setState(() {
-    isReserving = true;
-  });
-
-  try {
-    final reservedTotal = formattedTotal;
-
-    final booking = await _bookingDataSource.createBooking(
-      scheduleId: selectedSchedule!.id,
-      guestsCount: travelers,
-      pickupPoint: widget.experience.includesTransport
-        ? selectedPickupPoint
-        : null,
-    );
-
-    _decreaseAvailableSpotsAfterBooking();
-
-    if (!mounted) return;
-
-    final goToBooking = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return _BookingSuccessDialog(
-          bookingCode: booking.bookingCode,
-          totalPrice: reservedTotal,
-        );
-      },
-    );
-
-    if (goToBooking == true && mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        context.go('/client/bookings?bookingCode=${booking.bookingCode}');
-      });
-    }
-  } on CustomerBookingException catch (error) {
-    if (!mounted) return;
-
-    if (error.code == 'CARD_REQUIRED') {
-      final cardCreated = await _openAddCardForBooking();
-
-      if (!mounted || !cardCreated) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
 
       setState(() {
         isReserving = false;
       });
-
-      await _reserveExperience(skipReview: true);
-      return;
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.message)),
-    );
-  } catch (error) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          error.toString().replaceFirst('Exception: ', ''),
-        ),
-      ),
-    );
-  } finally {
-    if (!mounted) return;
-
-    setState(() {
-      isReserving = false;
-    });
   }
-}
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -783,9 +956,7 @@ Future<void> _reserveExperience({
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: _ExperiencePhotoGallery(
-                      photos: galleryPhotos,
-                    ),
+                    child: _ExperiencePhotoGallery(photos: galleryPhotos),
                   ),
                   Positioned(
                     top: MediaQuery.of(context).padding.top + 14,
@@ -831,15 +1002,15 @@ Future<void> _reserveExperience({
             ),
           ),
           if (experience.mapPickupPoints.isNotEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
-              child: _PickupPointsCard(
-                pickupPoints: experience.mapPickupPoints,
-                onOpenDirections: _openPickupPointDirections,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
+                child: _PickupPointsCard(
+                  pickupPoints: experience.mapPickupPoints,
+                  onOpenDirections: _openPickupPointDirections,
+                ),
               ),
             ),
-          ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
@@ -861,8 +1032,8 @@ Future<void> _reserveExperience({
               padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
               child: _BookingCard(
                 pickupPoints: experience.includesTransport
-                  ? experience.pickupPoints
-                  : const [],
+                    ? experience.pickupPoints
+                    : const [],
                 selectedPickupPoint: selectedPickupPoint,
                 onPickupPointChanged: (value) {
                   setState(() {
@@ -874,6 +1045,10 @@ Future<void> _reserveExperience({
                 travelersController: _travelersController,
                 travelers: travelers,
                 maxTravelers: maxTravelers,
+                includesMinors: includesMinors,
+                minorCount: minorCount,
+                onIncludesMinorsChanged: _updateIncludesMinors,
+                onMinorCountChanged: _updateMinorCount,
                 onScheduleChanged: _onScheduleChanged,
                 onMinus: () => _updateTravelers(travelers - 1),
                 onPlus: () => _updateTravelers(travelers + 1),
@@ -1033,9 +1208,7 @@ Future<void> _reserveExperience({
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo abrir Google Maps.'),
-        ),
+        const SnackBar(content: Text('No se pudo abrir Google Maps.')),
       );
 
       return;
@@ -1196,9 +1369,7 @@ class _MainInfoCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF9FAFB),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-              ),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: Text(
               experience.description?.trim().isNotEmpty == true
@@ -1227,9 +1398,7 @@ class _MainInfoCard extends StatelessWidget {
             spacing: 18,
             runSpacing: 12,
             children: amenities
-                .map(
-                  (item) => _IncludeItem(text: item),
-                )
+                .map((item) => _IncludeItem(text: item))
                 .toList(),
           ),
           const SizedBox(height: 22),
@@ -1245,10 +1414,7 @@ class _MainInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           ...itinerary.map(
-            (item) => _ItineraryItem(
-              time: item.time,
-              text: item.activity,
-            ),
+            (item) => _ItineraryItem(time: item.time, text: item.activity),
           ),
         ],
       ),
@@ -1273,9 +1439,7 @@ class _ContactProviderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFFBFDBFE),
-        ),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1321,9 +1485,7 @@ class _ContactProviderCard extends StatelessWidget {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
                     )
                   : const Icon(Icons.chat_bubble_outline_rounded),
               label: Text(
@@ -1331,15 +1493,11 @@ class _ContactProviderCard extends StatelessWidget {
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF003B73),
-                side: const BorderSide(
-                  color: Color(0xFF003B73),
-                ),
+                side: const BorderSide(color: Color(0xFF003B73)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999),
                 ),
-                textStyle: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                ),
+                textStyle: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ),
@@ -1359,6 +1517,10 @@ class _BookingCard extends StatelessWidget {
   final TextEditingController travelersController;
   final int travelers;
   final int maxTravelers;
+  final bool includesMinors;
+  final int minorCount;
+  final ValueChanged<bool> onIncludesMinorsChanged;
+  final ValueChanged<int> onMinorCountChanged;
   final ValueChanged<CustomerExperienceScheduleModel?> onScheduleChanged;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
@@ -1373,6 +1535,10 @@ class _BookingCard extends StatelessWidget {
     required this.travelersController,
     required this.travelers,
     required this.maxTravelers,
+    required this.includesMinors,
+    required this.minorCount,
+    required this.onIncludesMinorsChanged,
+    required this.onMinorCountChanged,
     required this.onScheduleChanged,
     required this.onMinus,
     required this.onPlus,
@@ -1401,7 +1567,6 @@ class _BookingCard extends StatelessWidget {
               color: Color(0xFF111827),
             ),
           ),
-
           if (pickupPoints.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Text(
@@ -1414,7 +1579,7 @@ class _BookingCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: selectedPickupPoint,
+              initialValue: selectedPickupPoint,
               isExpanded: true,
               decoration: InputDecoration(
                 hintText: 'Selecciona dónde te recogerán',
@@ -1483,12 +1648,64 @@ class _BookingCard extends StatelessWidget {
           Text(
             selectedSchedule == null
                 ? 'Selecciona una fecha para ver los cupos disponibles.'
-                : 'Mínimo 1 persona. Máximo $maxTravelers cupos.',
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF6B7280),
-            ),
+                : 'Mínimo 1 adulto. La suma de viajeros adultos y menores no puede superar $maxTravelers cupos.',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
           ),
+          const SizedBox(height: 22),
+          const Divider(),
+          const SizedBox(height: 14),
+          SwitchListTile.adaptive(
+            value: includesMinors,
+            onChanged: selectedSchedule == null
+                ? null
+                : onIncludesMinorsChanged,
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'La reserva incluye menores de edad',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+            subtitle: const Text(
+              'Los menores se agregarán a la cantidad de viajeros seleccionada y ocuparán cupos adicionales.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            activeThumbColor: const Color(0xFF003B73),
+          ),
+          if (includesMinors) ...[
+            const SizedBox(height: 14),
+            const Text(
+              'Cantidad de menores',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _MinorCountSelector(
+              minorCount: minorCount,
+              maxMinorCount: maxTravelers - travelers,
+              onMinus: () {
+                onMinorCountChanged(minorCount - 1);
+              },
+              onPlus: () {
+                onMinorCountChanged(minorCount + 1);
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Puedes agregar hasta ${maxTravelers - travelers} menor(es). '
+              'Total actual: ${travelers + minorCount} participante(s).',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+          ],
         ],
       ),
     );
@@ -1521,10 +1738,7 @@ class _ScheduleSelectorState extends State<_ScheduleSelector> {
 
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
 
-    final fieldOffset = renderBox.localToGlobal(
-      Offset.zero,
-      ancestor: overlay,
-    );
+    final fieldOffset = renderBox.localToGlobal(Offset.zero, ancestor: overlay);
 
     final fieldSize = renderBox.size;
 
@@ -1543,9 +1757,7 @@ class _ScheduleSelectorState extends State<_ScheduleSelector> {
         overlay.size.width - fieldOffset.dx - fieldSize.width,
         0,
       ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       items: widget.availableSchedules.map((schedule) {
         return PopupMenuItem<CustomerExperienceScheduleModel>(
           value: schedule,
@@ -1564,8 +1776,8 @@ class _ScheduleSelectorState extends State<_ScheduleSelector> {
               ),
               Text(
                 schedule.availableSpots == 1
-                ? '1 cupo disponible'
-                : '${schedule.availableSpots} cupos disponibles',
+                    ? '1 cupo disponible'
+                    : '${schedule.availableSpots} cupos disponibles',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -1601,10 +1813,7 @@ class _ScheduleSelectorState extends State<_ScheduleSelector> {
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.calendar_month_outlined,
-              color: Color(0xFF6B7280),
-            ),
+            const Icon(Icons.calendar_month_outlined, color: Color(0xFF6B7280)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -1615,8 +1824,9 @@ class _ScheduleSelectorState extends State<_ScheduleSelector> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 15,
-                  fontWeight:
-                      hasSelectedSchedule ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: hasSelectedSchedule
+                      ? FontWeight.w700
+                      : FontWeight.w500,
                   color: hasSelectedSchedule
                       ? const Color(0xFF111827)
                       : const Color(0xFF6B7280),
@@ -1717,6 +1927,57 @@ class _TravelersSelector extends StatelessWidget {
           _CounterButton(
             icon: Icons.add_rounded,
             enabled: enabled && travelers < maxTravelers,
+            onTap: onPlus,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MinorCountSelector extends StatelessWidget {
+  final int minorCount;
+  final int maxMinorCount;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+
+  const _MinorCountSelector({
+    required this.minorCount,
+    required this.maxMinorCount,
+    required this.onMinus,
+    required this.onPlus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 58,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          _CounterButton(
+            icon: Icons.remove_rounded,
+            enabled: minorCount > 1,
+            onTap: onMinus,
+          ),
+          Expanded(
+            child: Text(
+              minorCount.toString(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+          _CounterButton(
+            icon: Icons.add_rounded,
+            enabled: minorCount < maxMinorCount,
             onTap: onPlus,
           ),
         ],
@@ -1875,9 +2136,7 @@ class _PickupPointsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),
@@ -1937,10 +2196,7 @@ class _PickupPointItem extends StatelessWidget {
   final CustomerExperiencePickupPointModel point;
   final VoidCallback onOpenDirections;
 
-  const _PickupPointItem({
-    required this.point,
-    required this.onOpenDirections,
-  });
+  const _PickupPointItem({required this.point, required this.onOpenDirections});
 
   @override
   Widget build(BuildContext context) {
@@ -1953,9 +2209,7 @@ class _PickupPointItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2012,9 +2266,7 @@ class _PickupPointItem extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFFFFBEB),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFFFDE68A),
-                ),
+                border: Border.all(color: const Color(0xFFFDE68A)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2050,15 +2302,11 @@ class _PickupPointItem extends StatelessWidget {
               label: const Text('Cómo llegar'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF003B73),
-                side: const BorderSide(
-                  color: Color(0xFF003B73),
-                ),
+                side: const BorderSide(color: Color(0xFF003B73)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999),
                 ),
-                textStyle: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                ),
+                textStyle: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ),
@@ -2090,10 +2338,7 @@ class _ShareOption extends StatelessWidget {
           color: const Color(0xFFF3F4F6),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Icon(
-          icon,
-          color: const Color(0xFF111827),
-        ),
+        child: Icon(icon, color: const Color(0xFF111827)),
       ),
       title: Text(
         title,
@@ -2136,11 +2381,7 @@ class _CircleButton extends StatelessWidget {
         child: SizedBox(
           width: 48,
           height: 48,
-          child: Icon(
-            icon,
-            color: iconColor,
-            size: 24,
-          ),
+          child: Icon(icon, color: iconColor, size: 24),
         ),
       ),
     );
@@ -2150,9 +2391,7 @@ class _CircleButton extends StatelessWidget {
 class _IncludeItem extends StatelessWidget {
   final String text;
 
-  const _IncludeItem({
-    required this.text,
-  });
+  const _IncludeItem({required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -2194,10 +2433,7 @@ class _ItineraryItem extends StatelessWidget {
   final String time;
   final String text;
 
-  const _ItineraryItem({
-    required this.time,
-    required this.text,
-  });
+  const _ItineraryItem({required this.time, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -2220,10 +2456,7 @@ class _ItineraryItem extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF4B5563),
-              ),
+              style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563)),
             ),
           ),
         ],
@@ -2235,12 +2468,11 @@ class _ItineraryItem extends StatelessWidget {
 class _ExperiencePhotoGallery extends StatefulWidget {
   final List<String> photos;
 
-  const _ExperiencePhotoGallery({
-    required this.photos,
-  });
+  const _ExperiencePhotoGallery({required this.photos});
 
   @override
-  State<_ExperiencePhotoGallery> createState() => _ExperiencePhotoGalleryState();
+  State<_ExperiencePhotoGallery> createState() =>
+      _ExperiencePhotoGalleryState();
 }
 
 class _ExperiencePhotoGalleryState extends State<_ExperiencePhotoGallery> {
@@ -2392,21 +2624,31 @@ class _BookingReviewDialog extends StatefulWidget {
   final String experienceTitle;
   final String date;
   final int travelers;
+  final bool includesMinors;
+  final int minorCount;
   final String duration;
   final String unitPrice;
   final String totalPrice;
   final List<String> includedItems;
   final String? cancellationPolicy;
+  final LegalDocument paymentPolicyDocument;
+  final LegalDocument waiverDocument;
+  final LegalDocument? minorsDocument;
 
   const _BookingReviewDialog({
     required this.experienceTitle,
     required this.date,
     required this.travelers,
+    required this.includesMinors,
+    required this.minorCount,
     required this.duration,
     required this.unitPrice,
     required this.totalPrice,
     required this.includedItems,
     required this.cancellationPolicy,
+    required this.paymentPolicyDocument,
+    required this.waiverDocument,
+    required this.minorsDocument,
   });
 
   @override
@@ -2414,12 +2656,9 @@ class _BookingReviewDialog extends StatefulWidget {
 }
 
 class _BookingReviewDialogState extends State<_BookingReviewDialog> {
-  bool acceptedLiability = false;
+  bool acceptedBookingLegalDocuments = false;
 
-  void _openInfoModal({
-    required String title,
-    required String content,
-  }) {
+  void _openInfoModal({required String title, required String content}) {
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -2431,10 +2670,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
           content: SingleChildScrollView(
             child: Text(
               content,
-              style: const TextStyle(
-                height: 1.45,
-                color: Color(0xFF475569),
-              ),
+              style: const TextStyle(height: 1.45, color: Color(0xFF475569)),
             ),
           ),
           actions: [
@@ -2453,9 +2689,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(26),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
@@ -2508,14 +2742,31 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
                 ),
                 child: Column(
                   children: [
-                    _SummaryRow(label: 'Experiencia', value: widget.experienceTitle),
+                    _SummaryRow(
+                      label: 'Experiencia',
+                      value: widget.experienceTitle,
+                    ),
                     _SummaryRow(label: 'Fecha', value: widget.date),
                     _SummaryRow(
-                      label: 'Viajeros',
+                      label: 'Participantes',
                       value: widget.travelers == 1
                           ? '1 persona'
                           : '${widget.travelers} personas',
                     ),
+                    if (widget.includesMinors)
+                      _SummaryRow(
+                        label: 'Menores incluidos',
+                        value: widget.minorCount == 1
+                            ? '1 menor'
+                            : '${widget.minorCount} menores',
+                      ),
+                    if (widget.includesMinors)
+                      _SummaryRow(
+                        label: 'Adultos',
+                        value: (widget.travelers - widget.minorCount) == 1
+                            ? '1 adulto'
+                            : '${widget.travelers - widget.minorCount} adultos',
+                      ),
                     _SummaryRow(label: 'Duración', value: widget.duration),
                   ],
                 ),
@@ -2550,9 +2801,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              _CancellationPolicyCard(
-                policy: widget.cancellationPolicy,
-              ),
+              _CancellationPolicyCard(policy: widget.cancellationPolicy),
               const SizedBox(height: 15),
               const _PolicyItem(
                 icon: Icons.credit_card_rounded,
@@ -2567,104 +2816,98 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
                 title: 'Qué incluye',
                 text: widget.includedItems.join(', '),
               ),
+
               const SizedBox(height: 18),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    const Text(
-                      'Al confirmar esta reserva, aceptas nuestros ',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
-                    ),
-                    InkWell(
-                      onTap: () => _openInfoModal(
-                        title: 'Términos y Condiciones',
-                        content:
-                            'Al reservar en AndanDO, aceptas cumplir con las normas de la experiencia, llegar a tiempo al punto de encuentro, proveer información real y respetar las políticas del proveedor. Las reservas están sujetas a disponibilidad, condiciones climáticas y reglas operativas del afiliado.',
-                      ),
-                      child: const Text(
-                        'Términos y Condiciones',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF003B73),
-                          fontWeight: FontWeight.w900,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                    const Text(
-                      ' y ',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
-                    ),
-                    InkWell(
-                      onTap: () => _openInfoModal(
-                        title: 'Política de Privacidad',
-                        content:
-                            'AndanDO utiliza tus datos personales únicamente para gestionar tu reserva, contactar al proveedor, enviar confirmaciones y mejorar tu experiencia. No compartimos información sensible con terceros fuera de lo necesario para operar la reserva.',
-                      ),
-                      child: const Text(
-                        'Política de Privacidad',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF003B73),
-                          fontWeight: FontWeight.w900,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                    const Text(
-                      '.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
+
               CheckboxListTile(
-                value: acceptedLiability,
+                value: acceptedBookingLegalDocuments,
                 onChanged: (value) {
                   setState(() {
-                    acceptedLiability = value ?? false;
+                    acceptedBookingLegalDocuments = value ?? false;
                   });
                 },
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
                 title: const Text(
-                  'Acepto el documento de descargo de responsabilidad en caso de accidente.',
+                  'Certifico que he leído y acepto:',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111827),
+                    height: 1.4,
                   ),
                 ),
-                subtitle: InkWell(
-                  onTap: () => _openInfoModal(
-                    title: 'Descargo de responsabilidad',
-                    content:
-                        'Reconozco que algunas experiencias pueden incluir riesgos propios de actividades turísticas, transporte, caminatas, actividades acuáticas o al aire libre. Acepto seguir las instrucciones del guía o proveedor, informar cualquier condición médica relevante y liberar a AndanDO de responsabilidad por incidentes derivados del incumplimiento de normas, negligencia personal o eventos fuera del control de la plataforma.',
-                  ),
-                  child: const Text(
-                    'Leer documento de descargo',
-                    style: TextStyle(
-                      color: Color(0xFF003B73),
-                      fontWeight: FontWeight.w800,
-                      decoration: TextDecoration.underline,
-                    ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      InkWell(
+                        onTap: () => _openInfoModal(
+                          title: widget.paymentPolicyDocument.title,
+                          content: widget.paymentPolicyDocument.content,
+                        ),
+                        child: Text(
+                          widget.paymentPolicyDocument.title,
+                          style: const TextStyle(
+                            color: Color(0xFF003B73),
+                            fontWeight: FontWeight.w800,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      const Text(
+                        '·',
+                        style: TextStyle(color: Color(0xFF64748B)),
+                      ),
+                      InkWell(
+                        onTap: () => _openInfoModal(
+                          title: widget.waiverDocument.title,
+                          content: widget.waiverDocument.content,
+                        ),
+                        child: Text(
+                          widget.waiverDocument.title,
+                          style: const TextStyle(
+                            color: Color(0xFF003B73),
+                            fontWeight: FontWeight.w800,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      if (widget.includesMinors &&
+                          widget.minorsDocument != null) ...[
+                        const Text(
+                          '·',
+                          style: TextStyle(color: Color(0xFF64748B)),
+                        ),
+                        InkWell(
+                          onTap: () => _openInfoModal(
+                            title: widget.minorsDocument!.title,
+                            content: widget.minorsDocument!.content,
+                          ),
+                          child: Text(
+                            widget.minorsDocument!.title,
+                            style: const TextStyle(
+                              color: Color(0xFF003B73),
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
+
               const SizedBox(height: 18),
+
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: acceptedLiability
+                  onPressed: acceptedBookingLegalDocuments
                       ? () => Navigator.of(context).pop(true)
                       : null,
                   style: ElevatedButton.styleFrom(
@@ -2679,10 +2922,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
                   ),
                   child: const Text(
                     'Confirmar reserva',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                   ),
                 ),
               ),
@@ -2701,10 +2941,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
                   ),
                   child: const Text(
                     'Revisar Reserva',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                   ),
                 ),
               ),
@@ -2716,7 +2953,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
   }
 }
 
-  String _formatCancellationPolicy(String? policy) {
+String _formatCancellationPolicy(String? policy) {
   final normalized = policy?.trim();
 
   switch (normalized) {
@@ -2745,9 +2982,7 @@ class _BookingReviewDialogState extends State<_BookingReviewDialog> {
 class _CancellationPolicyCard extends StatelessWidget {
   final String? policy;
 
-  const _CancellationPolicyCard({
-    required this.policy,
-  });
+  const _CancellationPolicyCard({required this.policy});
 
   @override
   Widget build(BuildContext context) {
@@ -2761,36 +2996,31 @@ class _CancellationPolicyCard extends StatelessWidget {
       case 'free_24h':
         title = 'Política de esta experiencia';
         freeWindow = 'Cancelación gratuita hasta 24 horas antes.';
-        penaltyWindow =
-            'Dentro de las últimas 24 horas no aplica reembolso.';
+        penaltyWindow = 'Dentro de las últimas 24 horas no aplica reembolso.';
         break;
 
       case 'free_48h':
         title = 'Política de esta experiencia';
         freeWindow = 'Cancelación gratuita hasta 48 horas antes.';
-        penaltyWindow =
-            'Dentro de las últimas 48 horas no aplica reembolso.';
+        penaltyWindow = 'Dentro de las últimas 48 horas no aplica reembolso.';
         break;
 
       case 'free_72h':
         title = 'Política de esta experiencia';
         freeWindow = 'Cancelación gratuita hasta 72 horas antes.';
-        penaltyWindow =
-            'Dentro de las últimas 72 horas no aplica reembolso.';
+        penaltyWindow = 'Dentro de las últimas 72 horas no aplica reembolso.';
         break;
 
       case 'free_5d':
         title = 'Política de esta experiencia';
         freeWindow = 'Cancelación gratuita hasta 5 días antes.';
-        penaltyWindow =
-            'Dentro de los últimos 5 días no aplica reembolso.';
+        penaltyWindow = 'Dentro de los últimos 5 días no aplica reembolso.';
         break;
 
       case 'no_refund':
         title = 'Política de esta experiencia';
         freeWindow = 'Esta experiencia es no reembolsable.';
-        penaltyWindow =
-            'No aplica devolución después de creada la reserva.';
+        penaltyWindow = 'No aplica devolución después de creada la reserva.';
         break;
 
       default:
@@ -2805,19 +3035,14 @@ class _CancellationPolicyCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(
-                Icons.gpp_good_rounded,
-                color: Color(0xFF16A34A),
-              ),
+              Icon(Icons.gpp_good_rounded, color: Color(0xFF16A34A)),
               SizedBox(width: 8),
               Text(
                 'Política de esta experiencia',
@@ -2878,9 +3103,7 @@ class _BookingSuccessDialog extends StatelessWidget {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
         child: Column(
@@ -2926,9 +3149,7 @@ class _BookingSuccessDialog extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                ),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Column(
                 children: [
@@ -3025,9 +3246,7 @@ class _BookingSuccessDialog extends StatelessWidget {
 class _BookingCodeBox extends StatelessWidget {
   final String bookingCode;
 
-  const _BookingCodeBox({
-    required this.bookingCode,
-  });
+  const _BookingCodeBox({required this.bookingCode});
 
   @override
   Widget build(BuildContext context) {
@@ -3037,9 +3256,7 @@ class _BookingCodeBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFCBD5E1),
-        ),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3075,10 +3292,7 @@ class _BookingCodeBox extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Guarda este código para futuras consultas.',
-            style: TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-            ),
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
         ],
       ),
@@ -3090,10 +3304,7 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-  });
+  const _SummaryRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -3104,10 +3315,7 @@ class _SummaryRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
             ),
           ),
           const SizedBox(width: 16),
@@ -3158,9 +3366,7 @@ class _PriceRow extends StatelessWidget {
           style: TextStyle(
             fontSize: isTotal ? 21 : 15,
             fontWeight: FontWeight.w900,
-            color: isTotal
-                ? const Color(0xFF003B73)
-                : const Color(0xFF111827),
+            color: isTotal ? const Color(0xFF003B73) : const Color(0xFF111827),
           ),
         ),
       ],
@@ -3188,11 +3394,7 @@ class _PolicyItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            size: 22,
-            color: iconColor,
-          ),
+          Icon(icon, size: 22, color: iconColor),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

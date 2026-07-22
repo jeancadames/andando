@@ -20,6 +20,9 @@ class RouteNames {
   /// Registro cliente.
   static const String register = 'register';
 
+  /// Onboarding legal obligatorio para cuentas creadas con Google o Apple.
+  static const String socialLegalOnboarding = 'socialLegalOnboarding';
+
   /// Registro afiliado/proveedor.
   static const String affiliateRegister = 'affiliateRegister';
 
@@ -46,7 +49,7 @@ class RouteNames {
 
   /// Crear reseña de una reserva completada.
   static const String createReview = 'createReview';
-  
+
   /// Detalle público de experiencia.
   static const String experienceDetail = 'experienceDetail';
 
@@ -107,4 +110,7 @@ class RouteNames {
 
   /// Configuración proveedor.
   static const String providerSettings = 'providerSettings';
+
+  /// Centro Legal del proveedor.
+  static const String providerLegalCenter = 'providerLegalCenter';
 }

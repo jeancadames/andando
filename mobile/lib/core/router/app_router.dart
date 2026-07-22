@@ -25,6 +25,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
 
 import '../../features/customer/auth/presentation/screens/customer_register_screen.dart';
+import '../../features/customer/auth/presentation/screens/social_legal_onboarding_screen.dart';
 import '../../features/customer/explore/data/models/customer_experience_model.dart';
 import '../../features/customer/explore/presentation/controllers/explore_controller.dart';
 import '../../features/customer/explore/presentation/screens/experience_detail_screen.dart';
@@ -39,6 +40,7 @@ import '../../features/provider/experiences/screens/provider_experience_reviews_
 import '../../features/provider/onboarding/presentation/screens/provider_register_screen.dart';
 import '../../features/provider/onboarding/presentation/screens/provider_verification_pending_screen.dart';
 import '../../features/provider/profile/screens/provider_profile_screen.dart';
+import '../../features/provider/profile/screens/provider_legal_center_screen.dart';
 import '../../features/provider/bookings/screens/provider_bookings_screen.dart';
 import '../../features/provider/analytics/screens/provider_analytics_screen.dart';
 import '../../features/provider/chat/presentation/screens/provider_chat_list_screen.dart';
@@ -53,9 +55,8 @@ import '../../features/customer/profile/presentation/screens/customer_change_pas
 import 'route_names.dart';
 
 class AppRouter {
-  AppRouter({
-    required AuthController authController,
-  }) : _authController = authController;
+  AppRouter({required AuthController authController})
+    : _authController = authController;
 
   final AuthController _authController;
 
@@ -83,9 +84,7 @@ class AppRouter {
         path: '/login',
         name: RouteNames.login,
         builder: (context, state) {
-          return LoginScreen(
-            authController: _authController,
-          );
+          return LoginScreen(authController: _authController);
         },
       ),
 
@@ -112,9 +111,15 @@ class AppRouter {
         path: '/register',
         name: RouteNames.register,
         builder: (context, state) {
-          return CustomerRegisterScreen(
-            authController: _authController,
-          );
+          return CustomerRegisterScreen(authController: _authController);
+        },
+      ),
+
+      GoRoute(
+        path: '/auth/social/legal-onboarding',
+        name: RouteNames.socialLegalOnboarding,
+        builder: (context, state) {
+          return SocialLegalOnboardingScreen(authController: _authController);
         },
       ),
 
@@ -122,18 +127,14 @@ class AppRouter {
         path: '/client/explore',
         name: RouteNames.clientExplore,
         builder: (context, state) {
-          return ExploreScreen(
-            authController: _authController,
-          );
+          return ExploreScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/client/bookings',
         name: RouteNames.clientBookings,
         builder: (context, state) {
-          return CustomerBookingsScreen(
-            authController: _authController,
-          );
+          return CustomerBookingsScreen(authController: _authController);
         },
       ),
       GoRoute(
@@ -152,9 +153,7 @@ class AppRouter {
             );
           }
 
-          return CreateReviewScreen(
-            booking: booking,
-          );
+          return CreateReviewScreen(booking: booking);
         },
       ),
 
@@ -174,9 +173,7 @@ class AppRouter {
             );
           }
 
-          return CreateClaimScreen(
-            booking: booking,
-          );
+          return CreateClaimScreen(booking: booking);
         },
       ),
 
@@ -184,9 +181,7 @@ class AppRouter {
         path: '/client/favorites',
         name: RouteNames.clientFavorites,
         builder: (context, state) {
-          return CustomerFavoritesScreen(
-            authController: _authController,
-          );
+          return CustomerFavoritesScreen(authController: _authController);
         },
       ),
 
@@ -194,9 +189,7 @@ class AppRouter {
         path: '/customer/profile',
         name: RouteNames.customerProfile,
         builder: (context, state) {
-          return CustomerProfileScreen(
-            authController: _authController,
-          );
+          return CustomerProfileScreen(authController: _authController);
         },
       ),
       GoRoute(
@@ -210,9 +203,7 @@ class AppRouter {
         path: '/customer/profile/settings',
         name: RouteNames.customerProfileSettings,
         builder: (context, state) {
-          return CustomerProfileSettingsScreen(
-            authController: _authController,
-          );
+          return CustomerProfileSettingsScreen(authController: _authController);
         },
       ),
 
@@ -246,9 +237,7 @@ class AppRouter {
         path: '/customer/profile/change-password',
         name: 'customerChangePassword',
         builder: (context, state) {
-          return CustomerChangePasswordScreen(
-            authController: _authController,
-          );
+          return CustomerChangePasswordScreen(authController: _authController);
         },
       ),
 
@@ -263,18 +252,14 @@ class AppRouter {
         path: '/customer/dashboard',
         name: RouteNames.customerDashboard,
         builder: (context, state) {
-          return ExploreScreen(
-            authController: _authController,
-          );
+          return ExploreScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/client/messages',
         name: RouteNames.clientMessages,
         builder: (context, state) {
-          return CustomerChatListScreen(
-            authController: _authController,
-          );
+          return CustomerChatListScreen(authController: _authController);
         },
       ),
       GoRoute(
@@ -306,9 +291,7 @@ class AppRouter {
         path: '/experiences/:id',
         name: RouteNames.experienceDetail,
         builder: (context, state) {
-          final experienceId = int.tryParse(
-            state.pathParameters['id'] ?? '',
-          );
+          final experienceId = int.tryParse(state.pathParameters['id'] ?? '');
 
           if (experienceId == null) {
             return const _RouteErrorPlaceholder(
@@ -364,27 +347,21 @@ class AppRouter {
         path: '/affiliate/register',
         name: RouteNames.affiliateRegister,
         builder: (context, state) {
-          return ProviderRegisterScreen(
-            authController: _authController,
-          );
+          return ProviderRegisterScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/provider/register',
         name: RouteNames.providerRegister,
         builder: (context, state) {
-          return ProviderRegisterScreen(
-            authController: _authController,
-          );
+          return ProviderRegisterScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/provider/login',
         name: RouteNames.providerLogin,
         builder: (context, state) {
-          return LoginScreen(
-            authController: _authController,
-          );
+          return LoginScreen(authController: _authController);
         },
       ),
       GoRoute(
@@ -400,36 +377,28 @@ class AppRouter {
         path: '/provider/dashboard',
         name: RouteNames.providerDashboard,
         builder: (context, state) {
-          return ProviderDashboardScreen(
-            authController: _authController,
-          );
+          return ProviderDashboardScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/provider/catalog',
         name: RouteNames.providerCatalog,
         builder: (context, state) {
-          return ProviderCatalogScreen(
-            authController: _authController,
-          );
+          return ProviderCatalogScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/provider/create-experience',
         name: RouteNames.providerCreateExperience,
         builder: (context, state) {
-          return CreateExperienceScreen(
-            authController: _authController,
-          );
+          return CreateExperienceScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/provider/edit-experience/:id',
         name: RouteNames.providerEditExperience,
         builder: (context, state) {
-          final experienceId = int.tryParse(
-            state.pathParameters['id'] ?? '',
-          );
+          final experienceId = int.tryParse(state.pathParameters['id'] ?? '');
 
           if (experienceId == null) {
             return const _RouteErrorPlaceholder(
@@ -447,9 +416,7 @@ class AppRouter {
         path: '/provider/experience-calendar/:id/add-schedule',
         name: RouteNames.providerAddSchedule,
         builder: (context, state) {
-          final experienceId = int.tryParse(
-            state.pathParameters['id'] ?? '',
-          );
+          final experienceId = int.tryParse(state.pathParameters['id'] ?? '');
 
           final title = state.uri.queryParameters['title'] ?? 'Experiencia';
 
@@ -470,9 +437,7 @@ class AppRouter {
         path: '/provider/experience-calendar/:id',
         name: RouteNames.providerExperienceCalendar,
         builder: (context, state) {
-          final experienceId = int.tryParse(
-            state.pathParameters['id'] ?? '',
-          );
+          final experienceId = int.tryParse(state.pathParameters['id'] ?? '');
 
           final title = state.uri.queryParameters['title'] ?? 'Experiencia';
 
@@ -493,9 +458,7 @@ class AppRouter {
         path: '/provider/experiences/:id/reviews',
         name: RouteNames.providerExperienceReviews,
         builder: (context, state) {
-          final experienceId = int.tryParse(
-            state.pathParameters['id'] ?? '',
-          );
+          final experienceId = int.tryParse(state.pathParameters['id'] ?? '');
 
           final title = state.uri.queryParameters['title'] ?? 'Experiencia';
 
@@ -516,27 +479,21 @@ class AppRouter {
         path: '/provider/bookings',
         name: RouteNames.providerBookings,
         builder: (context, state) {
-          return ProviderBookingsScreen(
-            authController: _authController,
-          );
+          return ProviderBookingsScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/provider/analytics',
         name: RouteNames.providerAnalytics,
         builder: (context, state) {
-          return ProviderAnalyticsScreen(
-            authController: _authController,
-          );
+          return ProviderAnalyticsScreen(authController: _authController);
         },
       ),
       GoRoute(
         path: '/provider/messages',
         name: RouteNames.providerMessages,
         builder: (context, state) {
-          return ProviderChatListScreen(
-            authController: _authController,
-          );
+          return ProviderChatListScreen(authController: _authController);
         },
       ),
       GoRoute(
@@ -568,11 +525,18 @@ class AppRouter {
         path: '/provider/profile',
         name: RouteNames.providerProfile,
         builder: (context, state) {
-          return ProviderProfileScreen(
-            authController: _authController,
-          );
+          return ProviderProfileScreen(authController: _authController);
         },
       ),
+
+      GoRoute(
+        path: '/provider/profile/legal-center',
+        name: RouteNames.providerLegalCenter,
+        builder: (context, state) {
+          return ProviderLegalCenterScreen(authController: _authController);
+        },
+      ),
+
       GoRoute(
         path: '/provider/settings',
         name: RouteNames.providerSettings,
@@ -599,7 +563,6 @@ class AppRouter {
           return const CustomerTermsConditionsScreen();
         },
       ),
-
     ],
   );
 
@@ -618,9 +581,12 @@ class AppRouter {
 
     final isChecking = authStatus == AuthStatus.checking;
     final isAuthenticated = authStatus == AuthStatus.authenticated;
+    final requiresLegalOnboarding =
+        authStatus == AuthStatus.legalOnboardingRequired;
 
-    final isPublicExperienceRoute =
-        currentLocation.startsWith('/experiences/');
+    const socialLegalOnboardingPath = '/auth/social/legal-onboarding';
+
+    final isPublicExperienceRoute = currentLocation.startsWith('/experiences/');
 
     final publicRoutes = <String>{
       '/',
@@ -657,6 +623,37 @@ class AppRouter {
       return currentLocation == '/' ? null : '/';
     }
 
+    if (requiresLegalOnboarding) {
+      if (currentLocation == socialLegalOnboardingPath) {
+        return null;
+      }
+
+      final redirect = _safeRedirectPath(state);
+
+      if (redirect != null) {
+        return Uri(
+          path: socialLegalOnboardingPath,
+          queryParameters: {'redirect': redirect},
+        ).toString();
+      }
+
+      if (currentLocation.startsWith('/') &&
+          currentLocation != '/' &&
+          currentLocation != '/welcome' &&
+          currentLocation != '/login') {
+        return Uri(
+          path: socialLegalOnboardingPath,
+          queryParameters: {'redirect': currentLocation},
+        ).toString();
+      }
+
+      return socialLegalOnboardingPath;
+    }
+
+    if (isAuthenticated && currentLocation == socialLegalOnboardingPath) {
+      return '/client/explore';
+    }
+
     if (!isAuthenticated) {
       if (isPublicRoute) {
         return null;
@@ -672,7 +669,8 @@ class AppRouter {
     final isProvider = normalizedUserType == 'provider';
     final isCustomer = normalizedUserType == 'customer';
 
-    final isProviderPrivateRoute = currentLocation.startsWith('/provider/') &&
+    final isProviderPrivateRoute =
+        currentLocation.startsWith('/provider/') &&
         currentLocation != '/provider/register' &&
         currentLocation != '/provider/login' &&
         currentLocation != '/provider/verification-pending';
@@ -784,120 +782,112 @@ class AppRouter {
   }
 }
 
-  class _PublicExperienceDetailLoader extends StatefulWidget {
-    final int experienceId;
-    final AuthController authController;
-    final bool openBookingReview;
-    final int? initialScheduleId;
-    final int? initialTravelers;
+class _PublicExperienceDetailLoader extends StatefulWidget {
+  final int experienceId;
+  final AuthController authController;
+  final bool openBookingReview;
+  final int? initialScheduleId;
+  final int? initialTravelers;
 
-    const _PublicExperienceDetailLoader({
-      required this.experienceId,
-      required this.authController,
-      required this.openBookingReview,
-      required this.initialScheduleId,
-      required this.initialTravelers,
-    });
+  const _PublicExperienceDetailLoader({
+    required this.experienceId,
+    required this.authController,
+    required this.openBookingReview,
+    required this.initialScheduleId,
+    required this.initialTravelers,
+  });
 
-    @override
-    State<_PublicExperienceDetailLoader> createState() =>
-        _PublicExperienceDetailLoaderState();
+  @override
+  State<_PublicExperienceDetailLoader> createState() =>
+      _PublicExperienceDetailLoaderState();
+}
+
+class _PublicExperienceDetailLoaderState
+    extends State<_PublicExperienceDetailLoader> {
+  final ExploreController _controller = ExploreController();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+  CustomerExperienceModel? _experience;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExperience();
   }
 
-  class _PublicExperienceDetailLoaderState
-      extends State<_PublicExperienceDetailLoader> {
-    final ExploreController _controller = ExploreController();
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
-    bool _isLoading = true;
-    String? _errorMessage;
-    CustomerExperienceModel? _experience;
+  Future<void> _loadExperience() async {
+    try {
+      final experience = await _controller.getExperienceDetail(
+        widget.experienceId,
+      );
 
-    @override
-    void initState() {
-      super.initState();
-      _loadExperience();
+      if (!mounted) return;
+
+      setState(() {
+        _experience = experience;
+        _isLoading = false;
+        _errorMessage = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'No pudimos cargar esta experiencia.';
+      });
     }
+  }
 
-    @override
-    void dispose() {
-      _controller.dispose();
-      super.dispose();
-    }
-
-    Future<void> _loadExperience() async {
-      try {
-        final experience = await _controller.getExperienceDetail(
-          widget.experienceId,
-        );
-
-        if (!mounted) return;
-
-        setState(() {
-          _experience = experience;
-          _isLoading = false;
-          _errorMessage = null;
-        });
-      } catch (_) {
-        if (!mounted) return;
-
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'No pudimos cargar esta experiencia.';
-        });
-      }
-    }
-
-    @override
-    Widget build(BuildContext context) {
-      if (_isLoading) {
-        return const Scaffold(
-          backgroundColor: Color(0xFFF8F8F8),
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-      }
-
-      if (_errorMessage != null || _experience == null) {
-        return _RouteErrorPlaceholder(
-          message: _errorMessage ?? 'Experiencia no encontrada.',
-        );
-      }
-
-      final experience = _experience!;
-
-      return ExperienceDetailScreen(
-        experience: experience,
-        authController: widget.authController,
-        initialIsFavorite: _controller.isFavorite(experience.id),
-        initialScheduleId: widget.initialScheduleId,
-        initialTravelers: widget.initialTravelers,
-        openBookingReview: widget.openBookingReview,
-        onFavoriteChanged: (isFavorite) {
-          if (_controller.isFavorite(experience.id) != isFavorite) {
-            _controller.toggleFavorite(experience.id);
-          }
-        },
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF8F8F8),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    if (_errorMessage != null || _experience == null) {
+      return _RouteErrorPlaceholder(
+        message: _errorMessage ?? 'Experiencia no encontrada.',
+      );
+    }
+
+    final experience = _experience!;
+
+    return ExperienceDetailScreen(
+      experience: experience,
+      authController: widget.authController,
+      initialIsFavorite: _controller.isFavorite(experience.id),
+      initialScheduleId: widget.initialScheduleId,
+      initialTravelers: widget.initialTravelers,
+      openBookingReview: widget.openBookingReview,
+      onFavoriteChanged: (isFavorite) {
+        if (_controller.isFavorite(experience.id) != isFavorite) {
+          _controller.toggleFavorite(experience.id);
+        }
+      },
+    );
   }
+}
 
 class _RouteErrorPlaceholder extends StatelessWidget {
-  const _RouteErrorPlaceholder({
-    required this.message,
-  });
+  const _RouteErrorPlaceholder({required this.message});
 
   final String message;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ruta inválida'),
-      ),
-      body: Center(
-        child: Text(message),
-      ),
+      appBar: AppBar(title: const Text('Ruta inválida')),
+      body: Center(child: Text(message)),
     );
   }
 }
@@ -914,12 +904,8 @@ class _SimpleProviderPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: Center(
-        child: Text(message),
-      ),
+      appBar: AppBar(title: Text(title)),
+      body: Center(child: Text(message)),
     );
   }
 }

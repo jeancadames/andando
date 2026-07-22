@@ -53,6 +53,70 @@ class LegalDocumentSeeder extends Seeder
                 'requires_acceptance' => false,
                 'change_level' => LegalDocument::CHANGE_LEVEL_MATERIAL,
             ],
+            [
+                'type' => 'payment_policy',
+                'audience' => 'customer',
+                'version' => '1.0',
+                'title' => 'Política de Pagos, Cancelaciones y Reembolsos',
+                'summary' => 'Reglas financieras y condiciones aplicables a cada reserva.',
+                'path' => database_path('legal/payment_policy_v1.0.md'),
+                'requires_acceptance' => true,
+                'change_level' => LegalDocument::CHANGE_LEVEL_MATERIAL,
+            ],
+            [
+                'type' => 'waiver',
+                'audience' => 'customer',
+                'version' => '1.0',
+                'title' => 'Reconocimiento de Riesgos y Descargo Limitado',
+                'summary' => 'Reconocimiento de riesgos inherentes y obligaciones de seguridad por reserva.',
+                'path' => database_path('legal/waiver_v1.0.md'),
+                'requires_acceptance' => true,
+                'change_level' => LegalDocument::CHANGE_LEVEL_MATERIAL,
+            ],
+            [
+                'type' => 'minors',
+                'audience' => 'customer',
+                'version' => '1.0',
+                'title' => 'Declaración para Participación de Menores',
+                'summary' => 'Declaración del adulto responsable cuando la reserva incluye menores.',
+                'path' => database_path('legal/minors_v1.0.md'),
+                'requires_acceptance' => true,
+                'change_level' => LegalDocument::CHANGE_LEVEL_MATERIAL,
+            ],
+
+            /*
+             * Documentos legales para proveedores.
+             */
+            [
+                'type' => 'terms_provider',
+                'audience' => 'provider',
+                'version' => '1.0',
+                'title' => 'Términos y Condiciones para Afiliados',
+                'summary' => 'Contrato de acceso y operación para proveedores independientes que utilizan AndanDO.',
+                'path' => database_path('legal/terms_provider_v1.0.md'),
+                'requires_acceptance' => true,
+                'change_level' => LegalDocument::CHANGE_LEVEL_MATERIAL,
+            ],
+            [
+                'type' => 'provider_standards',
+                'audience' => 'provider',
+                'version' => '1.0',
+                'title' => 'Estándares de Publicación, Operación y Seguridad',
+                'summary' => 'Requisitos obligatorios para publicar y operar experiencias en AndanDO.',
+                'path' => database_path('legal/provider_standards_v1.0.md'),
+                'requires_acceptance' => true,
+                'change_level' => LegalDocument::CHANGE_LEVEL_MATERIAL,
+            ],
+            [
+                'type' => 'privacy',
+                'audience' => 'provider',
+                'version' => '1.0',
+                'title' => 'Política de Privacidad',
+                'summary' => 'Información sobre el tratamiento de datos personales y comerciales de proveedores.',
+                'path' => database_path('legal/privacy_v1.0.md'),
+                'requires_acceptance' => false,
+                'change_level' => LegalDocument::CHANGE_LEVEL_MATERIAL,
+            ],
         ];
 
         DB::transaction(function () use ($documents, $effectiveAt): void {

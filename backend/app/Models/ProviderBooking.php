@@ -45,6 +45,8 @@ class ProviderBooking extends Model
         'booking_date',
         'pickup_point',
         'guests_count',
+        'includes_minors',
+        'minor_count',
         'unit_price',
         'total_amount',
         'provider_earning',
@@ -69,6 +71,8 @@ class ProviderBooking extends Model
     protected $casts = [
         'booking_date' => 'datetime',
         'guests_count' => 'integer',
+        'includes_minors' => 'boolean',
+        'minor_count' => 'integer',
         'unit_price' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'provider_earning' => 'decimal:2',

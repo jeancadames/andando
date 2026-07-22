@@ -3,125 +3,120 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../../../core/config/environment.dart';
+import '../../../../customer/auth/data/models/legal_document.dart';
 import '../models/provider_auth_response.dart';
 import '../models/provider_register_form_data.dart';
 
-/// Servicio encargado de comunicarse con Laravel para el flujo de afiliado/proveedor.
-///
-/// Este archivo es parte de la capa data.
-///
-/// Responsabilidades:
-/// - enviar login de afiliado/proveedor.
-/// - enviar registro de afiliado/proveedor.
-/// - subir documentos.
-/// - consultar el estado actual del afiliado/proveedor.
-/// - cerrar sesión en backend.
-/// - procesar errores de Laravel.
-/// - convertir JSON en modelos Dart.
-///
-/// Este servicio NO debe tener lógica visual.
-/// No muestra SnackBars.
-/// No navega entre pantallas.
-/// Solo habla con la API.
+/// Servicio de autenticación y onboarding de afiliados.
 class ProviderAuthApi {
   const ProviderAuthApi();
 
-  /// Inicia sesión como afiliado/proveedor.
-  ///
-  /// Endpoint esperado:
-  ///
-  /// POST /api/provider/login
-  ///
-  /// Body enviado:
-  /// - email
-  /// - password
-  ///
-  /// Laravel debe responder:
-  /// - token
-  /// - user
-  /// - provider
-  ///
-  /// Ejemplo esperado de respuesta:
-  ///
-  /// {
-  ///   "message": "Inicio de sesión correcto.",
-  ///   "token": "1|token...",
-  ///   "user": {
-  ///     "id": 1,
-  ///     "name": "Jean",
-  ///     "email": "jeancadames22@gmail.com",
-  ///     "phone": "8090000000",
-  ///     "type": "provider"
-  ///   },
-  ///   "provider": {
-  ///     "id": 1,
-  ///     "business_name": "Tours Jean",
-  ///     "status": "approved",
-  ///     "rejection_reason": null
-  ///   }
-  /// }
-  ///
-  /// Este método devuelve ProviderAuthResponse para que la pantalla
-  /// pueda guardar la sesión localmente y redirigir según provider.status.
+  /// Obtiene un documento legal vigente para proveedores.
+  Future<LegalDocument> getLegalDocument({required String type}) async {
+    final normalizedType = type.trim();
+
+    if (normalizedType.isEmpty) {
+      throw Exception('El tipo de documento legal es obligatorio.');
+    }
+
+    final uri = Uri.parse(
+      '${Environment.apiBaseUrl}/legal/documents/$normalizedType',
+    ).replace(queryParameters: {'audience': 'provider'});
+
+    final response = await http.get(
+      uri,
+      headers: const {'Accept': 'application/json'},
+    );
+
+    final body = _decodeJson(response);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final data = body['data'];
+
+      if (data is! Map<String, dynamic>) {
+        throw Exception(
+          'El servidor respondió con un documento legal inválido.',
+        );
+      }
+
+      try {
+        return LegalDocument.fromJson(data);
+      } on FormatException catch (error) {
+        throw Exception(error.message);
+      }
+    }
+
+    throw Exception(
+      _extractErrorMessage(
+        body,
+        fallback: 'No fue posible cargar el documento legal.',
+      ),
+    );
+  }
+
+  /// Inicia sesión como afiliado.
   Future<ProviderAuthResponse> login({
     required String email,
     required String password,
   }) async {
     final uri = Uri.parse('${Environment.apiBaseUrl}/provider/login');
 
+    final headers = await _buildHeaders();
+
     final response = await http.post(
       uri,
-      headers: {
-        /// Le decimos a Laravel que queremos respuesta JSON.
-        ///
-        /// Esto es importante porque Laravel puede responder HTML
-        /// si no reconoce que es una petición API.
-        'Accept': 'application/json',
-      },
-      body: {
-        'email': email,
-        'password': password,
-      },
+      headers: headers,
+      body: {'email': email, 'password': password},
     );
 
     return _handleAuthResponse(response);
   }
 
-  /// Registra un afiliado/proveedor completo.
-  ///
-  /// Endpoint esperado:
-  ///
-  /// POST /api/provider/register
-  ///
-  /// Se usa MultipartRequest porque el formulario contiene archivos:
-  /// - cédula
-  /// - certificado RNC
-  /// - licencia comercial opcional
-  ///
-  /// Si Laravel responde correctamente, este método devuelve:
-  /// - token
-  /// - user
-  /// - provider
-  ///
-  /// Eso permite que Flutter guarde la sesión y mande al usuario
-  /// a la pantalla de solicitud pendiente.
+  /// Envía el registro multipart del afiliado.
   Future<ProviderAuthResponse> register({
     required ProviderRegisterFormData data,
   }) async {
+    final termsDocumentId = data.termsDocumentId;
+    final termsChecksum = data.termsDocumentChecksum;
+
+    final standardsDocumentId = data.standardsDocumentId;
+    final standardsChecksum = data.standardsDocumentChecksum;
+
+    final privacyDocumentId = data.privacyDocumentId;
+    final privacyChecksum = data.privacyDocumentChecksum;
+
+    if (!data.hasLegalDocuments) {
+      throw Exception('Los documentos legales todavía no están disponibles.');
+    }
+
+    if (!data.hasAcceptedLegalDocuments) {
+      throw Exception('Debes completar todas las confirmaciones legales.');
+    }
+
+    if (termsDocumentId == null ||
+        termsChecksum == null ||
+        standardsDocumentId == null ||
+        standardsChecksum == null ||
+        privacyDocumentId == null ||
+        privacyChecksum == null) {
+      throw Exception(
+        'No se pudo identificar la versión de los documentos legales.',
+      );
+    }
+
+    if (data.identityCard == null || data.rncCertificate == null) {
+      throw Exception('La cédula y el certificado RNC son obligatorios.');
+    }
+
     final uri = Uri.parse('${Environment.apiBaseUrl}/provider/register');
 
     final request = http.MultipartRequest('POST', uri);
 
-    request.headers.addAll({
-      'Accept': 'application/json',
-    });
+    request.headers.addAll(await _buildHeaders());
 
-    /// Campos normales del formulario.
-    ///
-    /// Estos nombres deben coincidir exactamente con los nombres
-    /// que Laravel espera en ProviderRegisterRequest.
     request.fields.addAll({
       'full_name': data.fullName,
       'email': data.email,
@@ -134,23 +129,37 @@ class ProviderAuthApi {
       'address': data.address,
       'city': data.city,
       'province': data.province,
+
+      /*
+       * Confirmaciones legales.
+       */
       'accept_terms': data.acceptTerms ? '1' : '0',
+      'accept_standards': data.acceptStandards ? '1' : '0',
       'accept_privacy': data.acceptPrivacy ? '1' : '0',
+
+      /*
+       * Términos para afiliados.
+       */
+      'terms_document_id': termsDocumentId.toString(),
+      'terms_document_checksum': termsChecksum,
+
+      /*
+       * Estándares de publicación y seguridad.
+       */
+      'standards_document_id': standardsDocumentId.toString(),
+      'standards_document_checksum': standardsChecksum,
+
+      /*
+       * Política de privacidad.
+       */
+      'privacy_document_id': privacyDocumentId.toString(),
+      'privacy_document_checksum': privacyChecksum,
     });
 
-    /// Archivo obligatorio: cédula.
-    ///
-    /// El nombre identity_card debe coincidir con Laravel.
     request.files.add(
-      _fileToMultipart(
-        fieldName: 'identity_card',
-        file: data.identityCard!,
-      ),
+      _fileToMultipart(fieldName: 'identity_card', file: data.identityCard!),
     );
 
-    /// Archivo obligatorio: certificado RNC.
-    ///
-    /// El nombre rnc_certificate debe coincidir con Laravel.
     request.files.add(
       _fileToMultipart(
         fieldName: 'rnc_certificate',
@@ -158,9 +167,6 @@ class ProviderAuthApi {
       ),
     );
 
-    /// Archivo opcional: licencia comercial.
-    ///
-    /// Solo lo enviamos si el usuario seleccionó un archivo.
     if (data.businessLicense != null) {
       request.files.add(
         _fileToMultipart(
@@ -170,152 +176,89 @@ class ProviderAuthApi {
       );
     }
 
-    /// Enviamos el request multipart.
     final streamedResponse = await request.send();
 
-    /// Convertimos StreamedResponse a Response normal
-    /// para poder leer statusCode y body fácilmente.
     final response = await http.Response.fromStream(streamedResponse);
 
     return _handleAuthResponse(response);
   }
 
-  /// Consulta el estado actual del afiliado/proveedor autenticado.
-  ///
-  /// Endpoint esperado:
-  ///
-  /// GET /api/provider/me
-  ///
-  /// Este método resuelve este problema:
-  ///
-  /// - Flutter tiene guardado localmente providerStatus = pending.
-  /// - Pero en la base de datos ya cambiaste providers.status = approved.
-  /// - El router sigue usando el estado local y deja al usuario en pending.
-  ///
-  /// Entonces esta función consulta Laravel, obtiene el estado real,
-  /// y luego la pantalla puede actualizar AuthController.
-  ///
-  /// Retorna:
-  /// - pending
-  /// - approved
-  /// - rejected
-  /// - suspended
-  Future<String> getCurrentProviderStatus({
-    required String token,
-  }) async {
+  /// Consulta el estado actual del afiliado.
+  Future<String> getCurrentProviderStatus({required String token}) async {
     final uri = Uri.parse('${Environment.apiBaseUrl}/provider/me');
 
-    final response = await http.get(
-      uri,
-      headers: {
-        /// Le decimos a Laravel que queremos JSON.
-        'Accept': 'application/json',
+    final headers = await _buildHeaders(token: token);
 
-        /// Token de Laravel Sanctum.
-        ///
-        /// Laravel usa este header para identificar al usuario autenticado.
-        'Authorization': 'Bearer $token',
-      },
-    );
+    final response = await http.get(uri, headers: headers);
 
     final body = _decodeJson(response);
 
-    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+    final isSuccessful =
+        response.statusCode >= 200 && response.statusCode < 300;
 
     if (!isSuccessful) {
       throw Exception(
-        body['message']?.toString() ?? 'No se pudo consultar el estado.',
+        _extractErrorMessage(body, fallback: 'No se pudo consultar el estado.'),
       );
     }
 
-    /// Laravel debe responder con una propiedad provider.
-    ///
-    /// Ejemplo:
-    ///
-    /// {
-    ///   "user": {...},
-    ///   "provider": {
-    ///     "id": 1,
-    ///     "business_name": "Tours Jean",
-    ///     "status": "approved"
-    ///   }
-    /// }
     final provider = body['provider'];
 
-    if (provider == null || provider is! Map<String, dynamic>) {
+    if (provider is! Map<String, dynamic>) {
       throw Exception('Este usuario no tiene perfil de afiliado.');
     }
 
-    final status = provider['status'];
+    final status = provider['status']?.toString().trim();
 
-    if (status == null || status.toString().trim().isEmpty) {
+    if (status == null || status.isEmpty) {
       throw Exception('El backend no devolvió el estado del afiliado.');
     }
 
-    return status.toString();
+    return status;
   }
 
-  /// Cierra sesión en Laravel eliminando el token actual.
-  ///
-  /// Endpoint esperado:
-  ///
-  /// POST /api/provider/logout
-  ///
-  /// Este método borra el token en backend.
-  ///
-  /// Importante:
-  /// Aunque este logout remoto falle, la app puede cerrar sesión localmente
-  /// usando AuthController.logout().
-  ///
-  /// Por eso, normalmente la pantalla que llame este método debería hacer:
-  ///
-  /// try {
-  ///   await api.logout(token: token);
-  /// } catch (_) {
-  ///   // Ignorar error remoto.
-  /// }
-  ///
-  /// await authController.logout();
-  Future<void> logout({
-    required String token,
-  }) async {
+  /// Cierra la sesión remota.
+  Future<void> logout({required String token}) async {
     final uri = Uri.parse('${Environment.apiBaseUrl}/provider/logout');
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
+    final headers = await _buildHeaders(token: token);
 
-    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+    final response = await http.post(uri, headers: headers);
 
-    /// Si el backend responde error, lanzamos excepción.
-    ///
-    /// La pantalla puede decidir ignorarla si solo quiere cerrar sesión local.
+    final isSuccessful =
+        response.statusCode >= 200 && response.statusCode < 300;
+
     if (!isSuccessful) {
       final body = _decodeJson(response);
 
       throw Exception(
-        body['message']?.toString() ?? 'No se pudo cerrar sesión en el servidor.',
+        _extractErrorMessage(
+          body,
+          fallback: 'No se pudo cerrar sesión en el servidor.',
+        ),
       );
     }
   }
 
-  /// Convierte un archivo seleccionado con file_picker
-  /// en un MultipartFile para enviarlo a Laravel.
-  ///
-  /// Usamos fromBytes porque funciona tanto en:
-  /// - Flutter Web
-  /// - Android
-  /// - iOS
-  ///
-  /// Para eso es importante que al seleccionar el archivo usemos:
-  ///
-  /// FilePicker.pickFiles(withData: true)
-  ///
-  /// Si withData viene false, file.bytes puede ser null.
+  Future<Map<String, String>> _buildHeaders({String? token}) async {
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'X-Platform': 'flutter',
+      'X-Locale': 'es',
+      'X-App-Version': '${packageInfo.version}+${packageInfo.buildNumber}',
+    };
+
+    final normalizedToken = token?.trim();
+
+    if (normalizedToken != null && normalizedToken.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $normalizedToken';
+    }
+
+    return headers;
+  }
+
   http.MultipartFile _fileToMultipart({
     required String fieldName,
     required PlatformFile file,
@@ -324,7 +267,8 @@ class ProviderAuthApi {
 
     if (bytes == null) {
       throw Exception(
-        'No se pudo leer el archivo ${file.name}. Intenta seleccionarlo nuevamente.',
+        'No se pudo leer el archivo ${file.name}. '
+        'Intenta seleccionarlo nuevamente.',
       );
     }
 
@@ -336,11 +280,6 @@ class ProviderAuthApi {
     );
   }
 
-  /// Detecta el tipo MIME básico según la extensión del archivo.
-  ///
-  /// Laravel también valida el MIME real del archivo,
-  /// pero enviarlo correctamente ayuda a que el backend procese mejor
-  /// el multipart.
   MediaType _guessContentType(String fileName) {
     final lower = fileName.toLowerCase();
 
@@ -360,66 +299,34 @@ class ProviderAuthApi {
       return MediaType('image', 'jpeg');
     }
 
-    /// Fallback razonable.
-    ///
-    /// En condiciones normales no debería llegar aquí porque
-    /// file_picker limita las extensiones permitidas o porque
-    /// nosotros validamos las extensiones antes de enviar.
     return MediaType('application', 'octet-stream');
   }
 
-  /// Procesa respuestas de login y registro.
-  ///
-  /// Si la respuesta es exitosa:
-  /// - convierte el JSON a ProviderAuthResponse.
-  ///
-  /// Si Laravel responde error de validación:
-  /// - toma el primer mensaje del array errors.
-  ///
-  /// Si Laravel responde otro error:
-  /// - usa message.
-  ///
-  /// Si no hay message:
-  /// - lanza un error genérico.
   ProviderAuthResponse _handleAuthResponse(http.Response response) {
     final body = _decodeJson(response);
 
-    final isSuccessful = response.statusCode >= 200 && response.statusCode < 300;
+    final isSuccessful =
+        response.statusCode >= 200 && response.statusCode < 300;
 
     if (isSuccessful) {
       return ProviderAuthResponse.fromJson(body);
     }
 
-    if (body.containsKey('errors')) {
-      final errors = body['errors'];
-
-      if (errors is Map<String, dynamic> && errors.isNotEmpty) {
-        final firstError = errors.values.first;
-
-        if (firstError is List && firstError.isNotEmpty) {
-          throw Exception(firstError.first.toString());
-        }
-      }
-    }
-
     throw Exception(
-      body['message']?.toString() ?? 'Ocurrió un error inesperado.',
+      _extractErrorMessage(body, fallback: 'Ocurrió un error inesperado.'),
     );
   }
 
-  /// Decodifica una respuesta JSON de Laravel.
-  ///
-  /// Lo separamos en un método reusable porque ahora lo usamos en:
-  /// - login/register mediante _handleAuthResponse.
-  /// - getCurrentProviderStatus.
-  /// - logout.
-  ///
-  /// Si Laravel responde HTML, texto plano o una pantalla de error,
-  /// jsonDecode fallaría. En ese caso lanzamos una excepción más clara.
   Map<String, dynamic> _decodeJson(http.Response response) {
+    if (response.body.trim().isEmpty) {
+      throw Exception('El servidor respondió sin contenido.');
+    }
+
+    dynamic decoded;
+
     try {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (_) {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
       final preview = response.body.length > 500
           ? response.body.substring(0, 500)
           : response.body;
@@ -430,5 +337,38 @@ class ProviderAuthApi {
         'Body: $preview',
       );
     }
+
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('El servidor respondió con un formato inválido.');
+    }
+
+    return decoded;
+  }
+
+  String _extractErrorMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final errors = body['errors'];
+
+    if (errors is Map<String, dynamic>) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty) {
+          return value.first.toString();
+        }
+
+        if (value != null) {
+          return value.toString();
+        }
+      }
+    }
+
+    final message = body['message']?.toString().trim();
+
+    if (message != null && message.isNotEmpty) {
+      return message;
+    }
+
+    return fallback;
   }
 }

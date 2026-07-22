@@ -25,6 +25,10 @@ class StorageKeys {
   static const String providerStatus = 'provider_status';
 
   static const String userName = 'user_name';
+
   static const String userEmail = 'user_email';
 
+  /// Indica si una cuenta social debe completar fecha de nacimiento
+  /// y aceptación de documentos legales antes de usar la aplicación.
+  static const String requiresLegalOnboarding = 'requires_legal_onboarding';
 }

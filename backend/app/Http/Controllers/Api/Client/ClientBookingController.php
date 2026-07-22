@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Client;
 
 use App\Services\Payments\CancelBookingPaymentService;
 use App\Services\Payments\CreateBookingPaymentTransactionService;
+use App\Services\Legal\LegalAcceptanceService;
+use App\Services\Legal\LegalDocumentService;
 
 use App\Notifications\Booking\BookingCancelledNotification;
 use App\Notifications\Booking\NewBookingNotification;
@@ -59,6 +61,8 @@ class ClientBookingController extends Controller
                         ?? $booking->booking_date?->toIso8601String(),
                     'ends_at' => $schedule?->ends_at?->toIso8601String(),
                     'guests_count' => (int) $booking->guests_count,
+                    'includes_minors' => (bool) $booking->includes_minors,
+                    'minor_count' => (int) $booking->minor_count,
                     'unit_price' => (float) $booking->unit_price,
                     'total_amount' => (float) $booking->total_amount,
                     'currency' => $experience?->currency ?? 'DOP',
@@ -102,6 +106,8 @@ class ClientBookingController extends Controller
     public function store(
         Request $request,
         CreateBookingPaymentTransactionService $paymentTransactionService,
+        LegalDocumentService $legalDocumentService,
+        LegalAcceptanceService $legalAcceptanceService,
     ): JsonResponse
     {
         $data = $request->validate([
@@ -120,9 +126,132 @@ class ClientBookingController extends Controller
                 'string',
                 'max:255',
             ],
+            'includes_minors' => [
+                'required',
+                'boolean',
+            ],
+            'minor_count' => [
+                'required',
+                'integer',
+                'min:0',
+                'lte:guests_count',
+            ],
+            'payment_policy_document_id' => [
+                'required',
+                'integer',
+            ],
+            'payment_policy_checksum' => [
+                'required',
+                'string',
+                'size:64',
+            ],
+            'payment_policy_accepted' => [
+                'accepted',
+            ],
+            'waiver_document_id' => [
+                'required',
+                'integer',
+            ],
+            'waiver_checksum' => [
+                'required',
+                'string',
+                'size:64',
+            ],
+            'waiver_accepted' => [
+                'accepted',
+            ],
+            'minors_document_id' => [
+                'nullable',
+                'integer',
+            ],
+            'minors_checksum' => [
+                'nullable',
+                'string',
+                'size:64',
+            ],
+            'minors_accepted' => [
+                'nullable',
+                'boolean',
+            ],
         ]);
 
         $user = $request->user();
+
+        $paymentPolicyDocument = $legalDocumentService->current(
+            'payment_policy',
+            'customer'
+        );
+
+        $waiverDocument = $legalDocumentService->current(
+            'waiver',
+            'customer'
+        );
+
+        $minorsDocument = $legalDocumentService->current(
+            'minors',
+            'customer'
+        );
+
+        if (! $paymentPolicyDocument || ! $waiverDocument || ! $minorsDocument) {
+            return response()->json([
+                'message' => 'Los documentos legales necesarios para reservar no están disponibles.',
+                'code' => 'LEGAL_DOCUMENTS_UNAVAILABLE',
+            ], 422);
+        }
+
+        if (
+            (int) $data['payment_policy_document_id'] !== $paymentPolicyDocument->id
+            || ! hash_equals(
+                $paymentPolicyDocument->checksum,
+                $data['payment_policy_checksum']
+            )
+        ) {
+            return response()->json([
+                'message' => 'La Política de Pagos cambió. Revisa la versión vigente antes de continuar.',
+                'code' => 'PAYMENT_POLICY_VERSION_MISMATCH',
+            ], 422);
+        }
+
+        if (
+            (int) $data['waiver_document_id'] !== $waiverDocument->id
+            || ! hash_equals(
+                $waiverDocument->checksum,
+                $data['waiver_checksum']
+            )
+        ) {
+            return response()->json([
+                'message' => 'El Reconocimiento de Riesgos cambió. Revisa la versión vigente antes de continuar.',
+                'code' => 'WAIVER_VERSION_MISMATCH',
+            ], 422);
+        }
+
+        $includesMinors = (bool) $data['includes_minors'];
+
+        if ($includesMinors) {
+            if (
+                empty($data['minors_document_id'])
+                || empty($data['minors_checksum'])
+                || empty($data['minors_accepted'])
+            ) {
+                return response()->json([
+                    'message' => 'Debes aceptar la Declaración para Participación de Menores.',
+                    'code' => 'MINORS_DECLARATION_REQUIRED',
+                ], 422);
+            }
+
+            if (
+                (int) $data['minors_document_id'] !== $minorsDocument->id
+                || ! hash_equals(
+                    $minorsDocument->checksum,
+                    $data['minors_checksum']
+                )
+            ) {
+                return response()->json([
+                    'message' => 'La Declaración de Menores cambió. Revisa la versión vigente antes de continuar.',
+                    'code' => 'MINORS_VERSION_MISMATCH',
+                ], 422);
+            }
+        }
 
         $defaultPaymentMethod = CustomerPaymentMethod::query()
             ->where('user_id', $user->id)
@@ -136,7 +265,17 @@ class ClientBookingController extends Controller
             ], 422);
         }
 
-        $booking = DB::transaction(function () use ($data, $user, $defaultPaymentMethod, $paymentTransactionService) {
+        $booking = DB::transaction(function () use (
+            $data,
+            $user,
+            $request,
+            $defaultPaymentMethod,
+            $paymentTransactionService,
+            $legalAcceptanceService,
+            $paymentPolicyDocument,
+            $waiverDocument,
+            $minorsDocument
+        ) {
             $schedule = ProviderExperienceSchedule::query()
                 ->with('experience.provider')
                 ->where('id', $data['provider_experience_schedule_id'])
@@ -148,6 +287,27 @@ class ClientBookingController extends Controller
 
             if (! $experience) {
                 abort(422, 'La experiencia no está disponible.');
+            }
+
+            $includesMinors = (bool) $data['includes_minors'];
+            $minorCount = (int) $data['minor_count'];
+
+            if (! $includesMinors) {
+                $minorCount = 0;
+            }
+
+            if ($includesMinors && $minorCount < 1) {
+                abort(
+                    422,
+                    'Debes indicar cuántos menores de edad incluye la reserva.'
+                );
+            }
+
+            if ($minorCount > (int) $data['guests_count']) {
+                abort(
+                    422,
+                    'La cantidad de menores no puede superar la cantidad total de viajeros.'
+                );
             }
 
             $includesTransport = (bool) $experience->includes_transport;
@@ -201,6 +361,8 @@ class ClientBookingController extends Controller
                     ? trim((string) ($data['pickup_point'] ?? ''))
                     : null,
                 'guests_count' => $data['guests_count'],
+                'includes_minors' => $includesMinors,
+                'minor_count' => $minorCount,
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
                 'provider_earning' => round($totalAmount * (1 - (float) config('payments.rules.andando_commission_rate', 0.15)), 2),
@@ -208,6 +370,68 @@ class ClientBookingController extends Controller
                 'customer_payment_method_id' => $defaultPaymentMethod->id,
                 'payment_status' => ProviderBooking::PAYMENT_STATUS_SCHEDULED,
             ]);
+
+            $legalContext = [
+                'booking_id' => $booking->id,
+                'experience_id' => $booking->provider_experience_id,
+                'schedule_id' => $booking->provider_experience_schedule_id,
+            ];
+
+            $legalAcceptanceService->acceptForUser(
+                user: $user,
+                documentId: $paymentPolicyDocument->id,
+                checksum: $paymentPolicyDocument->checksum,
+                request: $request,
+                context: [
+                    ...$legalContext,
+                    'metadata' => [
+                        'source' => 'booking_checkout',
+                        'acceptance_kind' => 'payment_policy',
+                        'guests_count' => (int) $booking->guests_count,
+                        'total_amount' => (float) $booking->total_amount,
+                        'currency' => $experience->currency ?? 'DOP',
+                        'cancellation_policy' => $experience->cancellation_policy,
+                    ],
+                ],
+            );
+
+            $legalAcceptanceService->acceptForUser(
+                user: $user,
+                documentId: $waiverDocument->id,
+                checksum: $waiverDocument->checksum,
+                request: $request,
+                context: [
+                    ...$legalContext,
+                    'metadata' => [
+                        'source' => 'booking_checkout',
+                        'acceptance_kind' => 'risk_acknowledgement',
+                        'guests_count' => (int) $booking->guests_count,
+                        'provider_id' => $booking->provider_id,
+                        'experience_title' => $experience->title,
+                    ],
+                ],
+            );
+
+            if ($booking->includes_minors) {
+                $legalAcceptanceService->acceptForUser(
+                    user: $user,
+                    documentId: $minorsDocument->id,
+                    checksum: $minorsDocument->checksum,
+                    request: $request,
+                    context: [
+                        ...$legalContext,
+                        'metadata' => [
+                            'source' => 'booking_checkout',
+                            'acceptance_kind' => 'minors_declaration',
+                            'minor_count' => (int) $booking->minor_count,
+                            'guests_count' => (int) $booking->guests_count,
+                            'adult_count' => (int) (
+                                $booking->guests_count - $booking->minor_count
+                            ),
+                        ],
+                    ],
+                );
+            }
 
             $paymentTransactionService->createForBooking($booking);
 
@@ -244,6 +468,9 @@ class ClientBookingController extends Controller
                 'id' => $booking->id,
                 'booking_code' => $booking->booking_code,
                 'status' => $booking->status,
+                'guests_count' => (int) $booking->guests_count,
+                'includes_minors' => (bool) $booking->includes_minors,
+                'minor_count' => (int) $booking->minor_count,
                 'total_amount' => (float) $booking->total_amount,
             ],
         ], 201);
